@@ -1,0 +1,5 @@
+# One prompt per line. Lines starting with # are ignored.
+# Run: ./.venv/bin/python -m synth.cli batch
+uplifting corporate, bright piano, subtle strings, optimistic, 110bpm, instrumental
+lo-fi hip hop, warm rhodes piano, soft vinyl crackle, relaxed, 85bpm, instrumental
+ambient underscore, soft evolving pads, sparse piano, unobtrusive, no drums, instrumental

@@ -1,0 +1,6 @@
+.venv/
+.venv-mlx/
+__pycache__/
+*.pyc
+output/*
+!output/.gitkeep
