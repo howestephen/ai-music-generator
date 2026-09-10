@@ -1,6 +1,6 @@
 """MusicGen runner. Runs in the main .venv.
 
-NOTE: MusicGen weights are CC-BY-NC-4.0 — non-commercial use only.
+NOTE: MusicGen weights are CC-BY-NC-4.0 - non-commercial use only.
 Fine for experimentation; do not ship its output commercially.
 """
 import json

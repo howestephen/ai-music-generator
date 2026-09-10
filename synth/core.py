@@ -13,7 +13,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 
-# Hugging Face's Xet transfer backend hangs on the first model download here —
+# Hugging Face's Xet transfer backend hangs on the first model download here -
 # four 0-byte .incomplete files and no progress. Forcing plain HTTPS transfer fixes it.
 # Must be set before anything imports huggingface_hub.
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
@@ -69,7 +69,7 @@ class Track:
 
     def write_sidecar(self) -> Path:
         data = asdict(self)
-        data["path"] = self.path.name  # relative — the folder may get moved
+        data["path"] = self.path.name  # relative - the folder may get moved
         target = self.sidecar_path()
         target.write_text(json.dumps(data, indent=2))
         return target
@@ -107,7 +107,7 @@ def generate(
     backend = backends.get(model)
     if not backend.available:
         raise RuntimeError(
-            f"Backend {backend.name!r} is not set up — expected interpreter at "
+            f"Backend {backend.name!r} is not set up - expected interpreter at "
             f"{backend.python}. See README for install steps."
         )
     if duration > backend.max_duration:

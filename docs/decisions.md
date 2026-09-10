@@ -1,12 +1,19 @@
+---
+status: active
+author: stephen+claude
+created: 2026-08-15
+updated: 2026-09-10
+---
+
 # Decisions
 
 Why the stack looks the way it does. Newest first. Each entry records what was decided,
-why, and what would change it — so a future decision can be revisited on evidence rather
+why, and what would change it - so a future decision can be revisited on evidence rather
 than re-argued from scratch.
 
 ---
 
-## 2026-08-15 — Project scope is open-ended verbal music synthesis
+## 2026-08-15 - Project scope is open-ended verbal music synthesis
 
 **Decided:** the repo is a workbench for describing music in words and rendering it
 locally. Not a single-purpose tool.
@@ -22,7 +29,7 @@ easy to add models to rather than optimised for one workflow.
 
 ---
 
-## 2026-08-15 — MLX build preferred over PyTorch on Apple Silicon
+## 2026-08-15 - MLX build preferred over PyTorch on Apple Silicon
 
 **Decided:** `vanch007/MiniMax-Music3-MLX-8bit` (13 GB) is the MiniMax backend. The 54 GB
 fp32 PyTorch build was deleted.
@@ -40,14 +47,14 @@ without an MLX conversion.
 
 ---
 
-## 2026-08-14 — MiniMax Music 3 added
+## 2026-08-14 - MiniMax Music 3 added
 
 **Decided:** adopt MiniMax Music 3 as the most capable backend.
 
 **Why:** ~11B parameters, and uniquely it exposes **explicit BPM, key and scale** control
 through its Structured Caption format. Earlier requests for a specific mode (D Mixolydian)
 were impossible on ACE-Step, which has no key conditioning. First measurements are
-encouraging — flat-7 energy ratio 2.7× versus ACE-Step's 0.7–1.0× — but this is **not yet
+encouraging - flat-7 energy ratio 2.7× versus ACE-Step's 0.7–1.0× - but this is **not yet
 confirmed by listening**.
 
 **Licence:** MiniMax Community. Commercial use permitted, with two conditions that matter
@@ -60,7 +67,7 @@ demos are all song-form genres.
 
 ---
 
-## 2026-08-14 — Multi-backend architecture with isolated environments
+## 2026-08-14 - Multi-backend architecture with isolated environments
 
 **Decided:** models are registered in `synth/backends.py`; those with conflicting
 dependencies run as subprocesses in their own venv, behind one `core.generate`.
@@ -74,7 +81,7 @@ enforce and display them rather than each caller remembering.
 
 ---
 
-## 2026-08-14 — MusicGen usable again (non-commercial only)
+## 2026-08-14 - MusicGen usable again (non-commercial only)
 
 **Decided:** keep MusicGen available, flagged **CC-BY-NC**.
 
@@ -83,11 +90,11 @@ commercial video. With the project now personal and experimental, that constrain
 apply. It's slow on Metal (~15× realtime) and capped at 30s, but it's a strong instrumental
 model.
 
-**Revisit if:** output is ever destined for commercial use — the licence blocks it.
+**Revisit if:** output is ever destined for commercial use - the licence blocks it.
 
 ---
 
-## 2026-08-11 — ACE-Step chosen, and why that was partly wrong
+## 2026-08-11 - ACE-Step chosen, and why that was partly wrong
 
 **Decided:** ACE-Step v1 3.5B as the original backend.
 
@@ -99,20 +106,20 @@ competence**, and the brief's central requirement was orchestral. ACE-Step is a 
 model; asked for cinematic orchestral it produced rock guitars. Two days of output were
 unusable.
 
-**Lesson, now standing:** verify a model handles the *target genre* — check its published
-demos — before adopting it on licence and specs.
+**Lesson, now standing:** verify a model handles the *target genre* - check its published
+demos - before adopting it on licence and specs.
 
 **Still useful for:** its actual strengths, near-realtime generation of song-form and
 loop-based material.
 
 ---
 
-## 2026-08-11 — Custom Python rather than ComfyUI
+## 2026-08-11 - Custom Python rather than ComfyUI
 
 **Decided:** a thin Python project calling models directly, no ComfyUI.
 
 **Why:** ComfyUI's value is composing many models in a node graph, which is an image-gen
-problem. Music generation is mostly single-shot — prompt in, audio out — so the graph buys
+problem. Music generation is mostly single-shot - prompt in, audio out - so the graph buys
 little, while adding a large dependency surface on the least-tested Apple Silicon path.
 
 **Held up well.** The subprocess-per-backend design later proved essential for dependency
@@ -123,7 +130,7 @@ recombine), where a graph earns its complexity.
 
 ---
 
-## 2026-08-11 — JSON sidecar per generated track
+## 2026-08-11 - JSON sidecar per generated track
 
 **Decided:** every WAV gets a `.json` recording prompt, seed, model and settings.
 

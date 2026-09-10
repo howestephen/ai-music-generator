@@ -1,11 +1,11 @@
-"""Local web UI. A thin wrapper over synth.core — no logic lives here."""
+"""Local web UI. A thin wrapper over synth.core - no logic lives here."""
 from __future__ import annotations
 
 import gradio as gr
 
 from synth import core
 
-# Starting points for work-video backing tracks. Edit freely — they're just prompt text.
+# Starting points for work-video backing tracks. Edit freely - they're just prompt text.
 PRESETS = {
     "Corporate / uplifting": "uplifting corporate, bright piano, subtle strings, steady four-on-the-floor, optimistic, 110bpm, instrumental",
     "Lo-fi / relaxed": "lo-fi hip hop, warm rhodes piano, soft vinyl crackle, mellow drums, relaxed, 85bpm, instrumental",
@@ -17,7 +17,7 @@ PRESETS = {
 
 def _generate(prompt, duration, steps, guidance, seed, use_seed):
     if not prompt or not prompt.strip():
-        raise gr.Error("Enter a prompt first — style tags work better than sentences.")
+        raise gr.Error("Enter a prompt first - style tags work better than sentences.")
     track = core.generate(
         prompt=prompt.strip(),
         duration=duration,
@@ -45,7 +45,7 @@ def build_ui() -> gr.Blocks:
             with gr.Column(scale=3):
                 preset = gr.Radio(
                     choices=list(PRESETS), label="Presets", value=None,
-                    info="Loads a starting prompt below — then edit it.",
+                    info="Loads a starting prompt below - then edit it.",
                 )
                 prompt = gr.Textbox(
                     label="Prompt", lines=3,

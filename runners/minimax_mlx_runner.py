@@ -1,4 +1,4 @@
-"""MiniMax Music 3, MLX 8-bit. Executes inside .venv-mlx — see synth/backends.py.
+"""MiniMax Music 3, MLX 8-bit. Executes inside .venv-mlx - see synth/backends.py.
 
 Native Apple Metal via MLX rather than PyTorch/MPS. Shells out to the runtime's own
 documented CLI rather than reaching into its internals, so upstream changes stay contained.

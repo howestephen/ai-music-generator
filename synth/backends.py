@@ -48,11 +48,11 @@ BACKENDS: dict[str, Backend] = {
         venv=".venv",
         runner=None,
         licence="Apache-2.0 (commercial OK)",
-        notes="Song-form model. Weak at orchestral/cinematic — tends toward band instrumentation.",
+        notes="Song-form model. Weak at orchestral/cinematic - tends toward band instrumentation.",
         default_steps=60,
         prompt_style="tags",
     ),
-    # The fp32 PyTorch build (MiniMaxAI/MiniMax-Music3, 53GB) was removed — the MLX
+    # The fp32 PyTorch build (MiniMaxAI/MiniMax-Music3, 53GB) was removed - the MLX
     # build below supersedes it on Apple Silicon. Don't re-add it without reason.
     "minimax-mlx": Backend(
         name="minimax-mlx",
@@ -71,7 +71,7 @@ BACKENDS: dict[str, Backend] = {
         model_id="facebook/musicgen-stereo-large",
         venv=".venv",
         runner="musicgen_runner.py",
-        licence="CC-BY-NC-4.0 — NON-COMMERCIAL ONLY",
+        licence="CC-BY-NC-4.0 - NON-COMMERCIAL ONLY",
         notes="Strong instrumental model, but 30s per generation.",
         default_steps=0,
         max_duration=30.0,

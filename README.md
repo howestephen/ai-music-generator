@@ -1,6 +1,13 @@
+---
+status: active
+author: stephen+claude
+created: 2026-08-15
+updated: 2026-09-10
+---
+
 # AI Music Generator
 
-A local workbench for **verbal music synthesis** — describing music in words and having it
+A local workbench for **verbal music synthesis** - describing music in words and having it
 rendered as audio, entirely on this machine.
 
 Runs on Apple Silicon (M3 Max, 128 GB). No cloud, no per-track licensing, no upload of
@@ -37,12 +44,12 @@ Three backends behind one CLI. Each runs in whatever environment it needs.
 |---|---|---|---|---|
 | `minimax-mlx` | MiniMax Music 3 (MLX 8-bit) | 300s | caption | MiniMax Community |
 | `acestep` | ACE-Step v1 3.5B | 240s | tags | Apache-2.0 |
-| `musicgen` | MusicGen stereo-large | 30s | tags | **CC-BY-NC — non-commercial** |
+| `musicgen` | MusicGen stereo-large | 30s | tags | **CC-BY-NC - non-commercial** |
 
 `minimax-mlx` is the newest and the only one with explicit **BPM, key and scale** control.
 It runs natively on Metal via MLX rather than PyTorch/MPS.
 
-`acestep` is fast (roughly realtime) but is a song-form model — it is demonstrably weak at
+`acestep` is fast (roughly realtime) but is a song-form model - it is demonstrably weak at
 orchestral and cinematic material, where it drifts toward rock band instrumentation.
 
 `musicgen` is capable but slow on Metal (~15× realtime) and capped at 30 seconds.
@@ -56,7 +63,7 @@ Non-commercial weights.
 ./.venv/bin/python -m synth.cli gen "<prompt>" --model minimax-mlx --duration 70
 ```
 
-**Batch** — put prompts in a directory, one per line, `#` for comments:
+**Batch** - put prompts in a directory, one per line, `#` for comments:
 
 ```bash
 ./.venv/bin/python -m synth.cli batch --dir briefs/my-brief --model minimax-mlx --duration 60
@@ -68,7 +75,7 @@ Non-commercial weights.
 ./.venv/bin/python app.py
 ```
 
-**Analyse what came out** — tempo, modality, transient placement:
+**Analyse what came out** - tempo, modality, transient placement:
 
 ```bash
 ./.venv/bin/python -m synth.analyze output/*.wav
@@ -82,7 +89,7 @@ Non-commercial weights.
 | `--duration` / `-d` | Seconds (each backend enforces its own cap) |
 | `--count` / `-n` | Variations per prompt |
 | `--seed` | Reproduce a specific track |
-| `--steps` | Inference steps — lower is faster, rougher |
+| `--steps` | Inference steps - lower is faster, rougher |
 | `--lyrics` | Defaults to the backend's instrumental sentinel |
 | `--json` | Machine-readable output |
 
@@ -113,7 +120,7 @@ progression, listening scenario, production profile), **Vocal Details**, and
 percussion, textures, spatial effects).
 
 Keep prompts focused. Stacking many competing directives tends to average into mush rather
-than blending — see [docs/gotchas.md](docs/gotchas.md).
+than blending - see [docs/gotchas.md](docs/gotchas.md).
 
 ## Reproducibility
 
@@ -128,7 +135,7 @@ change one parameter instead of rerolling and losing it.
 ## Layout
 
 ```
-synth/core.py      generate() — single entry point, dispatches to a backend
+synth/core.py      generate() - single entry point, dispatches to a backend
 synth/backends.py  model registry: venv, runner, caps, licence, prompt style
 synth/cli.py       gen / batch / models / ui
 synth/analyze.py   measure output against a brief
@@ -139,7 +146,7 @@ output/            generated audio + sidecars (gitignored)
 docs/              decisions and gotchas
 ```
 
-Backends whose dependencies conflict run as subprocesses in their own venv — ACE-Step pins
+Backends whose dependencies conflict run as subprocesses in their own venv - ACE-Step pins
 `transformers==4.50` while MiniMax needs `>=5`, so they can't share one. Adding a model is a
 runner script plus a registry entry.
 

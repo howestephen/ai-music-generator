@@ -49,7 +49,7 @@ def cmd_batch(args: argparse.Namespace) -> int:
                 jobs.append((file.name, line))
 
     if not jobs:
-        print(f"No prompts found in {prompt_dir}/ — add a .txt file with one prompt per line.")
+        print(f"No prompts found in {prompt_dir}/ - add a .txt file with one prompt per line.")
         return 1
 
     print(f"{len(jobs)} prompt(s) from {prompt_dir}/\n")

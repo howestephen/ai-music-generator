@@ -56,7 +56,7 @@ def analyse(path: Path, hit_interval: float = 8.0) -> Analysis:
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr).mean(axis=1)
     chroma = chroma / (chroma.sum() + 1e-9)
     scale_fit = float(sum(chroma[i] for i in D_MIXOLYDIAN))
-    # >1 means the flat 7 (C) beats the major 7 (C#) — the Mixolydian tell.
+    # >1 means the flat 7 (C) beats the major 7 (C#) - the Mixolydian tell.
     flat7_ratio = float(chroma[0] / (chroma[1] + 1e-9))
     tonic = PITCH_NAMES[int(np.argmax(chroma))]
 

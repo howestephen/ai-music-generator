@@ -1,7 +1,14 @@
+---
+status: active
+author: stephen+claude
+created: 2026-08-15
+updated: 2026-09-10
+---
+
 # Gotchas
 
 Traps hit while building this, with symptoms and fixes. **Read before installing a new
-model or debugging a failure** — several of these cost hours and every one of them is
+model or debugging a failure** - several of these cost hours and every one of them is
 already paid for.
 
 The nastiest share a shape: **the thing appears to work and produces plausible output**, so
@@ -25,10 +32,10 @@ predates Python 3.10.
 uv pip install "numba>=0.61" "llvmlite>=0.44" "git+https://github.com/ace-step/ACE-Step.git"
 ```
 
-### `torchcodec` missing — generation completes, then the save fails
+### `torchcodec` missing - generation completes, then the save fails
 
 **Symptom:** `ImportError: TorchCodec is required for save_with_torchcodec`. Full diffusion
-runs, then dies writing the file — the most annoying possible place.
+runs, then dies writing the file - the most annoying possible place.
 
 **Cause:** current torchaudio delegates `save()` to TorchCodec.
 
@@ -47,7 +54,7 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 Already set in `synth/core.py` and every runner. **Do not remove it.**
 
-### Model dependency conflicts are unresolvable — use separate venvs
+### Model dependency conflicts are unresolvable - use separate venvs
 
 ACE-Step pins `transformers==4.50.0`; MiniMax Music 3 needs `>=5`. There is no shared
 resolution. Backends declare their own venv in `synth/backends.py` and run as subprocesses.
@@ -79,7 +86,7 @@ bfloat16 errors on macOS. Upstream says pass `--bf16 false`; the equivalent here
 
 ### MiniMax returns numpy where its own docs assume a torch tensor
 
-**Symptom:** `AttributeError: 'numpy.ndarray' object has no attribute 'float'` — after a
+**Symptom:** `AttributeError: 'numpy.ndarray' object has no attribute 'float'` - after a
 full successful generation.
 
 **Cause:** the official example calls `audio.T.float().cpu().numpy()`. This build returns
@@ -88,7 +95,7 @@ numpy already.
 **Fix:** accept either, and transpose channel-first to frames-first for `soundfile`. See
 `runners/minimax_mlx_runner.py`.
 
-### The instrumental sentinel differs per model — and fails silently
+### The instrumental sentinel differs per model - and fails silently
 
 | Backend | "no vocals" |
 |---|---|
@@ -96,7 +103,7 @@ numpy already.
 | `minimax-mlx` | `[Instrumental]` |
 | `musicgen` | *(no lyrics channel)* |
 
-Passing the wrong one doesn't error — **you just get unwanted vocals**. Now a backend
+Passing the wrong one doesn't error - **you just get unwanted vocals**. Now a backend
 property (`instrumental_tag`), resolved in `core.generate`. Never hardcode it.
 
 ### Duration caps are per-model
@@ -123,8 +130,8 @@ Rough figures, single job, M3 Max:
 
 ### Overloaded prompts produce mush
 
-Stacking many competing directives — "orchestral **and** electronic, medieval **and**
-corporate", four instruments, two moods — tends to get averaged rather than blended. Fewer,
+Stacking many competing directives - "orchestral **and** electronic, medieval **and**
+corporate", four instruments, two moods - tends to get averaged rather than blended. Fewer,
 stronger tags work better.
 
 ### Match the prompt style to the backend
@@ -136,16 +143,16 @@ it. Check `backends.get(model).prompt_style`.
 
 ACE-Step, MiniMax and most current open music models are trained overwhelmingly on
 **song-form pop material**. Asked for cinematic orchestral, ACE-Step fell back to its prior
-and produced **rock guitars** — while still scoring perfectly on tempo and pitch-class
+and produced **rock guitars** - while still scoring perfectly on tempo and pitch-class
 analysis.
 
 **Before adopting a model for a genre, check that genre appears in its demos.** MiniMax's
-published examples are bossa nova, EDM, pop rock, ballad, funk, lo-fi jazz — no orchestral.
+published examples are bossa nova, EDM, pop rock, ballad, funk, lo-fi jazz - no orchestral.
 
 ### Audio analysis cannot judge quality
 
 `synth/analyze.py` measures tempo, chroma, onsets and RMS. **All of it can pass while the
-audio is unusable** — the guitar tracks above scored 100% on hit-point alignment.
+audio is unusable** - the guitar tracks above scored 100% on hit-point alignment.
 
 Analysis is for verifying *specific measurable claims* (did the requested key land?), never
 for deciding whether something sounds good. That requires a human listening. Generate a
