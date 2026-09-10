@@ -39,7 +39,7 @@ def main() -> int:
         audio = model.generate(
             **inputs,
             do_sample=True,
-            guidance_scale=float(job.get("guidance", 3.0)),
+            guidance_scale=float(job["guidance"]),  # core always supplies it (backend default 3.0)
             max_new_tokens=int(TOKENS_PER_SECOND * duration),
         )
 

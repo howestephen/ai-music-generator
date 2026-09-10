@@ -4,10 +4,15 @@ Native Apple Metal via MLX rather than PyTorch/MPS. Shells out to the runtime's 
 documented CLI rather than reaching into its internals, so upstream changes stay contained.
 """
 import json
+import os
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+# Xet transfer hangs silently on first download. Set before anything touches
+# huggingface_hub, and set here too so the runner is safe when run on its own.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 MODEL_ID = "vanch007/MiniMax-Music3-MLX-8bit"
 CLI = Path(sys.executable).parent / "mlx-minimax-music3"
@@ -27,7 +32,7 @@ def main() -> int:
     ]
     if job.get("lyrics"):
         cmd += ["--lyrics", job["lyrics"]]
-    if job.get("steps"):
+    if job.get("steps") is not None:  # 0 is a value, not an absence
         cmd += ["--steps", str(int(job["steps"]))]
 
     proc = subprocess.run(cmd, capture_output=True, text=True)

@@ -104,7 +104,22 @@ numpy already.
 | `musicgen` | *(no lyrics channel)* |
 
 Passing the wrong one doesn't error - **you just get unwanted vocals**. Now a backend
-property (`instrumental_tag`), resolved in `core.generate`. Never hardcode it.
+property (`instrumental_tag`), resolved in `core.generate`. Never hardcode it. Passing
+`--lyrics` to `musicgen` raises rather than being silently ignored.
+
+### A flag the backend cannot honour used to vanish, and the sidecar still recorded it
+
+**Symptom:** `--steps 80 -m minimax-mlx` produced the same audio as no flag, and the
+sidecar said `infer_step: 80`. MusicGen ran at guidance 15 (its own default is 3) because
+one CLI default was applied to every backend.
+
+**Cause:** `core.generate` built the subprocess job without `steps`, and the
+`mlx-minimax-music3` CLI has no guidance flag at all, but nothing said so.
+
+**Fix:** each `Backend` declares `default_steps` and `default_guidance` (`None` = no such
+control) and `supports_lyrics`; `core.generate` applies the backend's default and raises
+for a value it cannot honour. The sidecar records `null` for a knob that did not apply.
+When adding a backend, read its runtime's CLI source for the flags it really takes.
 
 ### Duration caps are per-model
 

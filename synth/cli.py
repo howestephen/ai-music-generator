@@ -11,8 +11,9 @@ from . import backends, core
 
 def _print_track(track: core.Track, as_json: bool) -> None:
     if as_json:
+        # One object per line (JSON Lines), so --count N stays machine-parseable.
         print(json.dumps({**json.loads(track.sidecar_path().read_text()),
-                          "path": str(track.path)}, indent=2))
+                          "path": str(track.path)}))
     else:
         print(f"  -> {track.path.name}  ({track.elapsed_seconds}s, seed {track.seed})")
 
@@ -49,7 +50,7 @@ def cmd_batch(args: argparse.Namespace) -> int:
                 jobs.append((file.name, line))
 
     if not jobs:
-        print(f"No prompts found in {prompt_dir}/ - add a .txt file with one prompt per line.")
+        print(f"No prompts found in {prompt_dir}/. Add a .txt file with one prompt per line.")
         return 1
 
     print(f"{len(jobs)} prompt(s) from {prompt_dir}/\n")
@@ -78,14 +79,20 @@ def cmd_batch(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _knob(value) -> str:
+    return "n/a" if value is None else f"{value:g}"
+
+
 def cmd_models(args: argparse.Namespace) -> int:
     for name, b in sorted(backends.BACKENDS.items()):
         mark = "ok " if b.available else "MISSING"
         star = " *" if name == core.DEFAULT_MODEL else "  "
-        print(f"{star}{name:9} [{mark}] {b.model_id}")
-        print(f"           max {b.max_duration:.0f}s | prompt: {b.prompt_style} | {b.licence}")
-        print(f"           {b.notes}\n")
-    print(f"* = default. Override with --model/-m.")
+        print(f"{star}{name:12} [{mark}] {b.model_id}")
+        print(f"              max {b.max_duration:.0f}s | steps {_knob(b.default_steps)} | "
+              f"guidance {_knob(b.default_guidance)} | prompt: {b.prompt_style} | {b.dtype}")
+        print(f"              {b.licence}")
+        print(f"              {b.notes}\n")
+    print("* = default. Override with --model/-m. 'n/a' = the backend has no such control.")
     return 0
 
 
@@ -102,17 +109,19 @@ def cmd_ui(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="synth",
-        description="Generate background music locally with ACE-Step.",
+        description="Describe music in words, render it locally.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--duration", "-d", type=float, default=60.0,
                        help="length in seconds (default: 60)")
-        p.add_argument("--steps", type=int, default=60,
-                       help="inference steps; lower is faster, rougher (default: 60)")
-        p.add_argument("--guidance", "-g", type=float, default=15.0,
-                       help="prompt adherence; higher follows the prompt harder (default: 15)")
+        p.add_argument("--steps", type=int, default=None,
+                       help="inference steps; lower is faster, rougher "
+                            "(default: the backend's own, see `models`)")
+        p.add_argument("--guidance", "-g", type=float, default=None,
+                       help="prompt adherence; higher follows the prompt harder "
+                            "(default: the backend's own, see `models`)")
         p.add_argument("--lyrics", default=None,
                        help="lyrics; default is the backend's instrumental sentinel")
         p.add_argument("--count", "-n", type=int, default=1,
@@ -122,9 +131,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help=f"backend to use (default: {core.DEFAULT_MODEL})")
 
     gen = sub.add_parser("gen", help="generate from a single prompt")
-    gen.add_argument("prompt", help="style tags, e.g. 'lo-fi hip hop, warm rhodes, 85bpm'")
+    gen.add_argument("prompt", help="style tags for acestep/musicgen, e.g. 'lo-fi hip hop, "
+                                    "warm rhodes, 85bpm'; a structured caption for minimax-mlx")
     gen.add_argument("--seed", type=int, default=None, help="reproduce a previous track")
-    gen.add_argument("--json", action="store_true", help="machine-readable output")
+    gen.add_argument("--json", action="store_true", help="machine-readable output, one JSON object per line")
     add_common(gen)
     gen.set_defaults(func=cmd_gen)
 

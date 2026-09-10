@@ -88,10 +88,11 @@ Non-commercial weights.
 | `--model` / `-m` | Backend to use |
 | `--duration` / `-d` | Seconds (each backend enforces its own cap) |
 | `--count` / `-n` | Variations per prompt |
+| `--guidance` / `-g` | Prompt adherence. Default is the backend's own (`acestep` 15, `musicgen` 3); `minimax-mlx` exposes none and refuses the flag |
 | `--seed` | Reproduce a specific track |
-| `--steps` | Inference steps - lower is faster, rougher |
-| `--lyrics` | Defaults to the backend's instrumental sentinel |
-| `--json` | Machine-readable output |
+| `--steps` | Inference steps, lower is faster and rougher. Default is the backend's own; `musicgen` has none and refuses the flag |
+| `--lyrics` | Defaults to the backend's instrumental sentinel; `musicgen` has no lyrics channel and refuses the flag |
+| `--json` | Machine-readable output, one JSON object per line |
 
 ## Prompting
 
@@ -124,12 +125,13 @@ than blending - see [docs/gotchas.md](docs/gotchas.md).
 
 ## Reproducibility
 
-Every WAV gets a matching `.json` sidecar recording prompt, seed, model and settings. This
+Every WAV gets a matching `.json` sidecar recording prompt, seed, backend, model and the
+settings that actually applied (a knob the backend does not have is recorded as `null`). This
 is what makes the tool usable rather than a slot machine: when something lands, you can
 change one parameter instead of rerolling and losing it.
 
 ```bash
-./.venv/bin/python -m synth.cli gen "<prompt from json>" --seed <seed from json> -m <model>
+./.venv/bin/python -m synth.cli gen "<prompt from json>" --seed <seed from json> -m <backend from json>
 ```
 
 ## Layout

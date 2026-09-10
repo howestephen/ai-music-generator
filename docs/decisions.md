@@ -13,6 +13,26 @@ than re-argued from scratch.
 
 ---
 
+## 2026-09-10 - Backends declare their knobs; core refuses what it cannot honour
+
+**Decided:** `Backend` carries `default_steps`, `default_guidance` (`None` = the backend has
+no such control), `supports_lyrics` and `dtype`. `core.generate` applies the backend's own
+defaults and raises on a value the backend cannot use. The sidecar gains a `backend` key
+(the registry name `--model` takes) and keeps `model` (the weights id); `dtype` is the
+backend's real precision.
+
+**Why:** the 2026-09-09 audit found `--steps` and `--guidance` never reached `minimax-mlx`,
+MusicGen always ran at guidance 15, and the README's reproduction command failed because
+the sidecar's `model` field was not a `--model` choice. Silent drops that leave a false
+record are the worst kind; loud refusal is cheaper.
+
+**Kept additive:** old sidecars still parse; new ones carry one extra key.
+
+**Would revisit if:** a backend exposes guidance later (set its `default_guidance`) or
+the sidecar needs a schema version.
+
+---
+
 ## 2026-08-15 - Project scope is open-ended verbal music synthesis
 
 **Decided:** the repo is a workbench for describing music in words and rendering it

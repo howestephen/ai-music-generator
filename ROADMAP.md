@@ -20,9 +20,8 @@ they are never buried in a chat.
 - Goal: describe music in words, render it locally on Apple Silicon, and keep the
   architecture easy to add models to
 - Current phase: 0, retrofit and audit remediation
-- Biggest known risk: `core.generate` is the one seam that knows about per-backend
-  differences and applies them inconsistently, so CLI flags are silently dropped and
-  sidecars record settings that never applied
+- Biggest known risk: the runner seam is still soft (0.3): a runner can exit 0 having
+  written nothing, hang forever, or emit malformed JSON, and the caller cannot tell
 - Default backend: `acestep`, pending a listening test against `minimax-mlx`
   (owner decision, open since 2026-08-14)
 
@@ -36,8 +35,8 @@ they are never buried in a chat.
 
 | # | Title | Status | Why it matters | Spec | Deps |
 |---|---|---|---|---|---|
-| 0.1 | Retrofit to `ai-product-base` | `in_progress` | Rules, commit gates, frontmatter and the structure lock. Nothing else is enforced until this lands | none | - |
-| 0.2 | Per-backend parameter plumbing | `planned` | `--steps` and `--guidance` never reach `minimax-mlx`; MusicGen always gets guidance 15 instead of its own 3; `--lyrics` is a silent no-op on MusicGen; sidecar `dtype` is wrong for MLX and its `model` field cannot be fed back to `-m`, so the README reproduction command fails. Rewrite exists in a git stash dated 2026-09-10 with 18 passing tests | none | 0.1 |
+| 0.1 | Retrofit to `ai-product-base` | `done` | Rules, commit gates, frontmatter and the structure lock. Nothing else is enforced until this lands | none | - |
+| 0.2 | Per-backend parameter plumbing | `done` | `--steps` and `--guidance` never reach `minimax-mlx`; MusicGen always gets guidance 15 instead of its own 3; `--lyrics` is a silent no-op on MusicGen; sidecar `dtype` is wrong for MLX and its `model` field cannot be fed back to `-m`, so the README reproduction command fails. Landed 2026-09-10 on `fix/backend-parameter-plumbing`: tests in `synth/tests.py`; `./.venv/bin/python scripts/mutate.py` reruns every listed mutation; each must fail the suite | none | 0.1 |
 | 0.3 | Harden the runner seam | `planned` | Unguarded `json.loads`; no check that the runner wrote the file; no duration lower bound; `available` ignores the `mlx-minimax-music3` binary; no subprocess timeout; subprocess text not decoded as UTF-8 explicitly | none | 0.2 |
 | 0.4 | Make `analyze.py` honest | `planned` | Hardcoded to D Mixolydian from a finished brief, so every other track gets a confident, meaningless scale score; one bad file aborts the whole run; NaN `intro_swell` on short clips is swallowed by a blanket warnings filter | none | 0.1 |
 | 0.5 | Docs match the code | `planned` | README has no install section though `core.py` sends users there; gotchas cite numpy handling the mlx runner does not contain and claim the XET flag is set in every runner; `.venv-mlx` has no manifest anywhere | none | 0.2 |
@@ -66,7 +65,7 @@ they are never buried in a chat.
 
 ## Current next step
 
-- Smallest next milestone: 0.1, finish the retrofit and have it audited
-- Then: 0.2, apply the stashed parameter-plumbing work, test, audit, commit
+- Smallest next milestone: 0.3, harden the runner seam
+- Then: 0.4 and 0.5 in either order; 0.5 depends on 0.2, which has landed
 - Expected validation: `scripts/validate.py --index` clean, retrofit checker clean,
   unit tests pass, independent audit clean

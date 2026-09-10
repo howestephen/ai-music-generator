@@ -162,9 +162,11 @@ commits. Stop at the milestone for Stephen's review.
 Validation for this project:
 
 - `./.venv/bin/python -m synth.cli models` lists every backend as `ok`
-- `./.venv/bin/python -m unittest discover -s synth -t .` runs the unit tests. None
-  exist in the tree until milestone 0.2 lands; exit 5 (no tests discovered) is not a
-  pass. The runner seam is stubbed in that suite, so no model loads
+- `./.venv/bin/python -m unittest discover -s synth -t .` runs the unit tests in
+  `synth/tests.py`; the runner seam is stubbed there, so no model loads. Exit 5 (no
+  tests discovered) is not a pass
+- `./.venv/bin/python scripts/mutate.py` proves the tests bite: every listed
+  mutation must fail the suite
 - `python3.13 scripts/validate.py` on the working tree, then `--index` on what is
   staged, before every commit. The commit hook enforces frontmatter, the allowlist,
   the structure lock, word budgets, no em-dashes and no secrets. An agent never
