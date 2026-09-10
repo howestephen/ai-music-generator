@@ -1,0 +1,45 @@
+{
+  "warn_words": 1300,
+  "fail_words": 2300,
+  "archive_dir": "_archive/",
+  "allowlist": [
+    "CLAUDE.md",
+    "AGENTS.md",
+    "README.md",
+    "RETROFIT.md",
+    "ROADMAP.md",
+    "handoffs/TEMPLATE.md"
+  ],
+  "growable": [
+    {
+      "dir": "docs/",
+      "pattern": "^[a-z0-9-]+\\.md$"
+    },
+    {
+      "dir": "specs/",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[a-z0-9-]+\\.md$"
+    },
+    {
+      "dir": "handoffs/",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[a-z0-9-]+\\.md$"
+    }
+  ],
+  "ignore": [
+    "^_archive/",
+    "^\\.claude/"
+  ],
+  "extra_statuses": [],
+  "top_dirs": [
+    ".claude",
+    "_archive",
+    "briefs",
+    "docs",
+    "handoffs",
+    "output",
+    "prompts",
+    "runners",
+    "scripts",
+    "specs",
+    "synth"
+  ]
+}

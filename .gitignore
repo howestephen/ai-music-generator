@@ -1,6 +1,24 @@
+# Two isolated environments (see README "Environments") and Python junk
 .venv/
 .venv-mlx/
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Generated audio and sidecars stay local; keep the folder
 output/*
 !output/.gitkeep
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local editor and tool state. .claude/settings.json (if ever added) stays tracked.
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+.DS_Store
+*.log
+.claude/hooks-state/
