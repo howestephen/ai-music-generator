@@ -57,11 +57,10 @@ they are never buried in a chat.
 
 1. Default backend: `acestep` stays until Stephen has listened to `minimax-mlx` on
    the same brief. Nothing in the code can settle this
-2. the client brief option D is the invented-scope prompt that
-   `CLAUDE.md` cites as a hard lesson, and its rerun directory duplicates the same finished
-   brief. Archive or consolidate: Stephen's call
-3. Whether `.venv-mlx` gets its own requirements file (a new top-level file) or the
-   pinned install command in the README is enough
+2. Resolved 2026-09-10: the finished client brief`briefs/` was deleted on
+   Stephen's instruction; `briefs/` stays declared for future prompt sets
+3. Resolved 2026-09-10: no new top-level file at this level; the pinned `.venv-mlx`
+   install command goes in the README (milestone 0.5)
 
 ## Current next step
 
