@@ -81,7 +81,8 @@ the selected backend's prompt style using separate tag and structured-caption ve
 Generated tracks remain in a playable history below
 the controls, newest first. The history is rebuilt from `output/` when the UI starts, so
 closing the browser does not lose earlier tracks. Use **Refresh history** to include files
-generated elsewhere while the UI is already open.
+generated elsewhere while the UI is already open. During generation, the Generate button
+becomes a disabled progress state so the request is acknowledged immediately.
 
 **Analyse what came out** - tempo, modality, transient placement:
 

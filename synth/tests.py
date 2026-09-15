@@ -246,6 +246,14 @@ class UiHistory(unittest.TestCase):
 
 
 class UiModelSelection(unittest.TestCase):
+    def test_generation_button_acknowledges_click_and_recovers(self):
+        started = app._generation_started()
+        self.assertEqual(started["value"], "Generating...")
+        self.assertFalse(started["interactive"])
+        finished = app._generation_finished()
+        self.assertEqual(finished["value"], "Generate")
+        self.assertTrue(finished["interactive"])
+
     def test_switching_to_musicgen_clamps_duration_and_hides_steps(self):
         updates = app._model_updates("musicgen", 60, None)
         self.assertEqual(updates[1]["value"], 30)
@@ -269,6 +277,15 @@ model_id = next(
     component_id for component_id, component in components.items()
     if component["type"] == "dropdown" and component["props"].get("label") == "Model"
 )
+generate_id = next(
+    component_id for component_id, component in components.items()
+    if component["type"] == "button" and component["props"].get("value") == "Generate"
+)
+generation = next(
+    dependency for dependency in config["dependencies"]
+    if dependency.get("api_name") == "_generate"
+)
+generation_id = generation["id"]
 print(json.dumps({
     "models": [value for _label, value in components[model_id]["props"]["choices"]],
     "buttons": [
@@ -281,6 +298,19 @@ print(json.dumps({
     ),
     "history_render": any(
         dependency.get("render_id") == 0 for dependency in config["dependencies"]
+    ),
+    "button_progress": generation.get("show_progress_on") == [generate_id],
+    "button_success_recovery": any(
+        dependency["outputs"] == [generate_id]
+        and dependency.get("trigger_after") == generation_id
+        and dependency.get("trigger_only_on_success")
+        for dependency in config["dependencies"]
+    ),
+    "button_failure_recovery": any(
+        dependency["outputs"] == [generate_id]
+        and dependency.get("trigger_after") == generation_id
+        and dependency.get("trigger_only_on_failure")
+        for dependency in config["dependencies"]
     ),
 }))
 """
@@ -295,6 +325,9 @@ print(json.dumps({
         self.assertIn("Refresh history", config["buttons"])
         self.assertTrue(config["model_change"])
         self.assertTrue(config["history_render"])
+        self.assertTrue(config["button_progress"])
+        self.assertTrue(config["button_success_recovery"])
+        self.assertTrue(config["button_failure_recovery"])
 
     def test_generate_passes_the_selected_backend_and_refreshes_history(self):
         self_path = Path("/tmp/generated.wav")

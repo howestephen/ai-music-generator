@@ -38,6 +38,38 @@ PRESETS = {
     },
 }
 
+UI_CSS = """
+#generate-button:disabled {
+    animation: generation-progress 1.2s linear infinite;
+    background-color: var(--button-secondary-background-fill);
+    background-image: linear-gradient(
+        90deg,
+        transparent 0%,
+        transparent 35%,
+        var(--button-primary-background-fill) 50%,
+        transparent 65%,
+        transparent 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 250% 0.35rem;
+    color: var(--button-secondary-text-color);
+    opacity: 1;
+}
+
+@keyframes generation-progress {
+    from { background-position: 100% 100%; }
+    to { background-position: 0 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #generate-button:disabled {
+        animation: none;
+        background: var(--button-secondary-background-fill);
+        box-shadow: inset 0 -0.35rem 0 var(--button-primary-background-fill);
+    }
+}
+"""
+
 
 def _prompt_hint(backend: backends.Backend) -> str:
     if backend.prompt_style == "tags":
@@ -128,6 +160,14 @@ def _history_copy(track: dict) -> str:
     )
 
 
+def _generation_started():
+    return gr.update(value="Generating...", interactive=False, variant="secondary")
+
+
+def _generation_finished():
+    return gr.update(value="Generate", interactive=True, variant="primary")
+
+
 def _generate(model, prompt, duration, steps, guidance, seed, use_seed):
     if not prompt or not prompt.strip():
         raise gr.Error("Enter a prompt first.")
@@ -196,7 +236,7 @@ def build_ui() -> gr.Blocks:
                     value=False, label="Lock seed",
                     info="Off = new random seed each time. On = reproduce an exact track.",
                 )
-                go = gr.Button("Generate", variant="primary")
+                go = gr.Button("Generate", variant="primary", elem_id="generate-button")
 
             with gr.Column(scale=2):
                 gr.Markdown("## Latest result")
@@ -230,16 +270,36 @@ def build_ui() -> gr.Blocks:
                     gr.Markdown(_history_copy(track), key=f"details-{track['path']}")
 
         refresh.click(_load_history, outputs=history)
-        go.click(
+        request = go.click(
+            _generation_started,
+            outputs=go,
+            queue=False,
+            show_progress="hidden",
+        )
+        generation = request.then(
             _generate,
             [model, prompt, duration, steps, guidance, seed, use_seed],
             [status, seed, history],
+            show_progress="full",
+            show_progress_on=go,
+        )
+        generation.success(
+            _generation_finished,
+            outputs=go,
+            queue=False,
+            show_progress="hidden",
+        )
+        generation.failure(
+            _generation_finished,
+            outputs=go,
+            queue=False,
+            show_progress="hidden",
         )
     return demo
 
 
 def main(share: bool = False, port: int = 7860) -> None:
-    build_ui().launch(share=share, server_port=port, inbrowser=True)
+    build_ui().launch(share=share, server_port=port, inbrowser=True, css=UI_CSS)
 
 
 if __name__ == "__main__":

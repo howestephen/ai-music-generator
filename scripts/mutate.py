@@ -46,6 +46,9 @@ MUTATIONS = [
     ("MiniMax preset stays as tags", "app.py",
      '    return prompts[backends.get(model).prompt_style]',
      '    return prompts["tags"]'),
+    ("Generate button stays clickable", "app.py",
+     'return gr.update(value="Generating...", interactive=False, variant="secondary")',
+     'return gr.update(value="Generating...", interactive=True, variant="secondary")'),
 ]
 
 
