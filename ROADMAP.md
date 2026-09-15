@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-15
+updated: 2026-09-16
 ---
 
 # ROADMAP
@@ -38,6 +38,7 @@ they are never buried in a chat.
 | 0.1 | Retrofit to `ai-product-base` | `done` | Rules, commit gates, frontmatter and the structure lock. Nothing else is enforced until this lands | none | - |
 | 0.2 | Per-backend parameter plumbing | `done` | `--steps` and `--guidance` never reach `minimax-mlx`; MusicGen always gets guidance 15 instead of its own 3; `--lyrics` is a silent no-op on MusicGen; sidecar `dtype` is wrong for MLX and its `model` field cannot be fed back to `-m`, so the README reproduction command fails. Landed 2026-09-10 on `fix/backend-parameter-plumbing`: tests in `synth/tests.py`; `./.venv/bin/python scripts/mutate.py` reruns every listed mutation; each must fail the suite | none | 0.1 |
 | 0.3 | Model selector and persistent UI history | `done` | The UI was locked to ACE-Step and replaced the visible result after every generation. It now selects any registered backend, adapts controls and presets to that backend, and rebuilds a newest-first playable history from the existing WAV files and sidecars. Landed 2026-09-15 on `codex/ui-model-history`. Button-level generation progress followed on `codex/ui-generate-progress`; the balanced history and fitted waveforms followed on `codex/ui-balanced-history-progress`. UI helpers are covered in `synth/tests.py` | none | 0.2 |
+| 0.3.1 | Serial UI render queue | `done` | Submissions now become reorderable and removable pending cards immediately, while one background worker renders at a time. The button is released as soon as the queue accepts a job; the active card shows a clearly labelled estimate because current runners expose start and finish but no trustworthy step callbacks. Implemented on `codex/ui-generation-queue` | none | 0.3 |
 | 0.4 | Harden the runner seam | `in_progress` | Unguarded `json.loads`; no check that the runner wrote the file; no duration lower bound; `available` does not verify that the MiniMax module imports; no subprocess timeout; subprocess text not decoded as UTF-8 explicitly. First slice landed 2026-09-15: the MiniMax runner invokes its module with the current environment's Python, avoiding stale absolute paths in console scripts after a repository move | none | 0.2 |
 | 0.5 | Make `analyze.py` honest | `planned` | Hardcoded to D Mixolydian from a finished brief, so every other track gets a confident, meaningless scale score; one bad file aborts the whole run; NaN `intro_swell` on short clips is swallowed by a blanket warnings filter | none | 0.1 |
 | 0.6 | Docs match the code | `planned` | README has no install section though `core.py` sends users there; gotchas cite numpy handling the mlx runner does not contain and claim the XET flag is set in every runner; `.venv-mlx` has no manifest anywhere | none | 0.2 |

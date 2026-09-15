@@ -40,6 +40,13 @@ MUTATIONS = [
      'reverse=True)', 'reverse=False)'),
     ("UI ignores selected model", "app.py",
      "            model=backend.name,", "            model=core.DEFAULT_MODEL,"),
+    ("queued UI job ignores selected model", "app.py",
+     '        "guidance_scale": guidance if backend.default_guidance is not None else None,\n'
+     '        "model": backend.name,\n'
+     '    }',
+     '        "guidance_scale": guidance if backend.default_guidance is not None else None,\n'
+     '        "model": core.DEFAULT_MODEL,\n'
+     '    }'),
     ("UI exposes unsupported step control", "app.py",
      "gr.update(value=backend.default_steps or 60, visible=backend.default_steps is not None),",
      "gr.update(value=backend.default_steps or 60, visible=True),"),
@@ -63,6 +70,26 @@ MUTATIONS = [
     ("Full waveform cannot seek", "app.py",
      "audio.currentTime = Math.max(0, Math.min(1, position)) * audio.duration;",
      "audio.currentTime = 0;"),
+    ("running queue job can be removed", "synth/jobs.py",
+     "                if job.id != job_id or job.status == \"running\"",
+     "                if job.id != job_id"),
+    ("estimated queue progress claims completion", "synth/jobs.py",
+     "progress = min(95.0, 90.0 * elapsed / job.expected_seconds)",
+     "progress = min(100.0, 90.0 * elapsed / job.expected_seconds)"),
+    ("queued job loses its acceptance wipe", "app.py",
+     "animation: queued-job-wipe 1.4s ease-in-out infinite;",
+     "animation: none;"),
+    ("queue trusts a missing output file", "synth/jobs.py",
+     '                if not output_path.is_file():',
+     '                if False:'),
+    ("runtime estimate trusts infinite history metadata", "app.py",
+     "            math.isfinite(track_duration)\n"
+     "            and math.isfinite(elapsed)",
+     "            True\n"
+     "            and True"),
+    ("UI accepts infinite duration", "app.py",
+     "    if not math.isfinite(duration) or duration <= 0:",
+     "    if duration <= 0:"),
 ]
 
 

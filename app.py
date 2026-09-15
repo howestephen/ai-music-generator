@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import html
 import json
+import math
+import random
+import statistics
 from functools import lru_cache
 from pathlib import Path
 
 import gradio as gr
 import soundfile as sf
 
-from synth import backends, core
+from synth import backends, core, jobs
 
 # Starting points for work-video backing tracks in each backend's prompt language.
 PRESETS = {
@@ -119,13 +122,78 @@ UI_CSS = """
     display: none;
 }
 
+.queue-job {
+    background: var(--block-background-fill);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--block-radius);
+    padding: 0.75rem;
+}
+
+.queue-job-header {
+    align-items: baseline;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+}
+
+.queue-job-title {
+    font-weight: 600;
+}
+
+.queue-job-status {
+    color: var(--body-text-color-subdued);
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.queue-job-summary {
+    color: var(--body-text-color-subdued);
+    font-size: 0.9em;
+    margin-top: 0.35rem;
+}
+
+.queue-job-track {
+    background: var(--button-secondary-background-fill);
+    border-radius: var(--button-large-radius);
+    height: 3.25rem;
+    margin-top: 0.65rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.queue-job-fill {
+    background: var(--button-primary-background-fill);
+    bottom: 0;
+    left: 0;
+    position: absolute;
+    top: 0;
+    transition: width 0.5s linear;
+    width: var(--job-progress, 0%);
+}
+
+.queue-job.queued .queue-job-fill {
+    animation: queued-job-wipe 1.4s ease-in-out infinite;
+    transform: translateX(-105%);
+    width: 55%;
+}
+
+.queue-job.failed {
+    border-color: var(--error-background-fill);
+}
+
+@keyframes queued-job-wipe {
+    from { transform: translateX(-105%); }
+    to { transform: translateX(190%); }
+}
+
 @keyframes generation-progress {
     from { transform: translateX(-105%); }
     to { transform: translateX(190%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #generate-button:disabled::before {
+    #generate-button:disabled::before,
+    .queue-job.queued .queue-job-fill {
         animation: none;
         transform: translateX(40%);
     }
@@ -260,6 +328,7 @@ def _load_history(output_dir: Path | None = None) -> list[dict]:
             "modified_ns": modified_ns,
             "backend": metadata.get("backend", "unknown model"),
             "duration": metadata.get("duration"),
+            "elapsed_seconds": metadata.get("elapsed_seconds"),
             "seed": metadata.get("seed"),
             "prompt": metadata.get("prompt", "Prompt unavailable"),
             "generated_at": metadata.get("generated_at", "Time unavailable"),
@@ -323,6 +392,138 @@ def _history_waveform(track: dict) -> str:
         'aria-valuenow="0">'
         '<svg viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true">'
         f'{bars}</svg><span class="history-waveform-cursor"></span></div>'
+    )
+
+
+_JOB_QUEUE: jobs.GenerationQueue | None = None
+
+
+def _run_queued_job(payload: dict) -> core.Track:
+    return core.generate(**payload)
+
+
+def _get_job_queue() -> jobs.GenerationQueue:
+    global _JOB_QUEUE
+    if _JOB_QUEUE is None:
+        _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job)
+    return _JOB_QUEUE
+
+
+def _estimate_runtime(model: str, duration: float) -> float:
+    ratios = []
+    for track in _load_history():
+        if track["backend"] != model:
+            continue
+        try:
+            track_duration = float(track["duration"])
+            elapsed = float(track["elapsed_seconds"])
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if (
+            math.isfinite(track_duration)
+            and math.isfinite(elapsed)
+            and track_duration > 0
+            and elapsed > 0
+        ):
+            ratios.append(elapsed / track_duration)
+    fallback_ratios = {"acestep": 2.5, "minimax-mlx": 3.3, "musicgen": 15.0}
+    ratio = statistics.median(ratios) if ratios else fallback_ratios.get(model, 3.0)
+    return max(5.0, float(duration) * ratio)
+
+
+def _enqueue_generation(model, prompt, duration, steps, guidance, seed, use_seed):
+    if not prompt or not prompt.strip():
+        raise gr.Error("Enter a prompt first.")
+    backend = backends.get(model)
+    duration = float(duration)
+    if not math.isfinite(duration) or duration <= 0:
+        raise gr.Error("Duration must be a positive number.")
+    if duration > backend.max_duration:
+        raise gr.Error(f"{backend.name} caps at {backend.max_duration:.0f}s")
+    chosen_seed = int(seed) if use_seed else random.randint(0, 2**31 - 1)
+    payload = {
+        "prompt": prompt.strip(),
+        "duration": duration,
+        "seed": chosen_seed,
+        "infer_step": int(steps) if backend.default_steps is not None else None,
+        "guidance_scale": guidance if backend.default_guidance is not None else None,
+        "model": backend.name,
+    }
+    summary = {
+        "model": backend.name,
+        "model_id": backend.model_id,
+        "prompt": prompt.strip(),
+        "duration": duration,
+        "seed": chosen_seed,
+    }
+    queue = _get_job_queue()
+    queue.enqueue(payload, summary, _estimate_runtime(model, duration))
+    status = (
+        f"**Queued {backend.name}** · {duration:g}s · seed `{chosen_seed}`  \n"
+        "The Generate button is ready for another job."
+    )
+    return status, chosen_seed, queue.snapshot()
+
+
+def _history_signature(output_dir: Path | None = None) -> tuple[tuple[str, int], ...]:
+    output_dir = Path(output_dir) if output_dir else core.OUTPUT_DIR
+    if not output_dir.exists():
+        return ()
+    signature = []
+    for pattern in ("*.wav", "*.json"):
+        for path in output_dir.glob(pattern):
+            try:
+                signature.append((path.name, path.stat().st_mtime_ns))
+            except OSError:
+                continue
+    return tuple(sorted(signature))
+
+
+def _refresh_history():
+    return _load_history(), _history_signature()
+
+
+def _poll_ui(previous_signature):
+    current_signature = _history_signature()
+    history = _load_history() if current_signature != previous_signature else gr.skip()
+    return _get_job_queue().snapshot(), history, current_signature
+
+
+def _move_job(job_id: str, direction: int):
+    return _get_job_queue().move(job_id, direction)
+
+
+def _remove_job(job_id: str):
+    return _get_job_queue().remove(job_id)
+
+
+def _queue_job_html(job: dict) -> str:
+    status_labels = {
+        "queued": f"Queued #{job.get('queue_position', 1)}",
+        "running": f"Rendering · estimated {job['progress']:g}%",
+        "complete": "Finishing",
+        "failed": "Failed",
+    }
+    prompt = html.escape(str(job["prompt"]))
+    if len(prompt) > 180:
+        prompt = f"{prompt[:177]}..."
+    details = (
+        f"{html.escape(str(job['model']))} · {float(job['duration']):g}s · "
+        f"seed {html.escape(str(job['seed']))}"
+    )
+    error = ""
+    if job.get("error"):
+        error = f'<div class="queue-job-summary">{html.escape(str(job["error"]))}</div>'
+    return (
+        f'<div class="queue-job {html.escape(job["status"])}" '
+        f'style="--job-progress: {float(job["progress"]):g}%">'
+        '<div class="queue-job-header">'
+        f'<span class="queue-job-title">{details}</span>'
+        f'<span class="queue-job-status">{status_labels[job["status"]]}</span>'
+        '</div>'
+        f'<div class="queue-job-summary">{prompt}</div>{error}'
+        '<div class="queue-job-track"><span class="queue-job-fill"></span></div>'
+        '</div>'
     )
 
 
@@ -403,15 +604,52 @@ def build_ui() -> gr.Blocks:
                     info="Off = new random seed each time. On = reproduce an exact track.",
                 )
                 go = gr.Button("Generate", variant="primary", elem_id="generate-button")
+                status = gr.Markdown("Ready to queue a generation.")
 
             with gr.Column(scale=1, elem_id="history-panel"):
-                gr.Markdown("## Latest result")
-                status = gr.Markdown("Generate a track and it will appear first below.")
+                gr.Markdown("## Render queue")
+                queue_state = gr.State(_get_job_queue().snapshot())
+
+                @gr.render(inputs=queue_state)
+                def render_queue(queue_items):
+                    if not queue_items:
+                        gr.Markdown("No queued renders.")
+                    for job in queue_items:
+                        with gr.Group(key=f"job-{job['id']}"):
+                            gr.HTML(_queue_job_html(job))
+                            if job["status"] == "queued":
+                                with gr.Row():
+                                    up = gr.Button("Move up", size="sm")
+                                    down = gr.Button("Move down", size="sm")
+                                    remove = gr.Button("Remove", size="sm")
+                                up.click(
+                                    lambda job_id=job["id"]: _move_job(job_id, -1),
+                                    outputs=queue_state,
+                                    queue=False,
+                                )
+                                down.click(
+                                    lambda job_id=job["id"]: _move_job(job_id, 1),
+                                    outputs=queue_state,
+                                    queue=False,
+                                )
+                                remove.click(
+                                    lambda job_id=job["id"]: _remove_job(job_id),
+                                    outputs=queue_state,
+                                    queue=False,
+                                )
+                            elif job["status"] == "failed":
+                                remove = gr.Button("Dismiss", size="sm")
+                                remove.click(
+                                    lambda job_id=job["id"]: _remove_job(job_id),
+                                    outputs=queue_state,
+                                    queue=False,
+                                )
 
                 with gr.Row():
                     gr.Markdown("## Track history")
                     refresh = gr.Button("Refresh history", size="sm")
                 history = gr.State(_load_history())
+                history_signature = gr.State(_history_signature())
 
                 @gr.render(inputs=history)
                 def render_history(tracks):
@@ -444,29 +682,40 @@ def build_ui() -> gr.Blocks:
         )
         preset.change(_preset_prompt, [preset, model], prompt)
 
-        refresh.click(_load_history, outputs=history)
+        refresh.click(
+            _refresh_history,
+            outputs=[history, history_signature],
+            queue=False,
+        )
         request = go.click(
             _generation_started,
             outputs=go,
             queue=False,
             show_progress="hidden",
         )
-        generation = request.then(
-            _generate,
+        submission = request.then(
+            _enqueue_generation,
             [model, prompt, duration, steps, guidance, seed, use_seed],
-            [status, seed, history],
-            show_progress="full",
-            show_progress_on=go,
+            [status, seed, queue_state],
+            show_progress="hidden",
         )
-        generation.success(
+        submission.success(
             _generation_finished,
             outputs=go,
             queue=False,
             show_progress="hidden",
         )
-        generation.failure(
+        submission.failure(
             _generation_finished,
             outputs=go,
+            queue=False,
+            show_progress="hidden",
+        )
+        timer = gr.Timer(0.5)
+        timer.tick(
+            _poll_ui,
+            inputs=history_signature,
+            outputs=[queue_state, history, history_signature],
             queue=False,
             show_progress="hidden",
         )

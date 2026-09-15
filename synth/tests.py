@@ -16,12 +16,15 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import app
-from synth import backends, cli, core
+from synth import backends, cli, core, jobs
 
 
 class _StubRunner:
@@ -193,6 +196,83 @@ class Registry(unittest.TestCase):
         self.assertIn("NON-COMMERCIAL", backends.get("musicgen").licence)
 
 
+class GenerationQueueTests(unittest.TestCase):
+    def test_jobs_run_serially_and_pending_jobs_can_move_or_be_removed(self):
+        first_started = threading.Event()
+        release_first = threading.Event()
+        order = []
+        output = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, output, ignore_errors=True)
+
+        def run(payload):
+            order.append(payload["name"])
+            if payload["name"] == "first":
+                first_started.set()
+                self.assertTrue(release_first.wait(2))
+            path = output / f"{payload['name']}.wav"
+            path.write_bytes(b"RIFF")
+            return SimpleNamespace(path=path)
+
+        queue = jobs.GenerationQueue(run, completed_hold_seconds=10)
+        self.addCleanup(queue.stop)
+        first = queue.enqueue({"name": "first"}, {"name": "first"}, 10)
+        self.assertTrue(first_started.wait(1))
+        second = queue.enqueue({"name": "second"}, {"name": "second"}, 10)
+        third = queue.enqueue({"name": "third"}, {"name": "third"}, 10)
+
+        after_active_remove = queue.remove(first["id"])
+        self.assertEqual(after_active_remove[0]["status"], "running")
+
+        queue.move(third["id"], -1)
+        queued = [item["name"] for item in queue.snapshot() if item["status"] == "queued"]
+        self.assertEqual(queued, ["third", "second"])
+        queue.remove(second["id"])
+        release_first.set()
+
+        deadline = time.monotonic() + 2
+        while order != ["first", "third"] and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(order, ["first", "third"])
+
+    def test_running_progress_is_explicitly_estimated_and_capped(self):
+        now = [0.0]
+        started = threading.Event()
+        release = threading.Event()
+        output = Path(tempfile.mkdtemp()) / "probe.wav"
+        self.addCleanup(shutil.rmtree, output.parent, ignore_errors=True)
+
+        def run(_payload):
+            started.set()
+            self.assertTrue(release.wait(2))
+            output.write_bytes(b"RIFF")
+            return SimpleNamespace(path=output)
+
+        queue = jobs.GenerationQueue(run, clock=lambda: now[0])
+        self.addCleanup(queue.stop)
+        queue.enqueue({}, {"name": "probe"}, expected_seconds=10)
+        self.assertTrue(started.wait(1))
+        now[0] = 5
+        running = queue.snapshot()[0]
+        self.assertEqual((running["status"], running["progress"]), ("running", 45.0))
+        now[0] = 50
+        self.assertEqual(queue.snapshot()[0]["progress"], 95.0)
+        release.set()
+
+    def test_missing_output_is_a_visible_failed_job(self):
+        queue = jobs.GenerationQueue(
+            lambda _payload: SimpleNamespace(path=Path("/missing.wav")),
+        )
+        self.addCleanup(queue.stop)
+        queue.enqueue({}, {"name": "missing"}, expected_seconds=10)
+        deadline = time.monotonic() + 1
+        snapshot = queue.snapshot()
+        while snapshot[0]["status"] != "failed" and time.monotonic() < deadline:
+            time.sleep(0.01)
+            snapshot = queue.snapshot()
+        self.assertEqual(snapshot[0]["status"], "failed")
+        self.assertIn("without writing its WAV", snapshot[0]["error"])
+
+
 class UiHistory(unittest.TestCase):
     def setUp(self) -> None:
         self.out = Path(tempfile.mkdtemp())
@@ -216,6 +296,15 @@ class UiHistory(unittest.TestCase):
             [track["name"] for track in app._load_history(self.out)],
             ["newer.wav", "older.wav"],
         )
+
+    def test_history_refreshes_when_a_sidecar_arrives_after_its_wav(self):
+        path = self._track("still-writing", 10)
+        before = app._history_signature(self.out)
+        path.with_suffix(".json").write_text(
+            json.dumps({"backend": "minimax-mlx"}), encoding="utf-8",
+        )
+        after = app._history_signature(self.out)
+        self.assertNotEqual(before, after)
 
     def test_missing_or_malformed_sidecars_do_not_hide_creative_assets(self):
         self._track("missing", 10)
@@ -269,6 +358,8 @@ class UiModelSelection(unittest.TestCase):
     def test_generation_progress_fills_button_and_waveforms_fit_without_scrolling(self):
         self.assertIn("#generate-button:disabled::before", app.UI_CSS)
         self.assertIn("inset: 0;", app.UI_CSS)
+        self.assertIn(".queue-job.queued .queue-job-fill", app.UI_CSS)
+        self.assertIn("animation: queued-job-wipe 1.4s ease-in-out infinite;", app.UI_CSS)
         self.assertIn(".history-audio .waveform-container", app.UI_CSS)
         self.assertIn(
             ".history-audio .subtitle-display {\n    display: none;\n}",
@@ -276,6 +367,27 @@ class UiModelSelection(unittest.TestCase):
         )
         self.assertIn('document.addEventListener("click"', app.UI_JS)
         self.assertIn("audio.currentTime = Math.max", app.UI_JS)
+
+    def test_queue_cards_distinguish_waiting_from_estimated_render_progress(self):
+        base = {
+            "id": "job-1",
+            "model": "minimax-mlx",
+            "duration": 60,
+            "seed": 123,
+            "prompt": "quiet & focused",
+            "error": None,
+        }
+        queued = app._queue_job_html({
+            **base, "status": "queued", "progress": 0, "queue_position": 2,
+        })
+        running = app._queue_job_html({
+            **base, "status": "running", "progress": 45,
+        })
+        self.assertIn('class="queue-job queued"', queued)
+        self.assertIn("Queued #2", queued)
+        self.assertIn("quiet &amp; focused", queued)
+        self.assertIn("Rendering · estimated 45%", running)
+        self.assertIn("--job-progress: 45%", running)
 
     def test_switching_to_musicgen_clamps_duration_and_hides_steps(self):
         updates = app._model_updates("musicgen", 60, None)
@@ -304,11 +416,11 @@ generate_id = next(
     component_id for component_id, component in components.items()
     if component["type"] == "button" and component["props"].get("value") == "Generate"
 )
-generation = next(
+submission = next(
     dependency for dependency in config["dependencies"]
-    if dependency.get("api_name") == "_generate"
+    if dependency.get("api_name") == "_enqueue_generation"
 )
-generation_id = generation["id"]
+submission_id = submission["id"]
 print(json.dumps({
     "models": [value for _label, value in components[model_id]["props"]["choices"]],
     "buttons": [
@@ -319,19 +431,23 @@ print(json.dumps({
         dependency["targets"] == [(model_id, "change")]
         for dependency in config["dependencies"]
     ),
-    "history_render": any(
-        dependency.get("render_id") == 0 for dependency in config["dependencies"]
+    "render_count": sum(
+        dependency.get("render_id") is not None for dependency in config["dependencies"]
     ),
-    "button_progress": generation.get("show_progress_on") == [generate_id],
+    "queue_poll": any(
+        dependency.get("api_name") == "_poll_ui"
+        for dependency in config["dependencies"]
+    ),
+    "submission_outputs_queue": len(submission["outputs"]) == 3,
     "button_success_recovery": any(
         dependency["outputs"] == [generate_id]
-        and dependency.get("trigger_after") == generation_id
+        and dependency.get("trigger_after") == submission_id
         and dependency.get("trigger_only_on_success")
         for dependency in config["dependencies"]
     ),
     "button_failure_recovery": any(
         dependency["outputs"] == [generate_id]
-        and dependency.get("trigger_after") == generation_id
+        and dependency.get("trigger_after") == submission_id
         and dependency.get("trigger_only_on_failure")
         for dependency in config["dependencies"]
     ),
@@ -352,14 +468,49 @@ print(json.dumps({
         self.assertIn("Generate", config["buttons"])
         self.assertIn("Refresh history", config["buttons"])
         self.assertTrue(config["model_change"])
-        self.assertTrue(config["history_render"])
-        self.assertTrue(config["button_progress"])
+        self.assertGreaterEqual(config["render_count"], 2)
+        self.assertTrue(config["queue_poll"])
+        self.assertTrue(config["submission_outputs_queue"])
         self.assertTrue(config["button_success_recovery"])
         self.assertTrue(config["button_failure_recovery"])
         self.assertEqual(
             config["panel_scales"],
             {"controls-panel": 1, "history-panel": 1},
         )
+
+    def test_enqueue_captures_selected_backend_and_returns_button_immediately(self):
+        queue = mock.Mock()
+        queue.enqueue.return_value = {"id": "job-1"}
+        queue.snapshot.return_value = [{"id": "job-1", "status": "queued"}]
+        with mock.patch.object(app, "_get_job_queue", return_value=queue), \
+                mock.patch.object(app, "_estimate_runtime", return_value=90), \
+                mock.patch.object(app.random, "randint", return_value=123):
+            status, seed, snapshot = app._enqueue_generation(
+                "minimax-mlx", " probe ", 60, 30, 15, 42, False,
+            )
+        payload, summary, expected = queue.enqueue.call_args.args
+        self.assertEqual(payload["model"], "minimax-mlx")
+        self.assertEqual(payload["prompt"], "probe")
+        self.assertEqual(payload["seed"], 123)
+        self.assertEqual((summary["model"], expected), ("minimax-mlx", 90))
+        self.assertEqual((seed, snapshot[0]["status"]), (123, "queued"))
+        self.assertIn("ready for another job", status)
+
+    def test_enqueue_rejects_non_finite_and_non_positive_durations(self):
+        for duration in (float("nan"), float("inf"), 0, -1):
+            with self.subTest(duration=duration), self.assertRaises(app.gr.Error):
+                app._enqueue_generation(
+                    "acestep", "probe", duration, 60, 15, 42, True,
+                )
+
+    def test_runtime_estimate_ignores_non_finite_history_metadata(self):
+        corrupt = [{
+            "backend": "minimax-mlx",
+            "duration": 60,
+            "elapsed_seconds": float("inf"),
+        }]
+        with mock.patch.object(app, "_load_history", return_value=corrupt):
+            self.assertEqual(app._estimate_runtime("minimax-mlx", 10), 33)
 
     def test_generate_passes_the_selected_backend_and_refreshes_history(self):
         self_path = Path("/tmp/generated.wav")

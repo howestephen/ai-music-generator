@@ -82,9 +82,14 @@ Generated tracks remain in a playable history to the right of the controls, newe
 in a balanced 50/50 layout. Each complete waveform is fitted to the available width and
 remains clickable for seeking. The history is rebuilt from `output/` when the UI starts, so
 closing the browser does not lose earlier tracks. Use **Refresh history** to include files
-generated elsewhere while the UI is already open. During generation, the Generate button
-becomes a disabled, full-height indeterminate progress state so the request is acknowledged
-immediately.
+generated elsewhere while the UI is already open.
+
+The UI accepts multiple render requests into a serial queue. The Generate button shows an
+acceptance wipe, then becomes available again as soon as the job is queued. Pending jobs can
+be reordered or removed in the right column. One job renders at a time; its card shows an
+explicitly labelled progress estimate, then gives way to the finished waveform. Serial
+rendering avoids the severe slowdown and unpredictable timings caused by competing Metal
+jobs. An active render cannot yet be cancelled safely.
 
 **Analyse what came out** - tempo, modality, transient placement:
 

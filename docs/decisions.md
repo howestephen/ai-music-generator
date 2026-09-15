@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-15
+updated: 2026-09-16
 ---
 
 # Decisions
@@ -10,6 +10,30 @@ updated: 2026-09-15
 Why the stack looks the way it does. Newest first. Each entry records what was decided,
 why, and what would change it - so a future decision can be revisited on evidence rather
 than re-argued from scratch.
+
+---
+
+## 2026-09-16 - UI generations use one serial worker
+
+**Decided:** the web UI accepts multiple render requests into an in-process queue but runs
+only one model job at a time. Pending jobs can be reordered or removed. The submission
+button is released when the queue accepts a job, not when that job eventually starts.
+
+**Why:** concurrent generations compete for the same Metal device and have already made
+individual jobs two to four times slower. Keeping the button disabled until a pending job
+started would also prevent more than one future render from being queued.
+
+**Progress honesty:** current model seams expose start and finish, not trustworthy progress
+callbacks. The active card therefore labels its moving percentage as an estimate derived
+from completed jobs for the same backend and caps it below completion. It reaches 100% only
+after the runner returns and the output exists.
+
+**Cancellation:** pending jobs can be removed; an active job cannot yet be cancelled. Safe
+active cancellation requires subprocess ownership for every backend and belongs with the
+runner-seam work, not a UI kill switch.
+
+**Would revisit if:** backends expose stable step callbacks, or isolated hardware makes
+parallel jobs genuinely faster rather than merely concurrent.
 
 ---
 
