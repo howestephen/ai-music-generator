@@ -78,11 +78,13 @@ Non-commercial weights.
 The model dropdown exposes every registered backend. Switching model updates the duration
 cap, supported controls, licence information and prompt guidance; presets are converted to
 the selected backend's prompt style using separate tag and structured-caption versions.
-Generated tracks remain in a playable history below
-the controls, newest first. The history is rebuilt from `output/` when the UI starts, so
+Generated tracks remain in a playable history to the right of the controls, newest first,
+in a balanced 50/50 layout. Each complete waveform is fitted to the available width and
+remains clickable for seeking. The history is rebuilt from `output/` when the UI starts, so
 closing the browser does not lose earlier tracks. Use **Refresh history** to include files
 generated elsewhere while the UI is already open. During generation, the Generate button
-becomes a disabled progress state so the request is acknowledged immediately.
+becomes a disabled, full-height indeterminate progress state so the request is acknowledged
+immediately.
 
 **Analyse what came out** - tempo, modality, transient placement:
 

@@ -244,6 +244,18 @@ class UiHistory(unittest.TestCase):
         track = app._load_history(self.out)[0]
         self.assertEqual((track["backend"], track["seed"]), ("minimax-mlx", 123))
 
+    def test_history_waveform_contains_every_peak_and_is_seekable(self):
+        track = {
+            "path": str(self.out / "probe.wav"),
+            "name": 'probe & "seek".wav',
+            "modified_ns": 10,
+        }
+        with mock.patch.object(app, "_waveform_peaks", return_value=(0.2, 1.0, 0.5)):
+            waveform = app._history_waveform(track)
+        self.assertEqual(waveform.count("<rect "), 3)
+        self.assertIn('role="slider"', waveform)
+        self.assertIn("probe &amp; &quot;seek&quot;.wav", waveform)
+
 
 class UiModelSelection(unittest.TestCase):
     def test_generation_button_acknowledges_click_and_recovers(self):
@@ -253,6 +265,17 @@ class UiModelSelection(unittest.TestCase):
         finished = app._generation_finished()
         self.assertEqual(finished["value"], "Generate")
         self.assertTrue(finished["interactive"])
+
+    def test_generation_progress_fills_button_and_waveforms_fit_without_scrolling(self):
+        self.assertIn("#generate-button:disabled::before", app.UI_CSS)
+        self.assertIn("inset: 0;", app.UI_CSS)
+        self.assertIn(".history-audio .waveform-container", app.UI_CSS)
+        self.assertIn(
+            ".history-audio .subtitle-display {\n    display: none;\n}",
+            app.UI_CSS,
+        )
+        self.assertIn('document.addEventListener("click"', app.UI_JS)
+        self.assertIn("audio.currentTime = Math.max", app.UI_JS)
 
     def test_switching_to_musicgen_clamps_duration_and_hides_steps(self):
         updates = app._model_updates("musicgen", 60, None)
@@ -312,6 +335,11 @@ print(json.dumps({
         and dependency.get("trigger_only_on_failure")
         for dependency in config["dependencies"]
     ),
+    "panel_scales": {
+        component["props"].get("elem_id"): component["props"].get("scale")
+        for component in components.values()
+        if component["props"].get("elem_id") in {"controls-panel", "history-panel"}
+    },
 }))
 """
         result = subprocess.run(
@@ -328,6 +356,10 @@ print(json.dumps({
         self.assertTrue(config["button_progress"])
         self.assertTrue(config["button_success_recovery"])
         self.assertTrue(config["button_failure_recovery"])
+        self.assertEqual(
+            config["panel_scales"],
+            {"controls-panel": 1, "history-panel": 1},
+        )
 
     def test_generate_passes_the_selected_backend_and_refreshes_history(self):
         self_path = Path("/tmp/generated.wav")
@@ -357,7 +389,7 @@ print(json.dumps({
             model="musicgen",
         )
         self.assertEqual((seed, history), (7, [{"path": str(self_path)}]))
-        self.assertIn("first in the history", status)
+        self.assertIn("first in the track history", status)
 
 
 if __name__ == "__main__":

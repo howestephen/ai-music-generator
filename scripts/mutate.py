@@ -49,6 +49,20 @@ MUTATIONS = [
     ("Generate button stays clickable", "app.py",
      'return gr.update(value="Generating...", interactive=False, variant="secondary")',
      'return gr.update(value="Generating...", interactive=True, variant="secondary")'),
+    ("Generate progress returns to a thin strip", "app.py",
+     "    inset: 0;",
+     "    bottom: 0;\n    height: 0.35rem;\n    left: 0;"),
+    ("History column is wider than controls", "app.py",
+     'with gr.Column(scale=1, elem_id="history-panel"):',
+     'with gr.Column(scale=2, elem_id="history-panel"):'),
+    ("Scrollable built-in waveform is shown", "app.py",
+     ".history-audio .waveform-container,\n.history-audio .timestamps,\n"
+     ".history-audio .subtitle-display {\n    display: none;\n}",
+     ".history-audio .waveform-container,\n.history-audio .timestamps,\n"
+     ".history-audio .subtitle-display {\n    display: block;\n}"),
+    ("Full waveform cannot seek", "app.py",
+     "audio.currentTime = Math.max(0, Math.min(1, position)) * audio.duration;",
+     "audio.currentTime = 0;"),
 ]
 
 

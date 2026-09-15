@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import html
 import json
+from functools import lru_cache
 from pathlib import Path
 
 import gradio as gr
+import soundfile as sf
 
 from synth import backends, core
 
@@ -40,34 +42,155 @@ PRESETS = {
 
 UI_CSS = """
 #generate-button:disabled {
-    animation: generation-progress 1.2s linear infinite;
+    background: var(--button-secondary-background-fill);
+    color: transparent;
+    isolation: isolate;
     background-color: var(--button-secondary-background-fill);
-    background-image: linear-gradient(
-        90deg,
-        transparent 0%,
-        transparent 35%,
-        var(--button-primary-background-fill) 50%,
-        transparent 65%,
-        transparent 100%
-    );
-    background-repeat: no-repeat;
-    background-size: 250% 0.35rem;
-    color: var(--button-secondary-text-color);
     opacity: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+#generate-button:disabled::before {
+    animation: generation-progress 1.4s ease-in-out infinite;
+    background: var(--button-primary-background-fill);
+    content: "";
+    inset: 0;
+    position: absolute;
+    transform: translateX(-105%);
+    width: 55%;
+    z-index: 0;
+}
+
+#generate-button:disabled::after {
+    background: var(--button-secondary-background-fill);
+    border-radius: var(--button-large-radius);
+    color: var(--button-secondary-text-color);
+    content: "Generating...";
+    left: 50%;
+    padding: 0.2rem 0.75rem;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+}
+
+#history-panel,
+.history-audio {
+    min-width: 0;
+}
+
+.history-waveform {
+    background: var(--block-background-fill);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--block-radius);
+    color: var(--neutral-400);
+    cursor: pointer;
+    height: 4.25rem;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+}
+
+.history-waveform:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+.history-waveform svg {
+    display: block;
+    height: 100%;
+    width: 100%;
+}
+
+.history-waveform-cursor {
+    background: var(--button-primary-background-fill);
+    bottom: 0;
+    left: var(--waveform-position, 0%);
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    width: 2px;
+}
+
+.history-audio .waveform-container,
+.history-audio .timestamps,
+.history-audio .subtitle-display {
+    display: none;
 }
 
 @keyframes generation-progress {
-    from { background-position: 100% 100%; }
-    to { background-position: 0 100%; }
+    from { transform: translateX(-105%); }
+    to { transform: translateX(190%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #generate-button:disabled {
+    #generate-button:disabled::before {
         animation: none;
-        background: var(--button-secondary-background-fill);
-        box-shadow: inset 0 -0.35rem 0 var(--button-primary-background-fill);
+        transform: translateX(40%);
     }
 }
+"""
+
+UI_JS = """
+(() => {
+    const wiredPlayers = new WeakSet();
+
+    const playerFor = (waveform) => {
+        const host = waveform.closest(".history-card")
+            ?.querySelector(".history-audio #waveform > div");
+        return host?.shadowRoot?.querySelector("audio");
+    };
+
+    const showPosition = (waveform, audio) => {
+        if (!Number.isFinite(audio.duration) || audio.duration === 0) return;
+        const percent = Math.max(0, Math.min(100, audio.currentTime / audio.duration * 100));
+        waveform.style.setProperty("--waveform-position", `${percent}%`);
+        waveform.setAttribute("aria-valuenow", `${Math.round(percent)}`);
+    };
+
+    const wirePlayers = () => {
+        document.querySelectorAll(".history-waveform").forEach((waveform) => {
+            const audio = playerFor(waveform);
+            if (!audio || wiredPlayers.has(audio)) return;
+            wiredPlayers.add(audio);
+            ["loadedmetadata", "seeking", "timeupdate"]
+                .forEach((eventName) => audio.addEventListener(
+                    eventName,
+                    () => showPosition(waveform, audio),
+                ));
+            showPosition(waveform, audio);
+        });
+    };
+
+    const seek = (waveform, position) => {
+        const audio = playerFor(waveform);
+        if (!audio || !Number.isFinite(audio.duration)) return;
+        audio.currentTime = Math.max(0, Math.min(1, position)) * audio.duration;
+        showPosition(waveform, audio);
+    };
+
+    document.addEventListener("click", (event) => {
+        const waveform = event.target.closest(".history-waveform");
+        if (!waveform) return;
+        const bounds = waveform.getBoundingClientRect();
+        seek(waveform, (event.clientX - bounds.left) / bounds.width);
+    });
+
+    document.addEventListener("keydown", (event) => {
+        const waveform = event.target.closest(".history-waveform");
+        if (!waveform || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+        const audio = playerFor(waveform);
+        if (!audio || !Number.isFinite(audio.duration)) return;
+        event.preventDefault();
+        const seconds = event.key === "ArrowLeft" ? -5 : 5;
+        seek(waveform, (audio.currentTime + seconds) / audio.duration);
+    });
+
+    new MutationObserver(() => requestAnimationFrame(wirePlayers))
+        .observe(document.body, {childList: true, subtree: true});
+    requestAnimationFrame(wirePlayers);
+})();
 """
 
 
@@ -160,6 +283,49 @@ def _history_copy(track: dict) -> str:
     )
 
 
+@lru_cache(maxsize=256)
+def _waveform_peaks(path_string: str, modified_ns: int, bars: int = 120) -> tuple[float, ...]:
+    del modified_ns  # Part of the cache key, so a replaced WAV is read again.
+    try:
+        with sf.SoundFile(path_string) as audio:
+            if len(audio) == 0:
+                return ()
+            peaks = []
+            for index in range(bars):
+                start = round(index * len(audio) / bars)
+                end = round((index + 1) * len(audio) / bars)
+                audio.seek(start)
+                samples = audio.read(end - start, dtype="float32", always_2d=True)
+                peaks.append(float(abs(samples).max()) if samples.size else 0.0)
+    except (OSError, RuntimeError, ValueError):
+        return ()
+    return tuple(peaks)
+
+
+def _history_waveform(track: dict) -> str:
+    peaks = _waveform_peaks(track["path"], track["modified_ns"])
+    if not peaks:
+        bars = '<text x="50" y="22" text-anchor="middle">Waveform unavailable</text>'
+    else:
+        peak_max = max(peaks) or 1.0
+        rects = []
+        for index, peak in enumerate(peaks):
+            height = max(1.0, peak / peak_max * 34)
+            rects.append(
+                f'<rect x="{index + 0.15:g}" y="{20 - height / 2:g}" '
+                f'width="0.7" height="{height:g}" rx="0.25" />'
+            )
+        bars = "".join(rects)
+    label = html.escape(f"Seek through {track['name']}", quote=True)
+    return (
+        f'<div class="history-waveform" role="slider" tabindex="0" '
+        f'aria-label="{label}" aria-valuemin="0" aria-valuemax="100" '
+        'aria-valuenow="0">'
+        '<svg viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true">'
+        f'{bars}</svg><span class="history-waveform-cursor"></span></div>'
+    )
+
+
 def _generation_started():
     return gr.update(value="Generating...", interactive=False, variant="secondary")
 
@@ -187,7 +353,7 @@ def _generate(model, prompt, duration, steps, guidance, seed, use_seed):
     status = (
         f"**Generated {track.path.name}**  \n"
         f"Seed `{track.seed}` · {track.elapsed_seconds}s to generate · {track.duration:.0f}s long. "
-        "It is now first in the history below."
+        "It is now first in the track history."
     )
     return status, track.seed, _load_history()
 
@@ -201,8 +367,8 @@ def build_ui() -> gr.Blocks:
     with gr.Blocks(title="Background Music Generator") as demo:
         gr.Markdown("# Background Music Generator\nLocal instrumental music, generated on this machine.")
 
-        with gr.Row():
-            with gr.Column(scale=3):
+        with gr.Row(equal_height=False):
+            with gr.Column(scale=1, elem_id="controls-panel"):
                 model = gr.Dropdown(
                     choices=model_choices,
                     value=core.DEFAULT_MODEL,
@@ -238,9 +404,38 @@ def build_ui() -> gr.Blocks:
                 )
                 go = gr.Button("Generate", variant="primary", elem_id="generate-button")
 
-            with gr.Column(scale=2):
+            with gr.Column(scale=1, elem_id="history-panel"):
                 gr.Markdown("## Latest result")
-                status = gr.Markdown("Generate a track and it will appear first in the history.")
+                status = gr.Markdown("Generate a track and it will appear first below.")
+
+                with gr.Row():
+                    gr.Markdown("## Track history")
+                    refresh = gr.Button("Refresh history", size="sm")
+                history = gr.State(_load_history())
+
+                @gr.render(inputs=history)
+                def render_history(tracks):
+                    if not tracks:
+                        gr.Markdown("No generated tracks yet.")
+                        return
+                    for track in tracks:
+                        with gr.Group(elem_classes="history-card"):
+                            gr.HTML(
+                                _history_waveform(track),
+                                key=f"waveform-{track['path']}",
+                            )
+                            gr.Audio(
+                                value=track["path"],
+                                show_label=False,
+                                interactive=False,
+                                editable=False,
+                                elem_classes="history-audio",
+                                key=f"audio-{track['path']}",
+                            )
+                            gr.Markdown(
+                                _history_copy(track),
+                                key=f"details-{track['path']}",
+                            )
 
         model.change(
             _model_updates,
@@ -248,26 +443,6 @@ def build_ui() -> gr.Blocks:
             [model_summary, duration, steps, guidance, prompt_help, prompt],
         )
         preset.change(_preset_prompt, [preset, model], prompt)
-
-        with gr.Row():
-            gr.Markdown("## Track history")
-            refresh = gr.Button("Refresh history", size="sm")
-        history = gr.State(_load_history())
-
-        @gr.render(inputs=history)
-        def render_history(tracks):
-            if not tracks:
-                gr.Markdown("No generated tracks yet.")
-                return
-            for track in tracks:
-                with gr.Row():
-                    gr.Audio(
-                        value=track["path"],
-                        label=track["name"],
-                        interactive=False,
-                        key=f"audio-{track['path']}",
-                    )
-                    gr.Markdown(_history_copy(track), key=f"details-{track['path']}")
 
         refresh.click(_load_history, outputs=history)
         request = go.click(
@@ -299,7 +474,13 @@ def build_ui() -> gr.Blocks:
 
 
 def main(share: bool = False, port: int = 7860) -> None:
-    build_ui().launch(share=share, server_port=port, inbrowser=True, css=UI_CSS)
+    build_ui().launch(
+        share=share,
+        server_port=port,
+        inbrowser=True,
+        css=UI_CSS,
+        js=UI_JS,
+    )
 
 
 if __name__ == "__main__":
