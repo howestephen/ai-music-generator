@@ -33,11 +33,22 @@ MUTATIONS = [
     ("minimax default steps = 60", "synth/backends.py", "default_steps=30,", "default_steps=60,"),
     ("runner drops steps=0", "runners/minimax_mlx_runner.py",
      '    if job.get("steps") is not None:', '    if job.get("steps"):'),
+    ("UI history oldest first", "app.py",
+     'reverse=True)', 'reverse=False)'),
+    ("UI ignores selected model", "app.py",
+     "            model=backend.name,", "            model=core.DEFAULT_MODEL,"),
+    ("UI exposes unsupported step control", "app.py",
+     "gr.update(value=backend.default_steps or 60, visible=backend.default_steps is not None),",
+     "gr.update(value=backend.default_steps or 60, visible=True),"),
+    ("MiniMax preset stays as tags", "app.py",
+     '    return prompts[backends.get(model).prompt_style]',
+     '    return prompts["tags"]'),
 ]
 
 
 def suite_passes() -> bool:
     shutil.rmtree(ROOT / "synth" / "__pycache__", ignore_errors=True)
+    shutil.rmtree(ROOT / "__pycache__", ignore_errors=True)
     r = subprocess.run([str(PY), "-B", "-m", "unittest", "discover", "-s", "synth", "-t", "."],
                        cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
     return r.returncode == 0

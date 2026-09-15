@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-10
+updated: 2026-09-15
 ---
 
 # ROADMAP
@@ -20,7 +20,7 @@ they are never buried in a chat.
 - Goal: describe music in words, render it locally on Apple Silicon, and keep the
   architecture easy to add models to
 - Current phase: 0, retrofit and audit remediation
-- Biggest known risk: the runner seam is still soft (0.3): a runner can exit 0 having
+- Biggest known risk: the runner seam is still soft (0.4): a runner can exit 0 having
   written nothing, hang forever, or emit malformed JSON, and the caller cannot tell
 - Default backend: `acestep`, pending a listening test against `minimax-mlx`
   (owner decision, open since 2026-08-14)
@@ -37,9 +37,10 @@ they are never buried in a chat.
 |---|---|---|---|---|---|
 | 0.1 | Retrofit to `ai-product-base` | `done` | Rules, commit gates, frontmatter and the structure lock. Nothing else is enforced until this lands | none | - |
 | 0.2 | Per-backend parameter plumbing | `done` | `--steps` and `--guidance` never reach `minimax-mlx`; MusicGen always gets guidance 15 instead of its own 3; `--lyrics` is a silent no-op on MusicGen; sidecar `dtype` is wrong for MLX and its `model` field cannot be fed back to `-m`, so the README reproduction command fails. Landed 2026-09-10 on `fix/backend-parameter-plumbing`: tests in `synth/tests.py`; `./.venv/bin/python scripts/mutate.py` reruns every listed mutation; each must fail the suite | none | 0.1 |
-| 0.3 | Harden the runner seam | `planned` | Unguarded `json.loads`; no check that the runner wrote the file; no duration lower bound; `available` ignores the `mlx-minimax-music3` binary; no subprocess timeout; subprocess text not decoded as UTF-8 explicitly | none | 0.2 |
-| 0.4 | Make `analyze.py` honest | `planned` | Hardcoded to D Mixolydian from a finished brief, so every other track gets a confident, meaningless scale score; one bad file aborts the whole run; NaN `intro_swell` on short clips is swallowed by a blanket warnings filter | none | 0.1 |
-| 0.5 | Docs match the code | `planned` | README has no install section though `core.py` sends users there; gotchas cite numpy handling the mlx runner does not contain and claim the XET flag is set in every runner; `.venv-mlx` has no manifest anywhere | none | 0.2 |
+| 0.3 | Model selector and persistent UI history | `done` | The UI was locked to ACE-Step and replaced the visible result after every generation. It now selects any registered backend, adapts controls and presets to that backend, and rebuilds a newest-first playable history from the existing WAV files and sidecars. Landed 2026-09-15 on `codex/ui-model-history`; UI helpers are covered in `synth/tests.py` | none | 0.2 |
+| 0.4 | Harden the runner seam | `planned` | Unguarded `json.loads`; no check that the runner wrote the file; no duration lower bound; `available` ignores the `mlx-minimax-music3` binary; no subprocess timeout; subprocess text not decoded as UTF-8 explicitly | none | 0.2 |
+| 0.5 | Make `analyze.py` honest | `planned` | Hardcoded to D Mixolydian from a finished brief, so every other track gets a confident, meaningless scale score; one bad file aborts the whole run; NaN `intro_swell` on short clips is swallowed by a blanket warnings filter | none | 0.1 |
+| 0.6 | Docs match the code | `planned` | README has no install section though `core.py` sends users there; gotchas cite numpy handling the mlx runner does not contain and claim the XET flag is set in every runner; `.venv-mlx` has no manifest anywhere | none | 0.2 |
 
 ## Deferred ideas
 
@@ -49,10 +50,6 @@ they are never buried in a chat.
 - Runtime notice when generating with the CC-BY-NC MusicGen backend. Why deferred:
   the licence is already stated in the registry, README and decisions. Trigger: any
   output leaving personal use
-- Backend selector in the Gradio UI. Why deferred: the UI now reads its model facts
-  from the registry, which closes the licence-mismatch risk. Trigger: the UI is used
-  for anything but the default backend
-
 ## Owner decisions open
 
 1. Default backend: `acestep` stays until Stephen has listened to `minimax-mlx` on
@@ -64,7 +61,7 @@ they are never buried in a chat.
 
 ## Current next step
 
-- Smallest next milestone: 0.3, harden the runner seam
-- Then: 0.4 and 0.5 in either order; 0.5 depends on 0.2, which has landed
+- Smallest next milestone: 0.4, harden the runner seam
+- Then: 0.5 and 0.6 in either order; 0.6 depends on 0.2, which has landed
 - Expected validation: `scripts/validate.py --index` clean, retrofit checker clean,
   unit tests pass, independent audit clean

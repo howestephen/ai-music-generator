@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-10
+updated: 2026-09-15
 ---
 
 # AI Music Generator
@@ -75,6 +75,14 @@ Non-commercial weights.
 ./.venv/bin/python app.py
 ```
 
+The model dropdown exposes every registered backend. Switching model updates the duration
+cap, supported controls, licence information and prompt guidance; presets are converted to
+the selected backend's prompt style using separate tag and structured-caption versions.
+Generated tracks remain in a playable history below
+the controls, newest first. The history is rebuilt from `output/` when the UI starts, so
+closing the browser does not lose earlier tracks. Use **Refresh history** to include files
+generated elsewhere while the UI is already open.
+
 **Analyse what came out** - tempo, modality, transient placement:
 
 ```bash
@@ -128,7 +136,8 @@ than blending - see [docs/gotchas.md](docs/gotchas.md).
 Every WAV gets a matching `.json` sidecar recording prompt, seed, backend, model and the
 settings that actually applied (a knob the backend does not have is recorded as `null`). This
 is what makes the tool usable rather than a slot machine: when something lands, you can
-change one parameter instead of rerolling and losing it.
+change one parameter instead of rerolling and losing it. The UI reads these same files for
+its persistent history; it does not keep a separate database.
 
 ```bash
 ./.venv/bin/python -m synth.cli gen "<prompt from json>" --seed <seed from json> -m <backend from json>

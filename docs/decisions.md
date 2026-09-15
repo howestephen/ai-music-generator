@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-10
+updated: 2026-09-15
 ---
 
 # Decisions
@@ -10,6 +10,21 @@ updated: 2026-09-10
 Why the stack looks the way it does. Newest first. Each entry records what was decided,
 why, and what would change it - so a future decision can be revisited on evidence rather
 than re-argued from scratch.
+
+---
+
+## 2026-09-15 - UI history uses generated files as its source of truth
+
+**Decided:** the Gradio UI rebuilds its track history from `output/*.wav` and each matching
+JSON sidecar. It does not add a database, manifest or browser-only history. Tracks are
+ordered by WAV modification time, newest first.
+
+**Why:** the WAV and sidecar pair already persists every generated result and the settings
+needed to reproduce it. A second store could drift, while reading the existing files also
+makes older tracks and CLI-generated tracks visible in the UI.
+
+**Would revisit if:** the output collection becomes large enough to need pagination,
+search or indexed metadata.
 
 ---
 
