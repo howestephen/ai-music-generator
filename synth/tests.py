@@ -155,6 +155,10 @@ class MinimaxRunnerArgv(unittest.TestCase):
         self.assertIn("--steps", cmd)
         self.assertEqual(cmd[cmd.index("--steps") + 1], "12")
 
+    def test_uses_current_interpreter_not_a_relocatable_console_script(self):
+        cmd = self._run(self._job())
+        self.assertEqual(cmd[:3], [sys.executable, "-m", "mlx_minimax_music3.cli"])
+
     def test_zero_steps_is_passed_not_dropped(self):
         cmd = self._run(self._job(steps=0))
         self.assertIn("--steps", cmd)

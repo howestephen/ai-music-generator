@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-10
+updated: 2026-09-15
 ---
 
 # Gotchas
@@ -83,6 +83,18 @@ bfloat16 errors on macOS. Upstream says pass `--bf16 false`; the equivalent here
 ---
 
 ## Runtime
+
+### A moved virtual environment can keep stale absolute paths in console scripts
+
+**Symptom:** the MiniMax runner fails immediately because `.venv-mlx/bin/mlx-minimax-music3`
+tries to execute Python from the repository's previous location.
+
+**Cause:** the generated console script embeds the virtual environment's absolute path.
+Moving the repository does not rewrite it, even though `.venv-mlx/bin/python` still works.
+
+**Fix:** the runner invokes `sys.executable -m mlx_minimax_music3.cli` instead of the
+generated console script. This uses the interpreter that launched the runner and survives a
+repository move.
 
 ### MiniMax returns numpy where its own docs assume a torch tensor
 
