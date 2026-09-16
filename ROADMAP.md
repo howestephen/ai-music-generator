@@ -20,8 +20,7 @@ they are never buried in a chat.
 - Goal: describe music in words, render it locally on Apple Silicon, and keep the
   architecture easy to add models to
 - Current phase: 0, retrofit and audit remediation
-- Biggest known risk: phase 0 code remediation is complete; remaining work is analyser
-  honesty and reproducible installation documentation
+- Biggest known risk: installed environments are not yet reproducible from the README
 - Default backend: `acestep`, pending a listening test against `minimax-mlx`
   (owner decision, open since 2026-08-14)
 
@@ -41,7 +40,7 @@ they are never buried in a chat.
 | 0.3.1 | Serial UI render queue | `done` | Submissions now become reorderable and removable pending cards immediately, while one background worker renders at a time. The button is released as soon as the queue accepts a job; the active card shows a clearly labelled estimate because current runners expose start and finish but no trustworthy step callbacks. Queue and history rendering now read their authoritative state from the local server, so separate browsers stay aligned. Implemented on `codex/ui-generation-queue` | none | 0.3 |
 | 0.3.2 | Manifest-driven UI controls | `done` | `synth/backends.json` is the versioned source of truth for model runtime, controls, licence and prompting metadata. Gradio's static schema accepts the union of its contracts; model selection narrows visible controls; the API handler and core enforce the selected backend. MiniMax reaches 300 seconds, ACE-Step remains at 240 and MusicGen at 30. Unsupported controls are hidden. A new subprocess model needs one manifest entry and its JSON runner adapter, then appears automatically in the CLI and UI. Completed 2026-09-16 on `codex/ui-generation-queue`; 58 unit tests, 33 mutations and a manual fake-queue endpoint smoke test cover the original 270-second failure | none | 0.3.1 |
 | 0.4 | Harden the runner seam | `done` | Manifest probes import the modules each backend actually invokes. Subprocesses use explicit UTF-8 and finite nested timeouts; process-group cleanup prevents an orphaned GPU child. Malformed final JSON, an unexpected path, invalid timing, an existing path and unreadable or empty audio all fail loudly. Collision-safe names prevent same-second overwrites. Duration minimums come from each model contract. Completed 2026-09-16 on `codex/ui-generation-queue` | none | 0.2 |
-| 0.5 | Make `analyze.py` honest | `planned` | Hardcoded to D Mixolydian from a finished brief, so every other track gets a confident, meaningless scale score; one bad file aborts the whole run; NaN `intro_swell` on short clips is swallowed by a blanket warnings filter | none | 0.1 |
+| 0.5 | Make `analyze.py` honest | `done` | Optional pitch-class collection coverage replaces the hardcoded D Mixolydian score and cannot distinguish modes sharing notes. Strongest chroma is a peak, not a tonic. Quiet edge flags do not claim a sweep or fade, and short edge windows never become empty. Silent or non-finite tonal and onset measurements stay unscored; no eligible hit boundary displays `--`; warnings remain visible; one bad file does not abort the batch but returns failure. Completed 2026-09-16 on `codex/ui-generation-queue` | none | 0.1 |
 | 0.6 | Docs match the code | `planned` | README has no install section though `core.py` sends users there; gotchas cite numpy handling the mlx runner does not contain and claim the XET flag is set in every runner; `.venv-mlx` has no manifest anywhere | none | 0.2 |
 
 ## Deferred ideas
@@ -63,7 +62,7 @@ they are never buried in a chat.
 
 ## Current next step
 
-- Current milestone: 0.5, make `analyze.py` honest
-- Then: 0.6, reconcile installation and documentation
+- Current milestone: 0.6, reconcile installation and documentation
+- Then: close Phase 0 and record the next research phase
 - Expected validation: `scripts/validate.py --index` clean, retrofit checker clean,
   unit tests pass, independent audit clean

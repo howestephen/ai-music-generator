@@ -202,6 +202,7 @@ published examples are bossa nova, EDM, pop rock, ballad, funk, lo-fi jazz - no 
 `synth/analyze.py` measures tempo, chroma, onsets and RMS. **All of it can pass while the
 audio is unusable** - the guitar tracks above scored 100% on hit-point alignment.
 
-Analysis is for verifying *specific measurable claims* (did the requested key land?), never
-for deciding whether something sounds good. That requires a human listening. Generate a
-small number of options, send them, and ask.
+Analysis verifies *specific measurable claims*, never whether music sounds good. Optional
+pitch-class coverage cannot distinguish modes containing the same notes. The strongest
+chroma pitch is a peak, not a tonic. Quiet edges are not detected fades or sweeps. Quality
+requires human listening.

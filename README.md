@@ -22,8 +22,8 @@ Deliberately open-ended. Current and possible uses:
 - Acting as the engine underneath a larger studio tool or system
 - Whatever artistic or technical concept the experimentation suggests
 
-Because the destination isn't fixed, the project prioritises **organisation and recorded
-reasoning**. Decisions retain their rationale and traps are recorded once.
+The project prioritises **organisation and recorded reasoning**. Decisions retain their
+rationale and traps are recorded once.
 
 | Document | Purpose |
 |---|---|
@@ -45,8 +45,7 @@ Three backends behind one CLI. Each runs in whatever environment it needs.
 | `acestep` | ACE-Step v1 3.5B | 240s | tags | Apache-2.0 |
 | `musicgen` | MusicGen stereo-large | 30s | tags | **CC-BY-NC - non-commercial** |
 
-`minimax-mlx` is the newest and the only one with explicit **BPM, key and scale** control.
-It runs natively on Metal via MLX rather than PyTorch/MPS.
+`minimax-mlx` alone has explicit **BPM, key and scale** control and runs through MLX/Metal.
 
 `acestep` is fast (roughly realtime) but is a song-form model - it is demonstrably weak at
 orchestral and cinematic material, where it drifts toward rock band instrumentation.
@@ -94,9 +93,8 @@ cap, supported controls, licence information and prompt guidance; presets are co
 the selected backend's prompt style using separate tag and structured-caption versions.
 The browser and API read those settings from the same versioned JSON manifest, so neither
 can impose another model's limits.
-Generated tracks remain in a playable history to the right of the controls, newest first,
-in a balanced 50/50 layout. Each complete waveform is fitted to the available width and
-remains clickable for seeking. The history is rebuilt from `output/` when the UI starts, so
+Generated tracks remain in a newest-first playable history beside the controls. Each
+waveform fits the available width and remains seekable. History rebuilds from `output/`, so
 closing the browser does not lose earlier tracks. Use **Refresh history** to include files
 generated elsewhere while the UI is already open.
 
@@ -109,11 +107,19 @@ jobs. Queue cards and track history are read from the shared local server, so op
 UI in another browser shows the same active and pending jobs and completed tracks. An active
 render cannot yet be cancelled safely.
 
-**Analyse what came out** - tempo, modality, transient placement:
+**Analyse measurable properties** - tempo, strongest pitch, transient placement and
+relative start/end loudness:
 
 ```bash
 ./.venv/bin/python -m synth.analyze output/*.wav
+./.venv/bin/python -m synth.analyze output/*.wav --key D --scale mixolydian
 ```
+
+Pitch-class collection coverage is opt-in through `--key` and `--scale`. It cannot
+distinguish relative keys or modes that contain the same notes. Start/end results only say
+that an edge is quiet relative to the track median; they do not detect a fade or sweep. One
+unreadable file does not abort the batch, but produces a non-zero exit. Measurements do not
+judge musical quality.
 
 ### Flags
 
@@ -159,11 +165,9 @@ than blending - see [docs/gotchas.md](docs/gotchas.md).
 
 ## Reproducibility
 
-Every WAV gets a matching `.json` sidecar recording prompt, seed, backend, model and the
-settings that actually applied (a knob the backend does not have is recorded as `null`). This
-is what makes the tool usable rather than a slot machine: when something lands, you can
-change one parameter instead of rerolling and losing it. The UI reads these same files for
-its persistent history; it does not keep a separate database.
+Every WAV gets a matching `.json` sidecar recording the prompt, seed, model and applied
+settings. Unsupported controls are `null`. The UI uses these files as its persistent
+history rather than keeping a separate database.
 
 ```bash
 ./.venv/bin/python -m synth.cli gen "<prompt from json>" --seed <seed from json> -m <backend from json>

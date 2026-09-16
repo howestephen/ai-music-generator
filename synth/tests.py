@@ -27,7 +27,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import app
-from synth import backends, cli, core, jobs
+from synth import analyze, backends, cli, core, jobs
 
 
 def _write_test_wav(path: Path, frames: int = 1) -> None:
@@ -580,6 +580,132 @@ class Registry(unittest.TestCase):
         path.write_text(json.dumps(document), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "timeout_seconds is required"):
             backends.load_manifest(path)
+
+
+class AnalysisHonesty(unittest.TestCase):
+    def _result(self, name: str = "good") -> analyze.Analysis:
+        return analyze.Analysis(
+            name=name,
+            duration=10.0,
+            tempo=90.0,
+            target_collection=None,
+            pitch_coverage=None,
+            peak_pitch="D",
+            hit_alignment=0.5,
+            quiet_start=False,
+            quiet_end=False,
+        )
+
+    def test_scale_fit_is_opt_in_not_hardcoded_to_d_mixolydian(self):
+        pitches, label = analyze._target_pitch_classes(None, None)
+        self.assertIsNone(pitches)
+        self.assertIsNone(label)
+        pitches, label = analyze._target_pitch_classes("D", "mixolydian")
+        self.assertEqual(pitches, {0, 2, 4, 6, 7, 9, 11})
+        self.assertEqual(label, "D mixolydian")
+        self.assertEqual(
+            analyze._target_pitch_classes("db", "major"),
+            analyze._target_pitch_classes("Db", "major"),
+        )
+
+    def test_key_and_scale_must_be_supplied_together(self):
+        with self.assertRaisesRegex(ValueError, "supplied together"):
+            analyze._target_pitch_classes("D", None)
+        with self.assertRaisesRegex(ValueError, "unknown scale"):
+            analyze._target_pitch_classes("D", "invented")
+
+    def test_short_clip_uses_at_least_one_rms_frame(self):
+        self.assertEqual(
+            analyze._quiet_edge_flags(analyze.np.array([0.1, 1.0, 1.0])),
+            (True, False),
+        )
+        self.assertEqual(
+            analyze._quiet_edge_flags(analyze.np.array([float("nan")])),
+            (False, False),
+        )
+        self.assertEqual(analyze._quiet_edge_flags(analyze.np.array([])), (False, False))
+
+    def test_line_does_not_invent_a_scale_score_without_a_target(self):
+        line = self._result().line()
+        self.assertIn("--", line)
+        self.assertNotIn("Mixolydian", line)
+
+    def test_complete_path_leaves_non_finite_measurements_unscored(self):
+        fake_librosa = SimpleNamespace(
+            load=lambda *_args, **_kwargs: (analyze.np.ones(300), 10),
+            beat=SimpleNamespace(
+                beat_track=lambda **_kwargs: (analyze.np.array([float("nan")]), []),
+            ),
+            feature=SimpleNamespace(
+                chroma_cqt=lambda **_kwargs: analyze.np.full((12, 2), float("nan")),
+                rms=lambda **_kwargs: analyze.np.array([[float("nan")]]),
+            ),
+            onset=SimpleNamespace(
+                onset_strength=lambda **_kwargs: analyze.np.full(30, float("nan")),
+            ),
+            times_like=lambda values, **_kwargs: analyze.np.arange(len(values)),
+        )
+        with mock.patch.dict(sys.modules, {"librosa": fake_librosa}):
+            result = analyze.analyse(Path("silent.wav"), key="d", scale="mixolydian")
+        self.assertIsNone(result.tempo)
+        self.assertIsNone(result.pitch_coverage)
+        self.assertEqual(result.peak_pitch, "--")
+        self.assertIsNone(result.hit_alignment)
+        self.assertFalse(result.quiet_start)
+        self.assertFalse(result.quiet_end)
+        self.assertIn("hits  --", result.line())
+
+    def test_import_does_not_hide_runtime_warnings_by_default(self):
+        probe = (
+            "import warnings; from synth import analyze; "
+            "warnings.warn('visible-analysis-warning', RuntimeWarning)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            cwd=core.PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("visible-analysis-warning", result.stderr)
+
+    def test_complete_path_rejects_loaded_audio_with_no_samples(self):
+        fake_librosa = SimpleNamespace(load=lambda *_args, **_kwargs: (analyze.np.array([]), 8000))
+        with mock.patch.dict(sys.modules, {"librosa": fake_librosa}):
+            with self.assertRaisesRegex(ValueError, "no samples"):
+                analyze.analyse(Path("empty.wav"))
+
+    def test_one_bad_file_does_not_abort_the_remaining_batch(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(
+            analyze,
+            "analyse",
+            side_effect=(OSError("broken wav"), self._result()),
+        ) as analyse_track, mock.patch.object(sys, "stdout", stdout), mock.patch.object(
+            sys, "stderr", stderr,
+        ):
+            result = analyze.main(["bad.wav", "good.wav"])
+        self.assertEqual(result, 1)
+        self.assertIn("bad.wav: failed: broken wav", stderr.getvalue())
+        self.assertIn("good", stdout.getvalue())
+        self.assertIn("peak", stdout.getvalue().splitlines()[0])
+        self.assertNotIn("tonic", stdout.getvalue().splitlines()[0])
+        self.assertIn("edges", stdout.getvalue().splitlines()[0])
+        self.assertNotIn("sweeps", stdout.getvalue().splitlines()[0])
+        self.assertEqual(analyse_track.call_count, 2)
+
+    def test_main_passes_an_explicit_target_to_every_file(self):
+        with mock.patch.object(analyze, "analyse", return_value=self._result()) as analyse_track, \
+                mock.patch.object(sys, "stdout", io.StringIO()):
+            self.assertEqual(
+                analyze.main(["track.wav", "--key", "D", "--scale", "mixolydian"]),
+                0,
+            )
+        analyse_track.assert_called_once_with(
+            Path("track.wav"), 8.0, "D", "mixolydian",
+        )
 
 
 class GenerationQueueTests(unittest.TestCase):

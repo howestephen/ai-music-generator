@@ -12,6 +12,20 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-16 - Pitch-collection coverage requires an explicit target
+
+**Decided:** `synth.analyze` measures pitch-class collection coverage only when key and
+scale are supplied. It cannot distinguish modes sharing the same notes. Otherwise it
+reports only the strongest chroma pitch, labelled as a peak rather than a tonic.
+
+**Why:** the previous D Mixolydian target belonged to one finished brief but was presented
+as truth for every track. Chroma energy also cannot infer a tonic confidently.
+
+Quiet start/end flags compare edge means with the track median; they do not claim a fade or
+sweep. **Would revisit if:** validated tonal or envelope estimation replaces these proxies.
+
+---
+
 ## 2026-09-16 - A runner result is a verified contract, not an exit code
 
 **Decided:** every subprocess backend declares import probes and a finite timeout in the
@@ -32,12 +46,9 @@ audio. A stalled subprocess could also hold the serial UI queue forever.
 It declares runtime, prompting metadata and numeric controls. The strict loader rejects
 unknown fields; core, browser and API use the loaded contract.
 
-**Why:** Gradio's static schema inherited ACE-Step's 240-second slider and rejected a valid
-270-second MiniMax request before the handler ran.
-
-**Implementation:** Gradio sees the union of manifest contracts; selection narrows the UI;
-the handler and core enforce the chosen model. A manifest entry and JSON runner make a new
-subprocess model appear in the CLI and UI.
+**Why:** Gradio inherited ACE-Step's 240-second schema and rejected valid longer MiniMax
+requests before the handler ran. The static schema now holds the union; selection narrows
+the UI and core enforces the chosen model.
 
 **Would revisit if:** a backend needs another control type or runner contract.
 
@@ -48,12 +59,9 @@ subprocess model appear in the CLI and UI.
 **Decided:** the UI accepts reorderable, removable pending jobs but renders serially. The
 button is released on acceptance because concurrent Metal jobs ran two to four times slower.
 
-**Progress:** runners expose start and finish, not trustworthy callbacks. The active card
-labels its history-derived percentage as estimated and stays below 100% until output exists.
-
-**Cancellation:** active jobs cannot yet be cancelled safely; that needs subprocess ownership.
-
-**Browser sessions:** queue state is process-wide; history comes from `output/`.
+Runners expose no trustworthy callbacks, so active progress is labelled estimated and stays
+below 100% until output exists. Queue state is process-wide; history comes from `output/`.
+Active cancellation still needs subprocess ownership.
 
 **Would revisit if:** backends expose stable step callbacks, or isolated hardware makes
 parallel jobs genuinely faster rather than merely concurrent.
@@ -99,8 +107,7 @@ thing that remains is the local synthesis capability, which could serve soundtra
 vocal parts and textures for music production, a larger studio system, or artistic
 experiments not yet defined.
 
-**Consequence:** organisation and recorded reasoning matter more than any feature.
-Architecture stays easy to extend rather than optimised for one workflow.
+**Consequence:** keep reasoning recorded and the architecture easy to extend.
 
 ---
 
@@ -147,8 +154,8 @@ demos are all song-form genres.
 **Decided:** models are registered in `synth/backends.py`; those with conflicting
 dependencies run as subprocesses in their own venv, behind one `core.generate`.
 
-**Why:** ACE-Step pins `transformers==4.50` and MiniMax needs `>=5`. Unifying them is
-impossible, and picking one model per repo defeats the purpose of a workbench.
+**Why:** ACE-Step pins `transformers==4.50` and MiniMax needs `>=5`; they cannot share an
+environment.
 
 **Consequence:** adding a model is a runner script plus a registry entry. Backends declare
 their own duration caps, prompt style, instrumental sentinel and licence, so the CLI can
@@ -160,10 +167,8 @@ enforce and display them rather than each caller remembering.
 
 **Decided:** keep MusicGen available, flagged **CC-BY-NC**.
 
-**Why:** it was originally excluded because its non-commercial weights were unusable for a
-commercial video. With the project now personal and experimental, that constraint doesn't
-apply. It's slow on Metal (~15× realtime) and capped at 30s, but it's a strong instrumental
-model.
+**Why:** the project is now personal and experimental. It is a strong instrumental model,
+though slow on Metal and capped at 30 seconds.
 
 **Revisit if:** output is ever destined for commercial use - the licence blocks it.
 
@@ -209,7 +214,6 @@ recombine), where a graph earns its complexity.
 
 **Decided:** every WAV gets a `.json` recording prompt, seed, model and settings.
 
-**Why:** without it the tool is a slot machine. With it, a track you like can be reproduced
-and adjusted one parameter at a time.
+**Why:** it makes a useful track reproducible and adjustable.
 
 **Held up well.** Cheap, and the thing that makes iteration possible.
