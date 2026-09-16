@@ -12,6 +12,21 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-16 - Installation follows the real environment split
+
+**Decided:** `.venv` is recreated from the complete `requirements.txt` lock. The separate
+`.venv-mlx` uses the exact tested `mlx-minimax-music3` Git commit documented in README,
+followed by compatibility checks for both environments.
+
+**Why:** MiniMax cannot share ACE-Step's Transformers version, and a console script from a
+moved virtual environment embeds a stale absolute interpreter path. The source pin belongs
+beside the two-environment setup rather than in a new top-level manifest.
+
+**Would revisit if:** `uv` gains a single lock that cleanly represents isolated backend
+environments without merging their dependency graphs.
+
+---
+
 ## 2026-09-16 - Pitch-collection coverage requires an explicit target
 
 **Decided:** `synth.analyze` measures pitch-class collection coverage only when key and
@@ -116,12 +131,8 @@ experiments not yet defined.
 **Decided:** `vanch007/MiniMax-Music3-MLX-8bit` (13 GB) is the MiniMax backend. The 54 GB
 fp32 PyTorch build was deleted.
 
-**Why:** MLX targets Metal natively. The fp32 build ran at ~13× realtime and consumed four
-times the disk for no benefit on this hardware.
-
-**Cost of getting this wrong:** the MLX build was found first but deferred while the
-inefficient build was downloaded and benchmarked. Roughly two hours and 54 GB wasted. Now
-a standing rule in
+**Why:** MLX targets Metal natively. The fp32 build ran at ~13× realtime, consumed four
+times the disk and cost roughly two hours to download and benchmark. Now a standing rule in
 [gotchas.md](gotchas.md#check-for-an-mlx-build-before-downloading-anything).
 
 **Would revisit if:** 8-bit quantisation proves audibly worse than fp32, or a model ships
@@ -133,16 +144,12 @@ without an MLX conversion.
 
 **Decided:** adopt MiniMax Music 3 as the most capable backend.
 
-**Why:** ~11B parameters, and uniquely it exposes **explicit BPM, key and scale** control
-through its Structured Caption format. Earlier requests for a specific mode (D Mixolydian)
-were impossible on ACE-Step, which has no key conditioning. First measurements are
-encouraging - flat-7 energy ratio 2.7× versus ACE-Step's 0.7–1.0× - but this is **not yet
+**Why:** it uniquely exposes **explicit BPM, key and scale** through Structured Captions.
+ACE-Step has no key conditioning. Early pitch measurements are encouraging but are **not
 confirmed by listening**.
 
-**Licence:** MiniMax Community. Commercial use permitted, with two conditions that matter
-only if this becomes commercial: display "MiniMax-Music3" on a commercial product's UI, and
-obtain written authorisation above $20M revenue from products using it. Not a constraint
-for personal or experimental work.
+**Licence:** MiniMax Community. Commercial products must display "MiniMax-Music3" and need
+written authorisation above $20M annual revenue from products using it.
 
 **Open:** whether it handles orchestral material any better than ACE-Step. Its published
 demos are all song-form genres.
@@ -167,8 +174,7 @@ enforce and display them rather than each caller remembering.
 
 **Decided:** keep MusicGen available, flagged **CC-BY-NC**.
 
-**Why:** the project is now personal and experimental. It is a strong instrumental model,
-though slow on Metal and capped at 30 seconds.
+**Why:** personal experiments can use this capable but slow, 30-second model.
 
 **Revisit if:** output is ever destined for commercial use - the licence blocks it.
 
@@ -178,16 +184,14 @@ though slow on Metal and capped at 30 seconds.
 
 **Decided:** ACE-Step v1 3.5B as the original backend.
 
-**Why at the time:** Apache-2.0 (commercially safe), multi-minute output where Stable Audio
-Open caps near 47s, and MusicGen's CC-BY-NC ruled it out for commercial work.
+**Why at the time:** Apache-2.0, multi-minute output and commercial safety.
 
 **What was wrong:** the choice weighed licence and track length but **never checked genre
 competence**, and the brief's central requirement was orchestral. ACE-Step is a song-form
 model; asked for cinematic orchestral it produced rock guitars. Two days of output were
 unusable.
 
-**Lesson, now standing:** verify a model handles the *target genre* - check its published
-demos - before adopting it on licence and specs.
+**Lesson:** verify the target genre in published demos before adopting on specs and licence.
 
 **Still useful for:** its actual strengths, near-realtime generation of song-form and
 loop-based material.
@@ -198,12 +202,8 @@ loop-based material.
 
 **Decided:** a thin Python project calling models directly, no ComfyUI.
 
-**Why:** ComfyUI's value is composing many models in a node graph, which is an image-gen
-problem. Music generation is mostly single-shot - prompt in, audio out - so the graph buys
-little, while adding a large dependency surface on the least-tested Apple Silicon path.
-
-**Held up well.** The subprocess-per-backend design later proved essential for dependency
-isolation, which would have been harder inside ComfyUI.
+**Why:** music generation here is mostly prompt in, audio out. A node graph adds a large
+dependency surface on the least-tested Apple Silicon path.
 
 **Would revisit if:** work needs genuine multi-model chaining (stem separation → transform →
 recombine), where a graph earns its complexity.

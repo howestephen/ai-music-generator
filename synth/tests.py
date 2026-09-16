@@ -1092,5 +1092,84 @@ print(json.dumps({
         self.assertIn("first in the track history", status)
 
 
+class DocumentationContract(unittest.TestCase):
+    MINIMAX_PACKAGE_COMMIT = "b42e07bd2c0ffd14cc6b75ca19d9a96e5397eaf9"
+
+    def test_readme_recreates_both_declared_environments(self):
+        readme = (core.PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("uv venv --python 3.12 .venv", readme)
+        self.assertIn(
+            "uv pip install --python .venv/bin/python -r requirements.txt",
+            readme,
+        )
+        self.assertIn("uv venv --python 3.12 .venv-mlx", readme)
+        self.assertIn(
+            "uv pip install --python .venv-mlx/bin/python \\\n"
+            "  \"mlx-minimax-music3 @ git+https://github.com/vanch007/"
+            f"mlx-minimax-music3.git@{self.MINIMAX_PACKAGE_COMMIT}\"\n"
+            "uv pip check --python .venv/bin/python\n"
+            "uv pip check --python .venv-mlx/bin/python\n"
+            "./.venv/bin/python -m synth.cli models",
+            readme,
+        )
+        self.assertIn("uv pip check --python .venv/bin/python", readme)
+        self.assertIn("uv pip check --python .venv-mlx/bin/python", readme)
+        self.assertIn("./.venv/bin/python -m synth.cli models", readme)
+
+        metadata_paths = list(
+            (core.PROJECT_ROOT / ".venv-mlx").glob(
+                "lib/python*/site-packages/"
+                "mlx_minimax_music3-*.dist-info/direct_url.json"
+            )
+        )
+        self.assertEqual(len(metadata_paths), 1, "installed MiniMax source metadata missing")
+        direct_url = json.loads(metadata_paths[0].read_text(encoding="utf-8"))
+        self.assertEqual(
+            direct_url["vcs_info"]["commit_id"],
+            self.MINIMAX_PACKAGE_COMMIT,
+        )
+
+    def test_minimax_conversion_is_documented_at_the_real_boundary(self):
+        gotchas = (core.PROJECT_ROOT / "docs" / "gotchas.md").read_text(encoding="utf-8")
+        self.assertIn("The runner returns JSON from `mlx_minimax_music3.cli`", gotchas)
+        self.assertIn("package's `audio.py`", gotchas)
+        self.assertNotIn("See `runners/minimax_mlx_runner.py`", gotchas)
+
+        audio_paths = list(
+            (core.PROJECT_ROOT / ".venv-mlx").glob(
+                "lib/python*/site-packages/mlx_minimax_music3/audio.py"
+            )
+        )
+        self.assertEqual(len(audio_paths), 1, "installed MiniMax audio source missing")
+        audio_source = audio_paths[0].read_text(encoding="utf-8")
+        for source_contract in (
+            "np.asarray(audio[0].astype(mx.float32)).T",
+            "np.isfinite(values).all()",
+            "np.clip(values, -1.0, 1.0)",
+            'format="WAV", subtype="PCM_16"',
+        ):
+            self.assertIn(source_contract, audio_source)
+
+    def test_xet_workaround_claim_names_every_actual_location(self):
+        marker = 'os.environ.setdefault("HF_HUB_DISABLE_XET", "1")'
+        search_roots = (core.PROJECT_ROOT / "synth", core.PROJECT_ROOT / "runners")
+        actual = {
+            path.relative_to(core.PROJECT_ROOT).as_posix()
+            for search_root in search_roots
+            for path in search_root.rglob("*.py")
+            if path != Path(__file__)
+            if marker in path.read_text(encoding="utf-8")
+        }
+        expected = {
+            "synth/core.py",
+            "runners/minimax_mlx_runner.py",
+            "runners/musicgen_runner.py",
+        }
+        self.assertEqual(actual, expected)
+        gotchas = (core.PROJECT_ROOT / "docs" / "gotchas.md").read_text(encoding="utf-8")
+        for location in expected:
+            self.assertIn(f"`{location}`", gotchas)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-15
+updated: 2026-09-16
 ---
 
 # Gotchas
@@ -52,7 +52,8 @@ no progress. Process stays alive looking busy.
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 ```
 
-Already set in `synth/core.py` and every runner. **Do not remove it.**
+Already set in `synth/core.py`, `runners/minimax_mlx_runner.py` and
+`runners/musicgen_runner.py`. **Do not remove it.**
 
 ### Model dependency conflicts are unresolvable - use separate venvs
 
@@ -109,15 +110,17 @@ Moving the repository does not rewrite it, even though `.venv-mlx/bin/python` st
 generated console script. This uses the interpreter that launched the runner and survives a
 repository move.
 
-### MiniMax returns numpy where its own docs assume a torch tensor
+### MiniMax audio conversion belongs to the installed MLX package
 
-**Symptom:** `AttributeError: 'numpy.ndarray' object has no attribute 'float'` - after a
-full successful generation.
+**Symptom:** changing the adapter to copy PyTorch-oriented save examples causes an error
+after the expensive generation has completed.
 
-**Cause:** the official example calls `audio.T.float().cpu().numpy()`. This build returns
-numpy already.
+**Cause:** The runner returns JSON from `mlx_minimax_music3.cli`; it never receives an
+audio tensor or array. The pinned package's `audio.py` already converts its MLX array to a
+finite NumPy frames-by-channels array, clips it and writes 16-bit PCM through `soundfile`.
 
-**Fix:** accept either, and transpose channel-first to frames-first for `soundfile`. See
+**Fix:** leave conversion in the pinned package and validate the resulting container at
+the project boundary. Do not add NumPy or PyTorch conversion to
 `runners/minimax_mlx_runner.py`.
 
 ### The instrumental sentinel differs per model - and fails silently

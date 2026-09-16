@@ -19,14 +19,14 @@ they are never buried in a chat.
 
 - Goal: describe music in words, render it locally on Apple Silicon, and keep the
   architecture easy to add models to
-- Current phase: 0, retrofit and audit remediation
-- Biggest known risk: installed environments are not yet reproducible from the README
+- Current phase: Phase 0 complete; next direction pending owner review
+- Biggest known risk: model quality and genre fit require listening, not code analysis
 - Default backend: `acestep`, pending a listening test against `minimax-mlx`
   (owner decision, open since 2026-08-14)
 
 ## Phase 0: Retrofit and remediation
 
-- Status: `in_progress`
+- Status: `done`
 - Goals: the house standard in place and enforced; the 2026-09-09 audit findings
   closed (19 verified: 4 high, 8 medium, 7 low)
 - Risks: fixing the parameter seam changes the sidecar format. Kept additive: a
@@ -41,7 +41,7 @@ they are never buried in a chat.
 | 0.3.2 | Manifest-driven UI controls | `done` | `synth/backends.json` is the versioned source of truth for model runtime, controls, licence and prompting metadata. Gradio's static schema accepts the union of its contracts; model selection narrows visible controls; the API handler and core enforce the selected backend. MiniMax reaches 300 seconds, ACE-Step remains at 240 and MusicGen at 30. Unsupported controls are hidden. A new subprocess model needs one manifest entry and its JSON runner adapter, then appears automatically in the CLI and UI. Completed 2026-09-16 on `codex/ui-generation-queue`; 58 unit tests, 33 mutations and a manual fake-queue endpoint smoke test cover the original 270-second failure | none | 0.3.1 |
 | 0.4 | Harden the runner seam | `done` | Manifest probes import the modules each backend actually invokes. Subprocesses use explicit UTF-8 and finite nested timeouts; process-group cleanup prevents an orphaned GPU child. Malformed final JSON, an unexpected path, invalid timing, an existing path and unreadable or empty audio all fail loudly. Collision-safe names prevent same-second overwrites. Duration minimums come from each model contract. Completed 2026-09-16 on `codex/ui-generation-queue` | none | 0.2 |
 | 0.5 | Make `analyze.py` honest | `done` | Optional pitch-class collection coverage replaces the hardcoded D Mixolydian score and cannot distinguish modes sharing notes. Strongest chroma is a peak, not a tonic. Quiet edge flags do not claim a sweep or fade, and short edge windows never become empty. Silent or non-finite tonal and onset measurements stay unscored; no eligible hit boundary displays `--`; warnings remain visible; one bad file does not abort the batch but returns failure. Completed 2026-09-16 on `codex/ui-generation-queue` | none | 0.1 |
-| 0.6 | Docs match the code | `planned` | README has no install section though `core.py` sends users there; gotchas cite numpy handling the mlx runner does not contain and claim the XET flag is set in every runner; `.venv-mlx` has no manifest anywhere | none | 0.2 |
+| 0.6 | Docs match the code | `done` | README now recreates the locked main environment and pins the isolated MiniMax package to the tested source commit. Environment checks and model probes are documented. Gotchas now describe the actual MLX package conversion boundary and name each XET setting. Completed and independently re-audited 2026-09-16 on `codex/ui-generation-queue` | none | 0.2 |
 
 ## Deferred ideas
 
@@ -51,6 +51,10 @@ they are never buried in a chat.
 - Runtime notice when generating with the CC-BY-NC MusicGen backend. Why deferred:
   the licence is already stated in the registry, README and decisions. Trigger: any
   output leaving personal use
+- Research current local music models and alternative generation architectures. Compare
+  Apple Silicon support, licence, duration, controllability, genre evidence, runtime and
+  integration cost before proposing additions. Trigger: after Phase 0 owner review
+
 ## Owner decisions open
 
 1. Default backend: `acestep` stays until Stephen has listened to `minimax-mlx` on
@@ -58,11 +62,11 @@ they are never buried in a chat.
 2. Resolved 2026-09-10: the finished client brief`briefs/` was deleted on
    Stephen's instruction; `briefs/` stays declared for future prompt sets
 3. Resolved 2026-09-10: no new top-level file at this level; the pinned `.venv-mlx`
-   install command goes in the README (milestone 0.5)
+   install command goes in the README (milestone 0.6)
 
 ## Current next step
 
-- Current milestone: 0.6, reconcile installation and documentation
-- Then: close Phase 0 and record the next research phase
-- Expected validation: `scripts/validate.py --index` clean, retrofit checker clean,
-  unit tests pass, independent audit clean
+- Current milestone: Phase 0 owner review
+- Then: agree the next product or research phase
+- Phase 0 exit gates: working-tree and staged validation clean, unit and mutation suites
+  pass, installed environments and model probes pass, independent audit clean

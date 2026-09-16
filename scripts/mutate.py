@@ -236,6 +236,23 @@ MUTATIONS = [
     ("analysis key parsing remains case-sensitive", "synth/analyze.py",
      '    key = key[:1].upper() + key[1:].lower()',
      "    key = key"),
+    ("MiniMax install floats off its tested source commit", "README.md",
+     "mlx-minimax-music3.git@b42e07bd2c0ffd14cc6b75ca19d9a96e5397eaf9",
+     "mlx-minimax-music3.git@v0.1.0"),
+    ("gotcha puts MiniMax conversion back in the runner", "docs/gotchas.md",
+     "The runner returns JSON from `mlx_minimax_music3.cli`",
+     "The runner converts audio from `mlx_minimax_music3.cli`"),
+    ("README skips the main environment compatibility check", "README.md",
+     "uv pip check --python .venv/bin/python",
+     "uv pip check --python .venv-mlx/bin/python"),
+    ("README skips the installed backend probe", "README.md",
+     "uv pip check --python .venv-mlx/bin/python\n"
+     "./.venv/bin/python -m synth.cli models",
+     "uv pip check --python .venv-mlx/bin/python\n"
+     "./.venv/bin/python -m synth.cli --help"),
+    ("MiniMax runner loses the documented XET workaround", "runners/minimax_mlx_runner.py",
+     'os.environ.setdefault("HF_HUB_DISABLE_XET", "1")',
+     'os.environ.setdefault("HF_HUB_DISABLE_XET", "0")'),
 ]
 
 

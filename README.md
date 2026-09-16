@@ -15,12 +15,8 @@ anything you're working on.
 
 ## What this is for
 
-Deliberately open-ended. Current and possible uses:
-
-- Generating soundtrack and underscore for video work
-- Producing interesting vocal parts, textures or fragments to pull into music production
-- Acting as the engine underneath a larger studio tool or system
-- Whatever artistic or technical concept the experimentation suggests
+Deliberately open-ended: soundtrack and underscore, vocal parts or textures for music
+production, a larger studio engine, and other artistic experiments.
 
 The project prioritises **organisation and recorded reasoning**. Decisions retain their
 rationale and traps are recorded once.
@@ -30,6 +26,31 @@ rationale and traps are recorded once.
 | [docs/decisions.md](docs/decisions.md) | Why the stack looks the way it does |
 | [docs/gotchas.md](docs/gotchas.md) | Setup traps, symptoms, and fixes |
 | [CLAUDE.md](CLAUDE.md) | Working rules for AI assistance in this repo |
+
+## Installation
+
+This project needs Apple Silicon with Metal, Python 3.12 and
+[`uv`](https://docs.astral.sh/uv/). Create the main environment from its full lock:
+
+```bash
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+```
+
+MiniMax has an incompatible dependency stack, so install its adapter at the exact tested
+source commit in a second environment:
+
+```bash
+uv venv --python 3.12 .venv-mlx
+uv pip install --python .venv-mlx/bin/python \
+  "mlx-minimax-music3 @ git+https://github.com/vanch007/mlx-minimax-music3.git@b42e07bd2c0ffd14cc6b75ca19d9a96e5397eaf9"
+uv pip check --python .venv/bin/python
+uv pip check --python .venv-mlx/bin/python
+./.venv/bin/python -m synth.cli models
+```
+
+Both environments are tested with Python 3.12.9. Model weights download on first use to
+`~/.cache/`: MiniMax MLX is about 13 GB, MusicGen 19 GB and ACE-Step 7.7 GB.
 
 ## Models
 
@@ -88,24 +109,19 @@ can lose structure, so compare seeds rather than treating one result as represen
 ./.venv/bin/python app.py
 ```
 
-The model dropdown exposes every registered backend. Switching model updates the duration
-cap, supported controls, licence information and prompt guidance; presets are converted to
-the selected backend's prompt style using separate tag and structured-caption versions.
-The browser and API read those settings from the same versioned JSON manifest, so neither
-can impose another model's limits.
+The model dropdown exposes every registered backend. Switching it updates duration,
+controls, licence, guidance and prompt-style-specific presets from the same versioned JSON
+manifest used by the API.
 Generated tracks remain in a newest-first playable history beside the controls. Each
 waveform fits the available width and remains seekable. History rebuilds from `output/`, so
 closing the browser does not lose earlier tracks. Use **Refresh history** to include files
 generated elsewhere while the UI is already open.
 
-The UI accepts multiple render requests into a serial queue. The Generate button shows an
-acceptance wipe, then becomes available again as soon as the job is queued. Pending jobs can
-be reordered or removed in the right column. One job renders at a time; its card shows an
-explicitly labelled progress estimate, then gives way to the finished waveform. Serial
-rendering avoids the severe slowdown and unpredictable timings caused by competing Metal
-jobs. Queue cards and track history are read from the shared local server, so opening the
-UI in another browser shows the same active and pending jobs and completed tracks. An active
-render cannot yet be cancelled safely.
+The UI queues multiple requests serially. Generate shows an acceptance wipe and becomes
+available once queued. Pending jobs can be reordered or removed; the active card shows a
+labelled progress estimate before becoming a waveform. Serial rendering avoids competing
+Metal jobs. Queue and history live on the local server, so browsers share the same state.
+An active render cannot yet be cancelled safely.
 
 **Analyse measurable properties** - tempo, strongest pitch, transient placement and
 relative start/end loudness:
@@ -180,7 +196,7 @@ synth/core.py      generate() - single entry point, dispatches to a backend
 synth/backends.json versioned model manifest: runtime, controls, licence, prompt style
 synth/backends.py  strict manifest loader and runtime registry
 synth/cli.py       gen / batch / models / ui
-synth/analyze.py   measure output against a brief
+synth/analyze.py   measure requested audio properties
 runners/           per-backend subprocess entry points (isolated environments)
 app.py             Gradio web UI
 briefs/            prompt sets per project
@@ -196,13 +212,3 @@ The manifest also declares modules used to verify the environment and a finite t
 each subprocess runner. A runner is successful only after its JSON result and readable
 audio file at a fresh path have both been checked. A timed-out runner and its model child
 are terminated together.
-
-## Environments
-
-| venv | Contains |
-|---|---|
-| `.venv` | ACE-Step, MusicGen, analysis tooling |
-| `.venv-mlx` | MLX runtime for MiniMax Music 3 |
-
-Model weights cache to `~/.cache/` (MiniMax MLX 13 GB, MusicGen 19 GB, ACE-Step 7.7 GB),
-outside the repo.
