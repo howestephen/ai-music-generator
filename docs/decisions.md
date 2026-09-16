@@ -15,13 +15,11 @@ than re-argued from scratch.
 
 ## 2026-09-16 - UI generations use one serial worker
 
-**Decided:** the web UI accepts multiple render requests into an in-process queue but runs
-only one model job at a time. Pending jobs can be reordered or removed. The submission
-button is released when the queue accepts a job, not when that job eventually starts.
+**Decided:** the UI queues multiple requests but runs one model job at a time. Pending jobs
+can be reordered or removed. The button is released when the queue accepts a job.
 
-**Why:** concurrent generations compete for the same Metal device and have already made
-individual jobs two to four times slower. Keeping the button disabled until a pending job
-started would also prevent more than one future render from being queued.
+**Why:** concurrent generations compete for Metal and made jobs two to four times slower.
+Keeping the button disabled until a job started would also prevent stacking future renders.
 
 **Progress honesty:** current model seams expose start and finish, not trustworthy progress
 callbacks. The active card therefore labels its moving percentage as an estimate derived
@@ -31,6 +29,9 @@ after the runner returns and the output exists.
 **Cancellation:** pending jobs can be removed; an active job cannot yet be cancelled. Safe
 active cancellation requires subprocess ownership for every backend and belongs with the
 runner-seam work, not a UI kill switch.
+
+**Browser sessions:** cards read the process-wide queue and history reads `output/`, so every
+browser shows the same current work and completed tracks.
 
 **Would revisit if:** backends expose stable step callbacks, or isolated hardware makes
 parallel jobs genuinely faster rather than merely concurrent.

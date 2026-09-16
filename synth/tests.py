@@ -478,6 +478,12 @@ print(json.dumps({
             {"controls-panel": 1, "history-panel": 1},
         )
 
+    def test_new_browser_sessions_load_fresh_server_owned_queue_and_history(self):
+        with mock.patch.object(app, "_queue_snapshot", return_value=["job"]), \
+                mock.patch.object(app, "_load_history", return_value=["track"]):
+            self.assertEqual(app._queue_items_for_render(["stale job"]), ["job"])
+            self.assertEqual(app._history_items_for_render(["stale track"]), ["track"])
+
     def test_enqueue_captures_selected_backend_and_returns_button_immediately(self):
         queue = mock.Mock()
         queue.enqueue.return_value = {"id": "job-1"}

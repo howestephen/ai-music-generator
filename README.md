@@ -89,7 +89,9 @@ acceptance wipe, then becomes available again as soon as the job is queued. Pend
 be reordered or removed in the right column. One job renders at a time; its card shows an
 explicitly labelled progress estimate, then gives way to the finished waveform. Serial
 rendering avoids the severe slowdown and unpredictable timings caused by competing Metal
-jobs. An active render cannot yet be cancelled safely.
+jobs. Queue cards and track history are read from the shared local server, so opening the
+UI in another browser shows the same active and pending jobs and completed tracks. An active
+render cannot yet be cancelled safely.
 
 **Analyse what came out** - tempo, modality, transient placement:
 

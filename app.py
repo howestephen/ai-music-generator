@@ -409,6 +409,10 @@ def _get_job_queue() -> jobs.GenerationQueue:
     return _JOB_QUEUE
 
 
+def _queue_snapshot() -> list[dict]:
+    return _get_job_queue().snapshot()
+
+
 def _estimate_runtime(model: str, duration: float) -> float:
     ratios = []
     for track in _load_history():
@@ -481,6 +485,16 @@ def _history_signature(output_dir: Path | None = None) -> tuple[tuple[str, int],
 
 def _refresh_history():
     return _load_history(), _history_signature()
+
+
+def _queue_items_for_render(_session_value=None):
+    """Use browser state only as a refresh signal; the server queue is authoritative."""
+    return _queue_snapshot()
+
+
+def _history_items_for_render(_session_value=None):
+    """Rebuild each browser's view from the shared output folder."""
+    return _load_history()
 
 
 def _poll_ui(previous_signature):
@@ -608,10 +622,11 @@ def build_ui() -> gr.Blocks:
 
             with gr.Column(scale=1, elem_id="history-panel"):
                 gr.Markdown("## Render queue")
-                queue_state = gr.State(_get_job_queue().snapshot())
+                queue_state = gr.State([])
 
                 @gr.render(inputs=queue_state)
-                def render_queue(queue_items):
+                def render_queue(session_queue_items):
+                    queue_items = _queue_items_for_render(session_queue_items)
                     if not queue_items:
                         gr.Markdown("No queued renders.")
                     for job in queue_items:
@@ -648,11 +663,12 @@ def build_ui() -> gr.Blocks:
                 with gr.Row():
                     gr.Markdown("## Track history")
                     refresh = gr.Button("Refresh history", size="sm")
-                history = gr.State(_load_history())
+                history = gr.State([])
                 history_signature = gr.State(_history_signature())
 
                 @gr.render(inputs=history)
-                def render_history(tracks):
+                def render_history(session_tracks):
+                    tracks = _history_items_for_render(session_tracks)
                     if not tracks:
                         gr.Markdown("No generated tracks yet.")
                         return

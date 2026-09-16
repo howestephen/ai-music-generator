@@ -90,6 +90,12 @@ MUTATIONS = [
     ("UI accepts infinite duration", "app.py",
      "    if not math.isfinite(duration) or duration <= 0:",
      "    if duration <= 0:"),
+    ("new browser trusts stale session queue", "app.py",
+     "    return _queue_snapshot()\n\n\ndef _history_items_for_render",
+     "    return _session_value\n\n\ndef _history_items_for_render"),
+    ("new browser trusts stale session history", "app.py",
+     "    return _load_history()\n\n\ndef _poll_ui",
+     "    return _session_value\n\n\ndef _poll_ui"),
 ]
 
 
