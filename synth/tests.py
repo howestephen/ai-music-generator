@@ -27,6 +27,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import app
+import soundfile as sf
 from synth import analyze, backends, cli, core, jobs
 
 
@@ -35,7 +36,7 @@ def _write_test_wav(path: Path, frames: int = 1) -> None:
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(8000)
-        wav.writeframes(b"\x00\x00" * frames)
+        wav.writeframes(b"\x01\x00" * frames)
 
 
 class _StubRunner:
@@ -47,7 +48,7 @@ class _StubRunner:
     def __call__(self, backend: backends.Backend, job: dict) -> dict:
         self.calls.append((backend.name, job))
         path = Path(job["output_path"])
-        _write_test_wav(path)
+        _write_test_wav(path, frames=round(float(job["duration"]) * 8000))
         return {"path": str(path), "elapsed_seconds": 0.1}
 
     @property
@@ -100,6 +101,7 @@ class GenerateSeam(unittest.TestCase):
     def test_minimax_accepts_duration_beyond_acestep_cap(self):
         track = self.gen(model="minimax-mlx", duration=270)
         self.assertEqual(track.duration, 270)
+        self.assertEqual(track.requested_duration, 270)
         self.assertEqual(self.stub.last_job["duration"], 270)
 
     def test_fractional_duration_matches_runner_request_and_sidecar(self):
@@ -108,6 +110,28 @@ class GenerateSeam(unittest.TestCase):
         self.assertEqual(self.stub.last_job["duration"], 1.5)
         self.assertEqual(track.duration, 1.5)
         self.assertEqual(sidecar["duration"], 1.5)
+        self.assertEqual(sidecar["requested_duration"], 1.5)
+        self.assertEqual(sidecar["audit_status"], "passed")
+
+    def test_short_output_is_retained_audited_and_rejected(self):
+        def short_runner(backend, job):
+            path = Path(job["output_path"])
+            _write_test_wav(path, frames=20 * 8000)
+            return {"path": str(path), "elapsed_seconds": 1.0}
+
+        with mock.patch.object(backends, "run_subprocess", short_runner):
+            with self.assertRaises(core.OutputAuditError) as raised:
+                self.gen(model="minimax-mlx", duration=240)
+        track = raised.exception.track
+        sidecar = json.loads(track.sidecar_path().read_text(encoding="utf-8"))
+        self.assertTrue(track.path.is_file())
+        self.assertEqual(track.audit_status, "short")
+        self.assertEqual(track.duration, 20)
+        self.assertEqual(track.requested_duration, 240)
+        self.assertEqual(sidecar["duration"], 20)
+        self.assertEqual(sidecar["requested_duration"], 240)
+        self.assertEqual(sidecar["audio_frames"], 160000)
+        self.assertIn("Short output retained", str(raised.exception))
 
     def test_each_backend_enforces_its_own_duration_cap(self):
         for model, duration in (("acestep", 241), ("minimax-mlx", 301), ("musicgen", 31)):
@@ -229,8 +253,39 @@ class SubprocessContract(unittest.TestCase):
             "_run_process",
             side_effect=lambda *_args: self._runner_result(payload),
         ) as run:
-            self.assertEqual(backends.run_subprocess(self.backend, self.job), payload)
+            result = backends.run_subprocess(self.backend, self.job)
+        audit = result.pop("_audio_audit")
+        self.assertEqual(result, payload)
+        self.assertIsInstance(audit, backends.AudioAudit)
+        self.assertEqual((audit.frames, audit.sample_rate, audit.channels), (1, 8000, 1))
+        self.assertGreater(audit.peak_amplitude, 0)
         self.assertEqual(run.call_args.args[2], self.backend.timeout_seconds)
+
+    def test_silent_audio_is_not_success(self):
+        payload = {"path": str(self.out), "elapsed_seconds": 1}
+
+        def silent_result(*_args):
+            with wave.open(str(self.out), "wb") as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)
+                wav.setframerate(8000)
+                wav.writeframes(b"\x00\x00" * 8000)
+            return self._proc(json.dumps(payload))
+
+        with mock.patch.object(backends, "_run_process", side_effect=silent_result):
+            with self.assertRaisesRegex(RuntimeError, "wrote silent audio"):
+                backends.run_subprocess(self.backend, self.job)
+
+    def test_non_finite_audio_is_not_success(self):
+        payload = {"path": str(self.out), "elapsed_seconds": 1}
+
+        def non_finite_result(*_args):
+            sf.write(str(self.out), [float("nan")], 8000, subtype="FLOAT")
+            return self._proc(json.dumps(payload))
+
+        with mock.patch.object(backends, "_run_process", side_effect=non_finite_result):
+            with self.assertRaisesRegex(RuntimeError, "non-finite audio samples"):
+                backends.run_subprocess(self.backend, self.job)
 
     def test_process_wrapper_uses_strict_utf8_timeout_and_new_session(self):
         proc = mock.Mock(returncode=0)
@@ -509,9 +564,36 @@ class Registry(unittest.TestCase):
 
     def test_manifest_declares_the_default_and_every_registered_backend(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 2)
+        self.assertEqual(document["schema_version"], 3)
         self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
         self.assertEqual(list(document["backends"]), list(backends.BACKENDS))
+
+    def test_every_backend_declares_a_valid_output_audit_policy(self):
+        for backend in backends.BACKENDS.values():
+            with self.subTest(backend=backend.name):
+                self.assertGreater(backend.output_audit.minimum_duration_ratio, 0)
+                self.assertLessEqual(backend.output_audit.minimum_duration_ratio, 1)
+                self.assertGreaterEqual(backend.output_audit.duration_tolerance_seconds, 0)
+                self.assertGreaterEqual(backend.output_audit.random_seed_retries, 0)
+        self.assertEqual(backends.get("minimax-mlx").output_audit.minimum_duration(240), 216)
+        self.assertEqual(backends.get("minimax-mlx").output_audit.minimum_duration(1), 0.9)
+
+    def test_manifest_rejects_invalid_output_audit_policy(self):
+        cases = (
+            ("minimum_duration_ratio", 0, "within"),
+            ("minimum_duration_ratio", float("nan"), "within"),
+            ("duration_tolerance_seconds", -1, "non-negative"),
+            ("random_seed_retries", True, "non-negative integer"),
+        )
+        for field, value, message in cases:
+            with self.subTest(field=field, value=value):
+                document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+                document["backends"]["minimax-mlx"]["output_audit"][field] = value
+                path = Path(tempfile.mkdtemp()) / "backends.json"
+                self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+                path.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, message):
+                    backends.load_manifest(path)
 
     def test_new_manifest_backend_gets_runtime_and_ui_settings_without_python_edits(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
@@ -784,6 +866,25 @@ class GenerationQueueTests(unittest.TestCase):
         self.assertEqual(snapshot[0]["status"], "failed")
         self.assertIn("without writing its WAV", snapshot[0]["error"])
 
+    def test_completed_job_reflects_the_seed_and_duration_that_passed_audit(self):
+        output = Path(tempfile.mkdtemp()) / "accepted.wav"
+        self.addCleanup(shutil.rmtree, output.parent, ignore_errors=True)
+
+        def run(_payload):
+            output.write_bytes(b"RIFF")
+            return SimpleNamespace(path=output, seed=99, duration=238.5)
+
+        queue = jobs.GenerationQueue(run, completed_hold_seconds=10)
+        self.addCleanup(queue.stop)
+        queue.enqueue({}, {"seed": 42, "duration": 240}, expected_seconds=10)
+        deadline = time.monotonic() + 1
+        snapshot = queue.snapshot()
+        while snapshot[0]["status"] != "complete" and time.monotonic() < deadline:
+            time.sleep(0.01)
+            snapshot = queue.snapshot()
+        self.assertEqual(snapshot[0]["seed"], 99)
+        self.assertEqual(snapshot[0]["delivered_duration"], 238.5)
+
 
 class UiHistory(unittest.TestCase):
     def setUp(self) -> None:
@@ -792,7 +893,7 @@ class UiHistory(unittest.TestCase):
 
     def _track(self, name: str, modified: int, metadata: dict | str | None = None) -> Path:
         path = self.out / f"{name}.wav"
-        path.write_bytes(b"RIFF")
+        _write_test_wav(path, frames=8000)
         os.utime(path, ns=(modified, modified))
         if isinstance(metadata, dict):
             path.with_suffix(".json").write_text(json.dumps(metadata), encoding="utf-8")
@@ -844,6 +945,30 @@ class UiHistory(unittest.TestCase):
         })
         track = app._load_history(self.out)[0]
         self.assertEqual((track["backend"], track["seed"]), ("minimax-mlx", 123))
+        self.assertEqual(track["duration"], 1)
+        self.assertEqual(track["requested_duration"], 45)
+        self.assertEqual(track["audit_status"], "short")
+        copy = app._history_copy(track)
+        self.assertIn("1.0s delivered", copy)
+        self.assertIn("45s target", copy)
+        self.assertIn("SHORT", copy)
+
+    def test_history_does_not_call_a_long_silent_file_passed(self):
+        path = self.out / "silent.wav"
+        with wave.open(str(path), "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(8000)
+            wav.writeframes(b"\x00\x00" * 10 * 8000)
+        path.with_suffix(".json").write_text(
+            json.dumps({"backend": "minimax-mlx", "duration": 10}),
+            encoding="utf-8",
+        )
+        track = app._load_history(self.out)[0]
+        self.assertIsNone(track["duration"])
+        self.assertEqual(track["audit_status"], "invalid")
+        self.assertIn("silent audio", track["audit_error"])
+        self.assertIn("INVALID", app._history_copy(track))
 
     def test_history_waveform_contains_every_peak_and_is_seekable(self):
         track = {
@@ -934,7 +1059,7 @@ model_id = next(
 )
 duration_id = next(
     component_id for component_id, component in components.items()
-    if component["type"] == "slider" and component["props"].get("label") == "Duration (s)"
+    if component["type"] == "slider" and component["props"].get("label") == "Target duration (s)"
 )
 generate_id = next(
     component_id for component_id, component in components.items()
@@ -1091,9 +1216,95 @@ print(json.dumps({
         self.assertEqual(payload["duration"], 270)
         self.assertIsNone(payload["guidance_scale"])
         self.assertEqual(payload["seed"], 123)
+        self.assertEqual(payload["_duration_retries"], 1)
+        self.assertTrue(payload["_retry_seed"])
         self.assertEqual((summary["model"], expected), ("minimax-mlx", 90))
         self.assertEqual((seed, snapshot[0]["status"]), (123, "queued"))
         self.assertIn("ready for another job", status)
+
+    def test_duration_audit_retries_once_with_a_new_seed(self):
+        short_track = SimpleNamespace(
+            backend="minimax-mlx",
+            duration=20,
+            requested_duration=240,
+            path=Path("short.wav"),
+        )
+        short_error = core.OutputAuditError(short_track, 215)
+        accepted = SimpleNamespace(path=Path("accepted.wav"), seed=99)
+        payload = {
+            "model": "minimax-mlx",
+            "prompt": "probe",
+            "duration": 240,
+            "seed": 42,
+            "infer_step": 30,
+            "guidance_scale": None,
+            "_duration_retries": 1,
+            "_retry_seed": True,
+        }
+        with mock.patch.object(core, "generate", side_effect=(short_error, accepted)) as generate, \
+                mock.patch.object(app.random, "randint", return_value=99):
+            self.assertIs(app._run_queued_job(payload), accepted)
+        self.assertEqual(generate.call_count, 2)
+        self.assertEqual(generate.call_args_list[0].kwargs["seed"], 42)
+        self.assertEqual(generate.call_args_list[1].kwargs["seed"], 99)
+        self.assertNotIn("_duration_retries", generate.call_args_list[0].kwargs)
+
+    def test_fixed_seed_does_not_retry_a_short_output(self):
+        short_track = SimpleNamespace(
+            backend="minimax-mlx",
+            duration=20,
+            requested_duration=240,
+            path=Path("short.wav"),
+        )
+        payload = {
+            "model": "minimax-mlx",
+            "prompt": "probe",
+            "duration": 240,
+            "seed": 42,
+            "_duration_retries": 0,
+            "_retry_seed": False,
+        }
+        with mock.patch.object(
+            core, "generate", side_effect=core.OutputAuditError(short_track, 215),
+        ) as generate:
+            with self.assertRaisesRegex(RuntimeError, "after 1 attempt"):
+                app._run_queued_job(payload)
+        generate.assert_called_once()
+
+    def test_twice_short_retry_updates_the_failed_queue_card_seed(self):
+        output = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, output, ignore_errors=True)
+
+        def fail_for_seed(**request):
+            track = SimpleNamespace(
+                backend="minimax-mlx",
+                duration=20,
+                requested_duration=240,
+                path=output / f"short-seed-{request['seed']}.wav",
+                seed=request["seed"],
+            )
+            raise core.OutputAuditError(track, 216)
+
+        payload = {
+            "model": "minimax-mlx",
+            "prompt": "probe",
+            "duration": 240,
+            "seed": 42,
+            "_duration_retries": 1,
+            "_retry_seed": True,
+        }
+        with mock.patch.object(core, "generate", side_effect=fail_for_seed), \
+                mock.patch.object(app.random, "randint", return_value=99):
+            queue = jobs.GenerationQueue(app._run_queued_job)
+            self.addCleanup(queue.stop)
+            queue.enqueue(payload, {"seed": 42, "duration": 240}, expected_seconds=10)
+            deadline = time.monotonic() + 1
+            snapshot = queue.snapshot()
+            while snapshot[0]["status"] != "failed" and time.monotonic() < deadline:
+                time.sleep(0.01)
+                snapshot = queue.snapshot()
+        self.assertEqual(snapshot[0]["seed"], 99)
+        self.assertIn("after 2 attempts", snapshot[0]["error"])
 
     def test_enqueue_rejects_non_finite_and_non_positive_durations(self):
         for duration in (float("nan"), float("inf"), 0, -1):

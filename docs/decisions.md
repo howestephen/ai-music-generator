@@ -12,6 +12,27 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-16 - Generated audio must pass a measured output contract
+
+**Decided:** a runner is successful only when the delivered WAV is readable, finite,
+non-silent and long enough for that backend's manifest policy. Sidecars store requested and
+delivered duration separately with basic audio facts. Short creative assets are retained and
+shown as failed rather than deleted or silently accepted.
+
+The UI retries one short result with a fresh seed when the user did not lock the seed. A
+fixed seed is never retried automatically because the retry would be deterministic. Backend
+thresholds and retry counts live in `synth/backends.json`, alongside the controls they
+qualify.
+
+**Why:** MiniMax uses requested duration as a maximum frame budget and may emit its end
+token much earlier. Twenty recent MiniMax renders delivered roughly 6% to 36% of their target,
+while their old sidecars and UI presented the target as though it were measured output.
+
+**Would revisit if:** a runner exposes a supported minimum-duration constraint or a
+continuation workflow that can extend a short musical result coherently.
+
+---
+
 ## 2026-09-16 - Installation follows the real environment split
 
 **Decided:** `.venv` is recreated from the complete `requirements.txt` lock. The separate

@@ -63,9 +63,13 @@ MUTATIONS = [
     ("queued UI job ignores selected model", "app.py",
      '        "guidance_scale": guidance,\n'
      '        "model": backend.name,\n'
+     '        "_duration_retries": backend.output_audit.random_seed_retries if not use_seed else 0,\n'
+     '        "_retry_seed": not use_seed,\n'
      '    }',
      '        "guidance_scale": guidance,\n'
      '        "model": core.DEFAULT_MODEL,\n'
+     '        "_duration_retries": backend.output_audit.random_seed_retries if not use_seed else 0,\n'
+     '        "_retry_seed": not use_seed,\n'
      '    }'),
     ("UI exposes unsupported step control", "app.py",
      "        _control_update(backend.steps),",
@@ -76,12 +80,12 @@ MUTATIONS = [
     ("MiniMax duration is capped like ACE", "synth/backends.json",
      '          "maximum": 300,\n'
      '          "step": 1,\n'
-     '          "label": "Duration (s)",\n'
-     '          "info": "MiniMax Music 3 supports 1 to 300 seconds.",',
+     '          "label": "Target duration (s)",\n'
+     '          "info": "MiniMax supports up to 300 seconds but may end early. Delivered audio must reach 90% of this target; an unlocked UI seed gets one retry.",',
      '          "maximum": 240,\n'
      '          "step": 1,\n'
-     '          "label": "Duration (s)",\n'
-     '          "info": "MiniMax Music 3 supports 1 to 240 seconds.",'),
+     '          "label": "Target duration (s)",\n'
+     '          "info": "MiniMax supports up to 240 seconds but may end early. Delivered audio must reach 90% of this target; an unlocked UI seed gets one retry.",'),
     ("MiniMax preset stays as tags", "app.py",
      '    return prompts[backends.get(model).prompt_style]',
      '    return prompts["tags"]'),
@@ -169,9 +173,9 @@ MUTATIONS = [
     ("runner accepts a missing or empty output", "synth/backends.py",
      "    if not path.is_file() or path.stat().st_size == 0:",
      "    if False:"),
-    ("core accepts generation without audio", "synth/core.py",
-     "    backends.validate_audio_file(path, backend.name)",
-     "    pass"),
+    ("core accepts generation without audio audit", "synth/core.py",
+     "        if not isinstance(audio_audit, backends.AudioAudit):",
+     "        if False:"),
     ("runner falls back past malformed final JSON", "synth/backends.py",
      "                raise RuntimeError(\n"
      '                    f"{backend.name} runner produced malformed JSON"\n'
@@ -189,9 +193,34 @@ MUTATIONS = [
     ("runner accepts an existing stale output", "synth/backends.py",
      "    if expected.exists():",
      "    if False:"),
-    ("runner skips audio container validation", "synth/backends.py",
-     "        info = sf.info(str(path))",
-     "        return"),
+    ("runner skips audio stream audit", "synth/backends.py",
+     '    result["_audio_audit"] = audit_audio_file(expected, backend.name)',
+     '    result["_audio_audit"] = None'),
+    ("runner accepts silent audio", "synth/backends.py",
+     "    if peak <= 1e-7:",
+     "    if False:"),
+    ("core accepts a short output", "synth/core.py",
+     '        if audit_status != "passed":',
+     "        if False:"),
+    ("core records the target as delivered duration", "synth/core.py",
+     "            duration=round(delivered_duration, 3),",
+     "            duration=float(duration),"),
+    ("history trusts the old sidecar duration", "app.py",
+     "        measured_duration = audio_audit.duration_seconds if audio_audit else None",
+     '        measured_duration = metadata.get("duration")'),
+    ("UI disables the short-output retry", "app.py",
+     '        "_duration_retries": backend.output_audit.random_seed_retries if not use_seed else 0,',
+     '        "_duration_retries": 0,'),
+    ("duration policy permits a zero-second floor", "synth/backends.py",
+     "        return max(\n"
+     "            0.0,\n"
+     "            requested_duration * self.minimum_duration_ratio\n"
+     "            - self.duration_tolerance_seconds,\n"
+     "        )",
+     "        return 0.0"),
+    ("failed retry keeps its original summary seed", "synth/jobs.py",
+     "                    if isinstance(exc, GenerationFailure):",
+     "                    if False:"),
     ("concurrent output reservations are not exclusive", "synth/core.py",
      "os.O_CREAT | os.O_EXCL | os.O_WRONLY",
      "os.O_CREAT | os.O_WRONLY"),

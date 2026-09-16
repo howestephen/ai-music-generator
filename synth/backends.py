@@ -105,6 +105,70 @@ class NumericControl:
 
 
 @dataclass(frozen=True)
+class OutputAuditPolicy:
+    """Backend-owned acceptance and automatic retry policy for delivered audio."""
+
+    minimum_duration_ratio: float
+    duration_tolerance_seconds: float
+    random_seed_retries: int
+
+    @classmethod
+    def from_manifest(cls, data, location: str) -> "OutputAuditPolicy":
+        if not isinstance(data, dict):
+            raise ValueError(f"{location} must be an object")
+        _expect_keys(
+            data,
+            {
+                "minimum_duration_ratio",
+                "duration_tolerance_seconds",
+                "random_seed_retries",
+            },
+            location,
+        )
+        ratio = data["minimum_duration_ratio"]
+        tolerance = data["duration_tolerance_seconds"]
+        retries = data["random_seed_retries"]
+        if (
+            isinstance(ratio, bool)
+            or not isinstance(ratio, (int, float))
+            or not math.isfinite(ratio)
+            or not 0 < ratio <= 1
+        ):
+            raise ValueError(f"{location}.minimum_duration_ratio must be within (0, 1]")
+        if (
+            isinstance(tolerance, bool)
+            or not isinstance(tolerance, (int, float))
+            or not math.isfinite(tolerance)
+            or tolerance < 0
+        ):
+            raise ValueError(
+                f"{location}.duration_tolerance_seconds must be a non-negative number"
+            )
+        if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
+            raise ValueError(f"{location}.random_seed_retries must be a non-negative integer")
+        return cls(float(ratio), float(tolerance), retries)
+
+    def minimum_duration(self, requested_duration: float) -> float:
+        return max(
+            0.0,
+            requested_duration * self.minimum_duration_ratio
+            - self.duration_tolerance_seconds,
+        )
+
+
+@dataclass(frozen=True)
+class AudioAudit:
+    """Facts measured from the delivered audio container and sample stream."""
+
+    duration_seconds: float
+    frames: int
+    sample_rate: int
+    channels: int
+    file_bytes: int
+    peak_amplitude: float
+
+
+@dataclass(frozen=True)
 class Backend:
     name: str
     model_id: str
@@ -116,6 +180,7 @@ class Backend:
     duration: NumericControl
     steps: NumericControl | None
     guidance: NumericControl | None
+    output_audit: OutputAuditPolicy
     prompt_style: str = "tags"  # "tags" or "caption"
     instrumental_tag: str = "[inst]"
     supports_lyrics: bool = True
@@ -131,7 +196,7 @@ class Backend:
             {
                 "model_id", "venv", "runner", "licence", "notes", "dtype",
                 "prompt_style", "instrumental_tag", "supports_lyrics", "runtime",
-                "controls",
+                "controls", "output_audit",
             },
             f"backends.{name}",
         )
@@ -195,6 +260,9 @@ class Backend:
             guidance=NumericControl.from_manifest(
                 controls["guidance"], f"backends.{name}.controls.guidance",
             ),
+            output_audit=OutputAuditPolicy.from_manifest(
+                data["output_audit"], f"backends.{name}.output_audit",
+            ),
             prompt_style=data["prompt_style"],
             instrumental_tag=data["instrumental_tag"],
             supports_lyrics=data["supports_lyrics"],
@@ -256,7 +324,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
     if not isinstance(document, dict):
         raise ValueError("backend manifest must contain one JSON object")
     _expect_keys(document, {"schema_version", "default_backend", "backends"}, "manifest")
-    if document["schema_version"] != 2:
+    if document["schema_version"] != 3:
         raise ValueError(f"unsupported backend manifest schema {document['schema_version']!r}")
     raw_backends = document["backends"]
     if not isinstance(raw_backends, dict) or not raw_backends:
@@ -349,18 +417,42 @@ def _run_process(command: list[str], input_text: str, timeout_seconds: int):
     return subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
 
 
-def validate_audio_file(path: Path, backend_name: str) -> None:
-    """Require a readable audio container with samples before declaring success."""
+def audit_audio_file(path: Path, backend_name: str) -> AudioAudit:
+    """Measure basic output facts and refuse empty, silent or non-finite audio."""
     if not path.is_file() or path.stat().st_size == 0:
         raise RuntimeError(f"{backend_name} runner wrote no audio file: {path}")
     try:
+        import numpy as np
         import soundfile as sf
 
-        info = sf.info(str(path))
+        with sf.SoundFile(str(path)) as audio:
+            frames = len(audio)
+            sample_rate = int(audio.samplerate)
+            channels = int(audio.channels)
+            peak = 0.0
+            for block in audio.blocks(blocksize=65_536, dtype="float32", always_2d=True):
+                if not np.isfinite(block).all():
+                    raise RuntimeError(
+                        f"{backend_name} runner wrote non-finite audio samples: {path}"
+                    )
+                if block.size:
+                    peak = max(peak, float(np.max(np.abs(block))))
     except Exception as exc:
+        if isinstance(exc, RuntimeError) and "non-finite audio samples" in str(exc):
+            raise
         raise RuntimeError(f"{backend_name} runner wrote invalid audio: {path}") from exc
-    if info.frames <= 0 or info.samplerate <= 0 or info.channels <= 0:
+    if frames <= 0 or sample_rate <= 0 or channels <= 0:
         raise RuntimeError(f"{backend_name} runner wrote empty audio: {path}")
+    if peak <= 1e-7:
+        raise RuntimeError(f"{backend_name} runner wrote silent audio: {path}")
+    return AudioAudit(
+        duration_seconds=frames / sample_rate,
+        frames=frames,
+        sample_rate=sample_rate,
+        channels=channels,
+        file_bytes=path.stat().st_size,
+        peak_amplitude=peak,
+    )
 
 
 def run_subprocess(backend: Backend, job: dict) -> dict:
@@ -417,5 +509,5 @@ def run_subprocess(backend: Backend, job: dict) -> dict:
         raise RuntimeError(
             f"{backend.name} runner reported invalid elapsed_seconds: {elapsed!r}"
         )
-    validate_audio_file(expected, backend.name)
+    result["_audio_audit"] = audit_audio_file(expected, backend.name)
     return result

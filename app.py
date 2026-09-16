@@ -349,6 +349,19 @@ def _model_updates(model, duration, preset):
     )
 
 
+@lru_cache(maxsize=512)
+def _history_audio_audit(
+    path_string: str,
+    modified_ns: int,
+) -> tuple[backends.AudioAudit | None, str | None]:
+    """Fully audit a WAV once per file revision, including its sample stream."""
+    del modified_ns  # Cache key: a replaced file is audited again.
+    try:
+        return backends.audit_audio_file(Path(path_string), "history"), None
+    except RuntimeError as exc:
+        return None, str(exc)
+
+
 def _load_history(output_dir: Path | None = None) -> list[dict]:
     output_dir = Path(output_dir) if output_dir else core.OUTPUT_DIR
     if not output_dir.exists():
@@ -367,12 +380,42 @@ def _load_history(output_dir: Path | None = None) -> list[dict]:
             modified_ns = path.stat().st_mtime_ns
         except OSError:
             continue
+        requested_duration = metadata.get("requested_duration", metadata.get("duration"))
+        audio_audit, audit_error = _history_audio_audit(str(path), modified_ns)
+        measured_duration = audio_audit.duration_seconds if audio_audit else None
+        audio_frames = audio_audit.frames if audio_audit else None
+        sample_rate = audio_audit.sample_rate if audio_audit else None
+        channels = audio_audit.channels if audio_audit else None
+        file_bytes = audio_audit.file_bytes if audio_audit else None
+
+        duration_ratio = None
+        audit_status = "invalid" if measured_duration is None else "unverified"
+        try:
+            target = float(requested_duration)
+            if not math.isfinite(target) or target <= 0:
+                raise ValueError
+            if measured_duration is not None:
+                duration_ratio = measured_duration / target
+                backend = backends.BACKENDS.get(str(metadata.get("backend")))
+                if backend is not None:
+                    minimum = backend.output_audit.minimum_duration(target)
+                    audit_status = "passed" if measured_duration >= minimum else "short"
+        except (TypeError, ValueError, OverflowError):
+            requested_duration = None
         tracks.append({
             "path": str(path),
             "name": path.name,
             "modified_ns": modified_ns,
             "backend": metadata.get("backend", "unknown model"),
-            "duration": metadata.get("duration"),
+            "duration": measured_duration,
+            "requested_duration": requested_duration,
+            "duration_ratio": duration_ratio,
+            "audit_status": audit_status,
+            "audit_error": audit_error,
+            "audio_frames": audio_frames,
+            "sample_rate": sample_rate,
+            "channels": channels,
+            "file_bytes": file_bytes,
             "elapsed_seconds": metadata.get("elapsed_seconds"),
             "seed": metadata.get("seed"),
             "prompt": metadata.get("prompt", "Prompt unavailable"),
@@ -385,9 +428,21 @@ def _history_copy(track: dict) -> str:
     details = [html.escape(str(track["backend"]))]
     if track["duration"] is not None:
         try:
-            details.append(f"{float(track['duration']):g}s")
+            delivered = float(track["duration"])
+            if math.isfinite(delivered):
+                details.append(f"{delivered:.1f}s delivered")
         except (TypeError, ValueError, OverflowError):
             pass
+    if track.get("requested_duration") is not None:
+        try:
+            target = float(track["requested_duration"])
+            if math.isfinite(target):
+                details.append(f"{target:g}s target")
+        except (TypeError, ValueError, OverflowError):
+            pass
+    audit_status = track.get("audit_status")
+    if audit_status in {"short", "invalid"}:
+        details.append(str(audit_status).upper())
     if track["seed"] is not None:
         details.append(f"seed {html.escape(str(track['seed']))}")
     return (
@@ -445,7 +500,25 @@ _JOB_QUEUE_LOCK = threading.Lock()
 
 
 def _run_queued_job(payload: dict) -> core.Track:
-    return core.generate(**payload)
+    request = dict(payload)
+    retries = int(request.pop("_duration_retries", 0))
+    retry_seed = bool(request.pop("_retry_seed", False))
+    for attempt in range(retries + 1):
+        try:
+            return core.generate(**request)
+        except core.OutputAuditError as exc:
+            if not retry_seed or attempt >= retries:
+                attempts = attempt + 1
+                raise jobs.GenerationFailure(
+                    f"Duration audit failed after {attempts} attempt"
+                    f"{'s' if attempts != 1 else ''}: {exc}",
+                    summary_updates={"seed": request["seed"]},
+                ) from exc
+            next_seed = random.randint(0, 2**31 - 1)
+            if next_seed == request["seed"]:
+                next_seed = (next_seed + 1) % (2**31)
+            request["seed"] = next_seed
+    raise AssertionError("unreachable duration retry state")
 
 
 def _get_job_queue() -> jobs.GenerationQueue:
@@ -467,7 +540,7 @@ def _estimate_runtime(model: str, duration: float) -> float:
         if track["backend"] != model:
             continue
         try:
-            track_duration = float(track["duration"])
+            track_duration = float(track.get("requested_duration", track.get("duration")))
             elapsed = float(track["elapsed_seconds"])
         except (TypeError, ValueError, OverflowError):
             continue
@@ -507,6 +580,8 @@ def _enqueue_generation(model, prompt, duration, steps, guidance, seed, use_seed
         "infer_step": steps,
         "guidance_scale": guidance,
         "model": backend.name,
+        "_duration_retries": backend.output_audit.random_seed_retries if not use_seed else 0,
+        "_retry_seed": not use_seed,
     }
     summary = {
         "model": backend.name,
@@ -518,8 +593,9 @@ def _enqueue_generation(model, prompt, duration, steps, guidance, seed, use_seed
     queue = _get_job_queue()
     queue.enqueue(payload, summary, _estimate_runtime(model, duration))
     status = (
-        f"**Queued {backend.name}** · {duration:g}s · seed `{chosen_seed}`  \n"
-        "The Generate button is ready for another job."
+        f"**Queued {backend.name}** · {duration:g}s target · seed `{chosen_seed}`  \n"
+        "The Generate button is ready for another job. The delivered WAV will be audited"
+        + (" and retried once with a new seed if it is short." if not use_seed else ".")
     )
     return status, chosen_seed, queue.snapshot()
 
@@ -577,7 +653,7 @@ def _queue_job_html(job: dict) -> str:
     if len(prompt) > 180:
         prompt = f"{prompt[:177]}..."
     details = (
-        f"{html.escape(str(job['model']))} · {float(job['duration']):g}s · "
+        f"{html.escape(str(job['model']))} · {float(job['duration']):g}s target · "
         f"seed {html.escape(str(job['seed']))}"
     )
     error = ""

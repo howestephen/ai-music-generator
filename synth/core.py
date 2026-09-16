@@ -53,6 +53,14 @@ class Track:
     path: Path
     prompt: str
     duration: float
+    requested_duration: float
+    duration_ratio: float
+    audit_status: str
+    audio_frames: int
+    sample_rate: int
+    channels: int
+    file_bytes: int
+    peak_amplitude: float
     seed: int
     infer_step: int | None
     guidance_scale: float | None
@@ -72,6 +80,19 @@ class Track:
         target = self.sidecar_path()
         target.write_text(json.dumps(data, indent=2), encoding="utf-8")
         return target
+
+
+class OutputAuditError(RuntimeError):
+    """A creative asset was retained, but it did not satisfy its output contract."""
+
+    def __init__(self, track: Track, minimum_duration: float):
+        self.track = track
+        self.minimum_duration = minimum_duration
+        super().__init__(
+            f"{track.backend} returned {track.duration:.2f}s for a "
+            f"{track.requested_duration:g}s target; minimum accepted is "
+            f"{minimum_duration:.2f}s. Short output retained at {track.path}"
+        )
 
 
 def _slug(text: str, max_len: int = 48) -> str:
@@ -180,6 +201,7 @@ def generate(
                 "output_path": str(path),
             })
             elapsed = result.get("elapsed_seconds", time.time() - started)
+            audio_audit = result.get("_audio_audit")
         else:
             if steps is None or guidance is None:
                 raise RuntimeError(
@@ -199,12 +221,28 @@ def generate(
             )
             elapsed = time.time() - started
 
-        backends.validate_audio_file(path, backend.name)
+            audio_audit = None
+
+        if not isinstance(audio_audit, backends.AudioAudit):
+            audio_audit = backends.audit_audio_file(path, backend.name)
+
+        delivered_duration = audio_audit.duration_seconds
+        duration_ratio = delivered_duration / float(duration)
+        minimum_duration = backend.output_audit.minimum_duration(float(duration))
+        audit_status = "passed" if delivered_duration >= minimum_duration else "short"
 
         track = Track(
             path=path,
             prompt=prompt,
-            duration=float(duration),
+            duration=round(delivered_duration, 3),
+            requested_duration=float(duration),
+            duration_ratio=round(duration_ratio, 4),
+            audit_status=audit_status,
+            audio_frames=audio_audit.frames,
+            sample_rate=audio_audit.sample_rate,
+            channels=audio_audit.channels,
+            file_bytes=audio_audit.file_bytes,
+            peak_amplitude=round(audio_audit.peak_amplitude, 8),
             seed=int(seed),
             infer_step=steps,
             guidance_scale=guidance,
@@ -216,6 +254,8 @@ def generate(
             elapsed_seconds=round(elapsed, 1),
         )
         track.write_sidecar()
+        if audit_status != "passed":
+            raise OutputAuditError(track, minimum_duration)
         return track
     finally:
         reservation.unlink(missing_ok=True)
