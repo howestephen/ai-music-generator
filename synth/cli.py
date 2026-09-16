@@ -12,7 +12,7 @@ from . import backends, core
 def _print_track(track: core.Track, as_json: bool) -> None:
     if as_json:
         # One object per line (JSON Lines), so --count N stays machine-parseable.
-        print(json.dumps({**json.loads(track.sidecar_path().read_text()),
+        print(json.dumps({**json.loads(track.sidecar_path().read_text(encoding="utf-8")),
                           "path": str(track.path)}))
     else:
         print(f"  -> {track.path.name}  ({track.elapsed_seconds}s, seed {track.seed})")
@@ -44,7 +44,7 @@ def cmd_batch(args: argparse.Namespace) -> int:
 
     jobs: list[tuple[str, str]] = []
     for file in sorted(prompt_dir.glob("*.txt")):
-        for line in file.read_text().splitlines():
+        for line in file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line and not line.startswith("#"):
                 jobs.append((file.name, line))

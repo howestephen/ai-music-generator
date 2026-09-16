@@ -70,13 +70,34 @@ class Track:
         data = asdict(self)
         data["path"] = self.path.name  # relative: the folder may get moved
         target = self.sidecar_path()
-        target.write_text(json.dumps(data, indent=2))
+        target.write_text(json.dumps(data, indent=2), encoding="utf-8")
         return target
 
 
 def _slug(text: str, max_len: int = 48) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return slug[:max_len].rstrip("-") or "track"
+
+
+def _reserve_output_path(output_dir: Path, stem: str) -> tuple[Path, Path]:
+    """Atomically reserve a path across concurrent CLI and server processes."""
+    suffix = 2
+    candidate = output_dir / f"{stem}.wav"
+    while True:
+        reservation = candidate.with_suffix(".wav.lock")
+        try:
+            descriptor = os.open(reservation, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            candidate = output_dir / f"{stem}_{suffix}.wav"
+            suffix += 1
+            continue
+        os.close(descriptor)
+        if candidate.exists():
+            reservation.unlink()
+            candidate = output_dir / f"{stem}_{suffix}.wav"
+            suffix += 1
+            continue
+        return candidate, reservation
 
 
 def _resolve(backend: backends.Backend, knob: str, value, default):
@@ -118,8 +139,8 @@ def generate(
     backend = backends.get(model)
     if not backend.available:
         raise RuntimeError(
-            f"Backend {backend.name!r} is not set up: expected interpreter at "
-            f"{backend.python}. See README for install steps."
+            f"Backend {backend.name!r} is not set up: {backend.availability_error}. "
+            "See README for install steps."
         )
     duration = backend.duration.validate(duration, f"{backend.name} duration")
 
@@ -143,52 +164,58 @@ def generate(
         seed = random.randint(0, 2**31 - 1)
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = output_dir / f"{stamp}_{backend.name}_{_slug(prompt)}_seed{seed}.wav"
+    stem = f"{stamp}_{backend.name}_{_slug(prompt)}_seed{seed}"
+    path, reservation = _reserve_output_path(output_dir, stem)
 
-    started = time.time()
-    if backend.runner:
-        result = backends.run_subprocess(backend, {
-            "prompt": prompt,
-            "lyrics": lyrics,
-            "duration": float(duration),
-            "seed": int(seed),
-            "steps": steps,
-            "guidance": guidance,
-            "output_path": str(path),
-        })
-        elapsed = result.get("elapsed_seconds", time.time() - started)
-    else:
-        if steps is None or guidance is None:
-            raise RuntimeError(
-                f"{backend.name} runs in-process and needs both default_steps and "
-                "default_guidance declared in synth/backends.py"
+    try:
+        started = time.time()
+        if backend.runner:
+            result = backends.run_subprocess(backend, {
+                "prompt": prompt,
+                "lyrics": lyrics,
+                "duration": float(duration),
+                "seed": int(seed),
+                "steps": steps,
+                "guidance": guidance,
+                "output_path": str(path),
+            })
+            elapsed = result.get("elapsed_seconds", time.time() - started)
+        else:
+            if steps is None or guidance is None:
+                raise RuntimeError(
+                    f"{backend.name} runs in-process and needs both default_steps and "
+                    "default_guidance declared in synth/backends.py"
+                )
+            pipe = _load_pipeline()
+            pipe(
+                prompt=prompt,
+                lyrics=lyrics,
+                audio_duration=float(duration),
+                infer_step=int(steps),
+                guidance_scale=float(guidance),
+                manual_seeds=[int(seed)],
+                save_path=str(path),
+                format="wav",
             )
-        pipe = _load_pipeline()
-        pipe(
-            prompt=prompt,
-            lyrics=lyrics,
-            audio_duration=float(duration),
-            infer_step=int(steps),
-            guidance_scale=float(guidance),
-            manual_seeds=[int(seed)],
-            save_path=str(path),
-            format="wav",
-        )
-        elapsed = time.time() - started
+            elapsed = time.time() - started
 
-    track = Track(
-        path=path,
-        prompt=prompt,
-        duration=float(duration),
-        seed=int(seed),
-        infer_step=steps,
-        guidance_scale=guidance,
-        lyrics=lyrics,
-        backend=backend.name,
-        model=backend.model_id,
-        dtype=backend.dtype,
-        generated_at=stamp,
-        elapsed_seconds=round(elapsed, 1),
-    )
-    track.write_sidecar()
-    return track
+        backends.validate_audio_file(path, backend.name)
+
+        track = Track(
+            path=path,
+            prompt=prompt,
+            duration=float(duration),
+            seed=int(seed),
+            infer_step=steps,
+            guidance_scale=guidance,
+            lyrics=lyrics,
+            backend=backend.name,
+            model=backend.model_id,
+            dtype=backend.dtype,
+            generated_at=stamp,
+            elapsed_seconds=round(elapsed, 1),
+        )
+        track.write_sidecar()
+        return track
+    finally:
+        reservation.unlink(missing_ok=True)

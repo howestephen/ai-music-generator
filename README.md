@@ -7,8 +7,8 @@ updated: 2026-09-16
 
 # AI Music Generator
 
-A local workbench for **verbal music synthesis** - describing music in words and having it
-rendered as audio, entirely on this machine.
+A local workbench for **verbal music synthesis** - describing music in words and rendering
+it locally as audio.
 
 Runs on Apple Silicon (M3 Max, 128 GB). No cloud, no per-track licensing, no upload of
 anything you're working on.
@@ -23,8 +23,7 @@ Deliberately open-ended. Current and possible uses:
 - Whatever artistic or technical concept the experimentation suggests
 
 Because the destination isn't fixed, the project prioritises **organisation and recorded
-reasoning** over any one feature. Decisions get written down with their rationale so future
-work doesn't relitigate them, and traps get recorded so they're only paid for once.
+reasoning**. Decisions retain their rationale and traps are recorded once.
 
 | Document | Purpose |
 |---|---|
@@ -189,6 +188,10 @@ Backends whose dependencies conflict run as subprocesses in their own venv - ACE
 `transformers==4.50` while MiniMax needs `>=5`, so they can't share one. Adding a model is a
 manifest entry plus a runner implementing the existing JSON job contract. The model then
 appears automatically in the CLI, dropdown, validation and model-specific UI controls.
+The manifest also declares modules used to verify the environment and a finite timeout for
+each subprocess runner. A runner is successful only after its JSON result and readable
+audio file at a fresh path have both been checked. A timed-out runner and its model child
+are terminated together.
 
 ## Environments
 

@@ -12,12 +12,17 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import signal
 import subprocess
+import time
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = Path(__file__).with_name("backends.json")
+TERMINATE_GRACE_SECONDS = 5
 
 
 def _expect_keys(data: dict, required: set[str], location: str) -> None:
@@ -114,6 +119,8 @@ class Backend:
     prompt_style: str = "tags"  # "tags" or "caption"
     instrumental_tag: str = "[inst]"
     supports_lyrics: bool = True
+    probe_modules: tuple[str, ...] = ()
+    timeout_seconds: int | None = None
 
     @classmethod
     def from_manifest(cls, name: str, data) -> "Backend":
@@ -123,10 +130,45 @@ class Backend:
             data,
             {
                 "model_id", "venv", "runner", "licence", "notes", "dtype",
-                "prompt_style", "instrumental_tag", "supports_lyrics", "controls",
+                "prompt_style", "instrumental_tag", "supports_lyrics", "runtime",
+                "controls",
             },
             f"backends.{name}",
         )
+        runtime = data["runtime"]
+        if not isinstance(runtime, dict):
+            raise ValueError(f"backends.{name}.runtime must be an object")
+        _expect_keys(
+            runtime,
+            {"probe_modules", "timeout_seconds"},
+            f"backends.{name}.runtime",
+        )
+        probe_modules = runtime["probe_modules"]
+        if (
+            not isinstance(probe_modules, list)
+            or not probe_modules
+            or any(not isinstance(module, str) or not module for module in probe_modules)
+        ):
+            raise ValueError(
+                f"backends.{name}.runtime.probe_modules must be a non-empty string list"
+            )
+        timeout_seconds = runtime["timeout_seconds"]
+        if timeout_seconds is not None and (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, int)
+            or timeout_seconds <= 0
+        ):
+            raise ValueError(
+                f"backends.{name}.runtime.timeout_seconds must be a positive integer or null"
+            )
+        if data["runner"] is None and timeout_seconds is not None:
+            raise ValueError(
+                f"backends.{name}.runtime.timeout_seconds must be null without a runner"
+            )
+        if data["runner"] is not None and timeout_seconds is None:
+            raise ValueError(
+                f"backends.{name}.runtime.timeout_seconds is required for a runner"
+            )
         controls = data["controls"]
         if not isinstance(controls, dict):
             raise ValueError(f"backends.{name}.controls must be an object")
@@ -156,6 +198,8 @@ class Backend:
             prompt_style=data["prompt_style"],
             instrumental_tag=data["instrumental_tag"],
             supports_lyrics=data["supports_lyrics"],
+            probe_modules=tuple(probe_modules),
+            timeout_seconds=timeout_seconds,
         )
 
     @property
@@ -176,13 +220,32 @@ class Backend:
     def python(self) -> Path:
         return PROJECT_ROOT / (self.venv or ".venv") / "bin" / "python"
 
+    @cached_property
+    def availability_error(self) -> str | None:
+        if not self.python.exists():
+            return f"missing interpreter at {self.python}"
+        if self.runner and not (PROJECT_ROOT / "runners" / self.runner).exists():
+            return f"missing runner runners/{self.runner}"
+        imports = "; ".join(f"import {module}" for module in self.probe_modules)
+        try:
+            proc = subprocess.run(
+                [str(self.python), "-c", imports],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="strict",
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired, UnicodeError) as exc:
+            return f"runtime probe failed: {exc}"
+        if proc.returncode != 0:
+            detail = proc.stderr.strip().splitlines()
+            return detail[-1] if detail else "runtime import probe failed"
+        return None
+
     @property
     def available(self) -> bool:
-        if not self.python.exists():
-            return False
-        if self.runner and not (PROJECT_ROOT / "runners" / self.runner).exists():
-            return False
-        return True
+        return self.availability_error is None
 
 
 def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
@@ -193,7 +256,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
     if not isinstance(document, dict):
         raise ValueError("backend manifest must contain one JSON object")
     _expect_keys(document, {"schema_version", "default_backend", "backends"}, "manifest")
-    if document["schema_version"] != 1:
+    if document["schema_version"] != 2:
         raise ValueError(f"unsupported backend manifest schema {document['schema_version']!r}")
     raw_backends = document["backends"]
     if not isinstance(raw_backends, dict) or not raw_backends:
@@ -220,20 +283,139 @@ def get(name: str) -> Backend:
         )
 
 
+def _terminate_process_tree(proc: subprocess.Popen) -> None:
+    """Terminate a runner and its descendants, then ensure the adapter is reaped."""
+    if os.name == "posix":
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            proc.terminate()
+        deadline = time.monotonic() + TERMINATE_GRACE_SECONDS
+        group_alive = True
+        while group_alive and time.monotonic() < deadline:
+            try:
+                os.killpg(proc.pid, 0)
+            except ProcessLookupError:
+                group_alive = False
+            except PermissionError:
+                # macOS can return EPERM while a terminated process group is
+                # disappearing. Escalate once, but never let the probe replace
+                # the original timeout error or bypass adapter reaping.
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                group_alive = False
+            else:
+                time.sleep(0.05)
+        if group_alive:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                proc.kill()
+    else:
+        proc.kill()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+
+def _run_process(command: list[str], input_text: str, timeout_seconds: int):
+    """Run one isolated adapter process with strict UTF-8 and tree cleanup."""
+    proc = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="strict",
+        start_new_session=os.name == "posix",
+    )
+    try:
+        stdout, stderr = proc.communicate(input_text, timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        _terminate_process_tree(proc)
+        for stream in (proc.stdin, proc.stdout, proc.stderr):
+            if stream is not None:
+                stream.close()
+        raise
+    return subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
+
+
+def validate_audio_file(path: Path, backend_name: str) -> None:
+    """Require a readable audio container with samples before declaring success."""
+    if not path.is_file() or path.stat().st_size == 0:
+        raise RuntimeError(f"{backend_name} runner wrote no audio file: {path}")
+    try:
+        import soundfile as sf
+
+        info = sf.info(str(path))
+    except Exception as exc:
+        raise RuntimeError(f"{backend_name} runner wrote invalid audio: {path}") from exc
+    if info.frames <= 0 or info.samplerate <= 0 or info.channels <= 0:
+        raise RuntimeError(f"{backend_name} runner wrote empty audio: {path}")
+
+
 def run_subprocess(backend: Backend, job: dict) -> dict:
     """Run a job in the backend's own interpreter and return its JSON result."""
+    if not backend.runner or backend.timeout_seconds is None:
+        raise RuntimeError(f"{backend.name} has no subprocess runtime configured")
     script = PROJECT_ROOT / "runners" / backend.runner
-    proc = subprocess.run(
-        [str(backend.python), str(script)],
-        input=json.dumps(job),
-        capture_output=True,
-        text=True,
-    )
+    expected = Path(job["output_path"])
+    if expected.exists():
+        raise RuntimeError(f"refusing to overwrite an existing output: {expected}")
+    try:
+        proc = _run_process(
+            [str(backend.python), str(script)],
+            json.dumps(job),
+            backend.timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"{backend.name} runner timed out after {backend.timeout_seconds} seconds"
+        ) from exc
+    except UnicodeError as exc:
+        raise RuntimeError(f"{backend.name} runner emitted invalid UTF-8") from exc
     if proc.returncode != 0:
         tail = "\n".join(proc.stderr.strip().splitlines()[-15:])
         raise RuntimeError(f"{backend.name} runner failed:\n{tail}")
     # Model loading chatter goes to stderr, but be defensive about stray stdout.
+    result = None
     for line in reversed(proc.stdout.strip().splitlines()):
-        if line.startswith("{"):
-            return json.loads(line)
-    raise RuntimeError(f"{backend.name} runner produced no JSON result")
+        if line.lstrip().startswith("{"):
+            try:
+                result = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(
+                    f"{backend.name} runner produced malformed JSON"
+                ) from exc
+            break
+    if result is None:
+        raise RuntimeError(f"{backend.name} runner produced no JSON result")
+    if not isinstance(result, dict):
+        raise RuntimeError(f"{backend.name} runner JSON result must be an object")
+
+    returned_path = result.get("path")
+    if not isinstance(returned_path, str) or Path(returned_path).resolve() != expected.resolve():
+        raise RuntimeError(
+            f"{backend.name} runner reported an unexpected output path: {returned_path!r}"
+        )
+    elapsed = result.get("elapsed_seconds")
+    if (
+        isinstance(elapsed, bool)
+        or not isinstance(elapsed, (int, float))
+        or not math.isfinite(elapsed)
+        or elapsed < 0
+    ):
+        raise RuntimeError(
+            f"{backend.name} runner reported invalid elapsed_seconds: {elapsed!r}"
+        )
+    validate_audio_file(expected, backend.name)
+    return result

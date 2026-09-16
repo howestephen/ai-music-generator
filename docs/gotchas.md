@@ -84,6 +84,19 @@ bfloat16 errors on macOS. Upstream says pass `--bf16 false`; the equivalent here
 
 ## Runtime
 
+### Exit code zero does not prove that a runner produced audio
+
+**Symptom:** a CLI call appeared successful, or a UI job reached the end of its estimate,
+but no playable file existed. Malformed runner JSON could also escape as a decode error.
+
+**Cause:** the subprocess boundary trusted the exit code and the first JSON-looking stdout
+line. It did not validate the result fields or the output file.
+
+**Fix:** the manifest now declares import probes and a finite runner timeout. The caller
+decodes UTF-8 explicitly and requires valid result JSON, the requested fresh output path,
+a finite elapsed time and a readable audio container before writing a sidecar. A timeout
+terminates the adapter's process group so its model child cannot continue using the GPU.
+
 ### A moved virtual environment can keep stale absolute paths in console scripts
 
 **Symptom:** the MiniMax runner fails immediately because `.venv-mlx/bin/mlx-minimax-music3`

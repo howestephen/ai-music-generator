@@ -7,9 +7,22 @@ updated: 2026-09-16
 
 # Decisions
 
-Why the stack looks the way it does. Newest first. Each entry records what was decided,
-why, and what would change it - so a future decision can be revisited on evidence rather
-than re-argued from scratch.
+Why the stack looks the way it does. Newest first. Each entry records the decision,
+rationale and reason to revisit it.
+
+---
+
+## 2026-09-16 - A runner result is a verified contract, not an exit code
+
+**Decided:** every subprocess backend declares import probes and a finite timeout in the
+model manifest. A successful call must return valid UTF-8 JSON with the expected path and
+a finite elapsed time, and must leave a readable audio file at a fresh path. Timed-out
+adapters terminate their whole process group so the model cannot remain on the GPU.
+
+**Why:** exit code zero did not prove that a runner returned usable metadata or wrote any
+audio. A stalled subprocess could also hold the serial UI queue forever.
+
+**Would revisit if:** persistent workers add heartbeats and cancellation.
 
 ---
 
@@ -22,9 +35,9 @@ unknown fields; core, browser and API use the loaded contract.
 **Why:** Gradio's static schema inherited ACE-Step's 240-second slider and rejected a valid
 270-second MiniMax request before the handler ran.
 
-**Implementation:** Gradio sees the union of manifest contracts; model selection narrows
-the UI; the handler and core enforce the selected one. A new subprocess model needs a
-manifest entry and JSON runner, then appears automatically in the CLI and UI.
+**Implementation:** Gradio sees the union of manifest contracts; selection narrows the UI;
+the handler and core enforce the chosen model. A manifest entry and JSON runner make a new
+subprocess model appear in the CLI and UI.
 
 **Would revisit if:** a backend needs another control type or runner contract.
 
@@ -86,9 +99,8 @@ thing that remains is the local synthesis capability, which could serve soundtra
 vocal parts and textures for music production, a larger studio system, or artistic
 experiments not yet defined.
 
-**Consequence:** because the destination is unfixed, organisation and recorded reasoning
-matter more than any feature. Decisions and gotchas get written down. Architecture stays
-easy to add models to rather than optimised for one workflow.
+**Consequence:** organisation and recorded reasoning matter more than any feature.
+Architecture stays easy to extend rather than optimised for one workflow.
 
 ---
 
@@ -100,9 +112,9 @@ fp32 PyTorch build was deleted.
 **Why:** MLX targets Metal natively. The fp32 build ran at ~13× realtime and consumed four
 times the disk for no benefit on this hardware.
 
-**Cost of getting this wrong:** the MLX build was found in the *first* search and treated as
-a future optimisation while the inefficient build was downloaded, run and benchmarked.
-Roughly two hours and 54 GB wasted. Now a standing rule in
+**Cost of getting this wrong:** the MLX build was found first but deferred while the
+inefficient build was downloaded and benchmarked. Roughly two hours and 54 GB wasted. Now
+a standing rule in
 [gotchas.md](gotchas.md#check-for-an-mlx-build-before-downloading-anything).
 
 **Would revisit if:** 8-bit quantisation proves audibly worse than fp32, or a model ships

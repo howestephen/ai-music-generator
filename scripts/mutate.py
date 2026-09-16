@@ -141,6 +141,62 @@ MUTATIONS = [
     ("new browser trusts stale session history", "app.py",
      "    return _load_history()\n\n\ndef _poll_ui",
      "    return _session_value\n\n\ndef _poll_ui"),
+    ("runner subprocess has no timeout", "synth/backends.py",
+     "        stdout, stderr = proc.communicate(input_text, timeout=timeout_seconds)",
+     "        stdout, stderr = proc.communicate(input_text, timeout=None)"),
+    ("runner timeout leaves descendants in the parent process group", "synth/backends.py",
+     '        start_new_session=os.name == "posix",',
+     "        start_new_session=False,"),
+    ("timeout never escalates an uncooperative process group", "synth/backends.py",
+     "        if group_alive:\n"
+     "            try:\n"
+     "                os.killpg(proc.pid, signal.SIGKILL)",
+     "        if False:\n"
+     "            try:\n"
+     "                os.killpg(proc.pid, signal.SIGKILL)"),
+    ("process-group probe leaks macOS permission errors", "synth/backends.py",
+     "            except PermissionError:\n"
+     "                # macOS can return EPERM while a terminated process group is",
+     "            except RuntimeError:\n"
+     "                # macOS can return EPERM while a terminated process group is"),
+    ("runtime probe imports nothing", "synth/backends.py",
+     '        imports = "; ".join(f"import {module}" for module in self.probe_modules)',
+     '        imports = ""'),
+    ("runner accepts a missing or empty output", "synth/backends.py",
+     "    if not path.is_file() or path.stat().st_size == 0:",
+     "    if False:"),
+    ("core accepts generation without audio", "synth/core.py",
+     "    backends.validate_audio_file(path, backend.name)",
+     "    pass"),
+    ("runner falls back past malformed final JSON", "synth/backends.py",
+     "                raise RuntimeError(\n"
+     '                    f"{backend.name} runner produced malformed JSON"\n'
+     "                ) from exc",
+     "                continue"),
+    ("runner accepts a different reported path", "synth/backends.py",
+     "    if not isinstance(returned_path, str) or Path(returned_path).resolve() != expected.resolve():",
+     "    if False:"),
+    ("runner accepts non-finite elapsed time", "synth/backends.py",
+     "        or not math.isfinite(elapsed)",
+     "        or False"),
+    ("runner replaces invalid UTF-8", "synth/backends.py",
+     '        errors="strict",\n        start_new_session=os.name == "posix",',
+     '        errors="replace",\n        start_new_session=os.name == "posix",'),
+    ("runner accepts an existing stale output", "synth/backends.py",
+     "    if expected.exists():",
+     "    if False:"),
+    ("runner skips audio container validation", "synth/backends.py",
+     "        info = sf.info(str(path))",
+     "        return"),
+    ("concurrent output reservations are not exclusive", "synth/core.py",
+     "os.O_CREAT | os.O_EXCL | os.O_WRONLY",
+     "os.O_CREAT | os.O_WRONLY"),
+    ("MiniMax inner timeout can outlive its adapter", "runners/minimax_mlx_runner.py",
+     "COMMAND_TIMEOUT_SECONDS = 7100",
+     "COMMAND_TIMEOUT_SECONDS = 7200"),
+    ("MiniMax probes only its shallow package root", "synth/backends.json",
+     '"probe_modules": ["mlx_minimax_music3.cli"]',
+     '"probe_modules": ["mlx_minimax_music3"]'),
 ]
 
 

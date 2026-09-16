@@ -14,6 +14,9 @@ import time
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 MODEL_ID = "vanch007/MiniMax-Music3-MLX-8bit"
+# The outer adapter has a 7,200-second ceiling. Leave enough time for this layer
+# to kill and reap the model process, serialise the result and exit first.
+COMMAND_TIMEOUT_SECONDS = 7100
 
 
 def main() -> int:
@@ -33,7 +36,20 @@ def main() -> int:
     if job.get("steps") is not None:  # 0 is a value, not an absence
         cmd += ["--steps", str(int(job["steps"]))]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="strict",
+            timeout=COMMAND_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        sys.stderr.write(
+            f"MiniMax generation timed out after {COMMAND_TIMEOUT_SECONDS} seconds"
+        )
+        return 124
     if proc.returncode != 0:
         sys.stderr.write("\n".join(proc.stderr.strip().splitlines()[-15:]))
         return proc.returncode

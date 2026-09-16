@@ -12,6 +12,7 @@ import importlib.util
 import io
 import json
 import os
+import signal
 import shutil
 import subprocess
 import sys
@@ -19,12 +20,22 @@ import tempfile
 import threading
 import time
 import unittest
+import wave
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
 import app
 from synth import backends, cli, core, jobs
+
+
+def _write_test_wav(path: Path, frames: int = 1) -> None:
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(8000)
+        wav.writeframes(b"\x00\x00" * frames)
 
 
 class _StubRunner:
@@ -35,8 +46,9 @@ class _StubRunner:
 
     def __call__(self, backend: backends.Backend, job: dict) -> dict:
         self.calls.append((backend.name, job))
-        Path(job["output_path"]).write_bytes(b"RIFF")
-        return {"elapsed_seconds": 0.1}
+        path = Path(job["output_path"])
+        _write_test_wav(path)
+        return {"path": str(path), "elapsed_seconds": 0.1}
 
     @property
     def last_job(self) -> dict:
@@ -49,6 +61,14 @@ class GenerateSeam(unittest.TestCase):
         patcher = mock.patch.object(backends, "run_subprocess", self.stub)
         patcher.start()
         self.addCleanup(patcher.stop)
+        available = mock.patch.object(
+            backends.Backend,
+            "available",
+            new_callable=mock.PropertyMock,
+            return_value=True,
+        )
+        available.start()
+        self.addCleanup(available.stop)
         self.out = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.out, ignore_errors=True)
 
@@ -145,6 +165,243 @@ class GenerateSeam(unittest.TestCase):
         side = json.loads(self.gen(model="musicgen").sidecar_path().read_text())
         self.assertIsNone(side["infer_step"])
 
+    def test_core_refuses_a_runner_result_without_audio(self):
+        with mock.patch.object(
+            backends,
+            "run_subprocess",
+            return_value={"path": "ignored", "elapsed_seconds": 0.1},
+        ):
+            with self.assertRaisesRegex(RuntimeError, "wrote no audio file"):
+                self.gen(model="minimax-mlx")
+
+    def test_output_path_does_not_overwrite_a_same_second_collision(self):
+        first = self.out / "same.wav"
+        first.write_bytes(b"existing")
+        path, reservation = core._reserve_output_path(self.out, "same")
+        self.addCleanup(reservation.unlink, missing_ok=True)
+        self.assertEqual(path.name, "same_2.wav")
+
+    def test_output_path_reservations_are_atomic_across_concurrent_callers(self):
+        barrier = threading.Barrier(8)
+        results = []
+        lock = threading.Lock()
+
+        def reserve():
+            barrier.wait()
+            item = core._reserve_output_path(self.out, "concurrent")
+            with lock:
+                results.append(item)
+
+        threads = [threading.Thread(target=reserve) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(2)
+        self.assertEqual(len(results), 8)
+        self.assertEqual(len({path for path, _reservation in results}), 8)
+        for _path, reservation in results:
+            reservation.unlink(missing_ok=True)
+
+
+class SubprocessContract(unittest.TestCase):
+    def setUp(self) -> None:
+        self.out = Path(tempfile.mkdtemp()) / "probe.wav"
+        self.addCleanup(shutil.rmtree, self.out.parent, ignore_errors=True)
+        self.backend = backends.get("minimax-mlx")
+        self.job = {"output_path": str(self.out)}
+
+    def _proc(self, stdout: str, returncode: int = 0, stderr: str = ""):
+        return SimpleNamespace(stdout=stdout, stderr=stderr, returncode=returncode)
+
+    def _runner_result(self, payload: dict, *, audio: str = "valid"):
+        if audio == "valid":
+            _write_test_wav(self.out)
+        elif audio == "invalid":
+            self.out.write_bytes(b"RIFF")
+        elif audio == "empty":
+            self.out.touch()
+        return self._proc(json.dumps(payload))
+
+    def test_success_requires_matching_path_elapsed_and_valid_audio(self):
+        payload = {"path": str(self.out), "elapsed_seconds": 1.25}
+        with mock.patch.object(
+            backends,
+            "_run_process",
+            side_effect=lambda *_args: self._runner_result(payload),
+        ) as run:
+            self.assertEqual(backends.run_subprocess(self.backend, self.job), payload)
+        self.assertEqual(run.call_args.args[2], self.backend.timeout_seconds)
+
+    def test_process_wrapper_uses_strict_utf8_timeout_and_new_session(self):
+        proc = mock.Mock(returncode=0)
+        proc.communicate.return_value = ("out", "err")
+        with mock.patch.object(backends.subprocess, "Popen", return_value=proc) as popen:
+            result = backends._run_process(["python", "runner.py"], "{}", 12)
+        kwargs = popen.call_args.kwargs
+        self.assertEqual(kwargs["encoding"], "utf-8")
+        self.assertEqual(kwargs["errors"], "strict")
+        self.assertEqual(kwargs["start_new_session"], os.name == "posix")
+        proc.communicate.assert_called_once_with("{}", timeout=12)
+        self.assertEqual((result.stdout, result.stderr), ("out", "err"))
+
+    def test_process_group_probe_permission_error_cannot_escape_cleanup(self):
+        proc = mock.Mock(pid=123)
+        with mock.patch.object(
+            backends.os,
+            "killpg",
+            side_effect=(None, PermissionError("probe"), ProcessLookupError()),
+        ):
+            backends._terminate_process_tree(proc)
+        proc.wait.assert_called()
+
+    def test_timeout_is_reported_as_a_runner_failure(self):
+        with mock.patch.object(
+            backends,
+            "_run_process",
+            side_effect=subprocess.TimeoutExpired("runner", 7200),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "timed out after 7200 seconds"):
+                backends.run_subprocess(self.backend, self.job)
+
+    def test_malformed_or_missing_json_is_reported_cleanly(self):
+        for stdout, message in (("{broken", "malformed JSON"), ("chatter", "no JSON")):
+            with self.subTest(stdout=stdout), mock.patch.object(
+                backends, "_run_process", return_value=self._proc(stdout),
+            ):
+                with self.assertRaisesRegex(RuntimeError, message):
+                    backends.run_subprocess(self.backend, self.job)
+
+    def test_result_contract_rejects_wrong_path_elapsed_or_missing_file(self):
+        cases = (
+            ({"path": "/wrong.wav", "elapsed_seconds": 1}, "unexpected output path"),
+            ({"path": str(self.out), "elapsed_seconds": float("nan")}, "invalid elapsed"),
+            ({"path": str(self.out), "elapsed_seconds": 1}, "wrote no audio"),
+        )
+        for payload, message in cases:
+            if self.out.exists():
+                self.out.unlink()
+            with self.subTest(message=message), mock.patch.object(
+                backends,
+                "_run_process",
+                side_effect=lambda *_args, payload=payload: self._runner_result(
+                    payload,
+                    audio="valid" if "path" in message or "elapsed" in message else "missing",
+                ),
+            ):
+                with self.assertRaisesRegex(RuntimeError, message):
+                    backends.run_subprocess(self.backend, self.job)
+
+    def test_empty_output_file_is_not_success(self):
+        payload = {"path": str(self.out), "elapsed_seconds": 1}
+        with mock.patch.object(
+            backends,
+            "_run_process",
+            side_effect=lambda *_args: self._runner_result(payload, audio="empty"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "wrote no audio"):
+                backends.run_subprocess(self.backend, self.job)
+
+    def test_invalid_wav_header_is_not_success(self):
+        payload = {"path": str(self.out), "elapsed_seconds": 1}
+        with mock.patch.object(
+            backends,
+            "_run_process",
+            side_effect=lambda *_args: self._runner_result(payload, audio="invalid"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "wrote invalid audio"):
+                backends.run_subprocess(self.backend, self.job)
+
+    def test_existing_output_is_refused_before_the_runner_starts(self):
+        _write_test_wav(self.out)
+        with mock.patch.object(backends, "_run_process") as run:
+            with self.assertRaisesRegex(RuntimeError, "refusing to overwrite"):
+                backends.run_subprocess(self.backend, self.job)
+        run.assert_not_called()
+
+    def test_malformed_final_json_cannot_fall_back_to_an_earlier_result(self):
+        payload = {"path": str(self.out), "elapsed_seconds": 1}
+        stdout = f"{json.dumps(payload)}\n{{broken"
+        with mock.patch.object(
+            backends, "_run_process", return_value=self._proc(stdout),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "malformed JSON"):
+                backends.run_subprocess(self.backend, self.job)
+
+    @unittest.skipUnless(os.name == "posix", "process groups are POSIX-specific")
+    def test_cooperative_timeout_is_reported_and_reaped(self):
+        with mock.patch.object(backends, "TERMINATE_GRACE_SECONDS", 0.2):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                backends._run_process(
+                    [sys.executable, "-c", "import time; time.sleep(60)"],
+                    "",
+                    0.2,
+                )
+
+    @unittest.skipUnless(os.name == "posix", "process groups are POSIX-specific")
+    def test_timeout_kills_a_descendant_that_ignores_sigterm(self):
+        ready = self.out.parent / "child-ready"
+        pid_file = self.out.parent / "child-pid"
+        child_code = (
+            "import pathlib,signal,time; "
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+            f"pathlib.Path({str(ready)!r}).write_text('yes'); "
+            "time.sleep(60)"
+        )
+        parent_code = (
+            "import pathlib,subprocess,sys,time; "
+            f"child=subprocess.Popen([sys.executable, '-c', {child_code!r}]); "
+            f"ready=pathlib.Path({str(ready)!r}); "
+            "\nwhile not ready.exists(): time.sleep(0.01)\n"
+            f"pathlib.Path({str(pid_file)!r}).write_text(str(child.pid)); "
+            "time.sleep(60)"
+        )
+        with mock.patch.object(backends, "TERMINATE_GRACE_SECONDS", 0.2):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                backends._run_process([sys.executable, "-c", parent_code], "", 1)
+        child_pid = int(pid_file.read_text(encoding="utf-8"))
+
+        def kill_child_if_needed():
+            try:
+                os.kill(child_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+        self.addCleanup(kill_child_if_needed)
+        deadline = time.monotonic() + 2
+        child_alive = True
+        while child_alive and time.monotonic() < deadline:
+            try:
+                os.kill(child_pid, 0)
+            except ProcessLookupError:
+                child_alive = False
+                break
+            time.sleep(0.02)
+        self.assertFalse(child_alive, "SIGTERM-ignoring descendant survived group cleanup")
+
+    def test_runtime_probe_imports_declared_modules_with_utf8(self):
+        backend = replace(self.backend, probe_modules=("first", "second"))
+        with mock.patch.object(
+            backends.subprocess,
+            "run",
+            return_value=self._proc(""),
+        ) as run:
+            self.assertTrue(backend.available)
+        self.assertEqual(
+            run.call_args.args[0][-1],
+            "import first; import second",
+        )
+        self.assertEqual(run.call_args.kwargs["encoding"], "utf-8")
+
+    def test_runtime_probe_failure_marks_backend_missing(self):
+        backend = replace(self.backend, probe_modules=("missing_runtime",))
+        with mock.patch.object(
+            backends.subprocess,
+            "run",
+            return_value=self._proc("", returncode=1, stderr="ModuleNotFoundError: missing"),
+        ):
+            self.assertFalse(backend.available)
+            self.assertIn("ModuleNotFoundError", backend.availability_error)
+
 
 class MinimaxRunnerArgv(unittest.TestCase):
     """The runner builds the real CLI command; nothing above it sees that argv."""
@@ -196,6 +453,18 @@ class MinimaxRunnerArgv(unittest.TestCase):
         cmd = self._run(self._job(duration=1.5))
         self.assertEqual(cmd[cmd.index("--duration") + 1], "1.5")
 
+    def test_inner_timeout_finishes_before_the_outer_adapter_timeout(self):
+        spec = importlib.util.spec_from_file_location(
+            "minimax_runner_timeout",
+            core.PROJECT_ROOT / "runners" / "minimax_mlx_runner.py",
+        )
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        self.assertLess(
+            runner.COMMAND_TIMEOUT_SECONDS,
+            backends.get("minimax-mlx").timeout_seconds,
+        )
+
 
 class CliDefaults(unittest.TestCase):
     def test_steps_and_guidance_default_to_none_so_backend_defaults_win(self):
@@ -224,6 +493,12 @@ class Registry(unittest.TestCase):
         self.assertIsNone(backends.get("musicgen").steps)
         self.assertIsNone(backends.get("minimax-mlx").guidance)
 
+    def test_minimax_probes_the_exact_cli_module_it_invokes(self):
+        self.assertEqual(
+            backends.get("minimax-mlx").probe_modules,
+            ("mlx_minimax_music3.cli",),
+        )
+
     def test_control_validation_rejects_non_finite_fractional_and_out_of_range_values(self):
         with self.assertRaises(ValueError):
             backends.get("minimax-mlx").duration.validate(float("inf"), "duration")
@@ -234,7 +509,7 @@ class Registry(unittest.TestCase):
 
     def test_manifest_declares_the_default_and_every_registered_backend(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["schema_version"], 2)
         self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
         self.assertEqual(list(document["backends"]), list(backends.BACKENDS))
 
@@ -296,6 +571,15 @@ class Registry(unittest.TestCase):
                 path.write_text(json.dumps(document), encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, "must be a finite number"):
                     backends.load_manifest(path)
+
+    def test_manifest_requires_runtime_probe_and_timeout_for_subprocess_models(self):
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        document["backends"]["minimax-mlx"]["runtime"]["timeout_seconds"] = None
+        path = Path(tempfile.mkdtemp()) / "backends.json"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "timeout_seconds is required"):
+            backends.load_manifest(path)
 
 
 class GenerationQueueTests(unittest.TestCase):
