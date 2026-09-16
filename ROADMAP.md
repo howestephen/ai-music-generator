@@ -19,8 +19,8 @@ they are never buried in a chat.
 
 - Goal: describe music in words, render it locally on Apple Silicon, and keep the
   architecture easy to add models to
-- Current phase: Phase 0 complete; next direction pending owner review
-- Biggest known risk: model quality and genre fit require listening, not code analysis
+- Current phase: Phase 1.1 complete; owner review before merge
+- Biggest known risk: MiniMax treats requested duration as a maximum and often ends early
 - Default backend: `acestep`, pending a listening test against `minimax-mlx`
   (owner decision, open since 2026-08-14)
 
@@ -42,6 +42,15 @@ they are never buried in a chat.
 | 0.4 | Harden the runner seam | `done` | Manifest probes import the modules each backend actually invokes. Subprocesses use explicit UTF-8 and finite nested timeouts; process-group cleanup prevents an orphaned GPU child. Malformed final JSON, an unexpected path, invalid timing, an existing path and unreadable or empty audio all fail loudly. Collision-safe names prevent same-second overwrites. Duration minimums come from each model contract. Completed 2026-09-16 on `codex/ui-generation-queue` | none | 0.2 |
 | 0.5 | Make `analyze.py` honest | `done` | Optional pitch-class collection coverage replaces the hardcoded D Mixolydian score and cannot distinguish modes sharing notes. Strongest chroma is a peak, not a tonic. Quiet edge flags do not claim a sweep or fade, and short edge windows never become empty. Silent or non-finite tonal and onset measurements stay unscored; no eligible hit boundary displays `--`; warnings remain visible; one bad file does not abort the batch but returns failure. Completed 2026-09-16 on `codex/ui-generation-queue` | none | 0.1 |
 | 0.6 | Docs match the code | `done` | README now recreates the locked main environment and pins the isolated MiniMax package to the tested source commit. Environment checks and model probes are documented. Gotchas now describe the actual MLX package conversion boundary and name each XET setting. Completed and independently re-audited 2026-09-16 on `codex/ui-generation-queue` | none | 0.2 |
+
+## Phase 1: Output acceptance
+
+- Status: `done`
+- Goal: a request is complete only when the resulting file satisfies its declared contract
+
+| # | Title | Status | Why it matters | Spec | Deps |
+|---|---|---|---|---|---|
+| 1.1 | Duration and basic audio audit | `done` | MiniMax accepted 16.76–33.59 second files for 240-second requests and 41.56 seconds for a 300-second request, while sidecars and the UI displayed the target as measured. Every WAV is now audited; requested and delivered facts are separate; short assets remain visible but fail acceptance; an unlocked UI seed retries once. Completed and independently re-audited 2026-09-16 on `codex/output-duration-audit`: 100 unit tests and 73 mutations pass | none | 0.4 |
 
 ## Deferred ideas
 
@@ -66,7 +75,7 @@ they are never buried in a chat.
 
 ## Current next step
 
-- Current milestone: Phase 0 owner review
-- Then: agree the next product or research phase
-- Phase 0 exit gates: working-tree and staged validation clean, unit and mutation suites
-  pass, installed environments and model probes pass, independent audit clean
+- Current milestone: Phase 1.1 owner review
+- Then: merge after owner approval, then agree the next product or research phase
+- Phase 1.1 exit gates: existing short outputs display their measured length; 100 unit tests
+  and 73 mutations pass; installed model probes pass; independent audit is clean

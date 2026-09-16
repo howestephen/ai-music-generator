@@ -83,6 +83,8 @@ two or three instruments, and describe a coherent section-by-section evolution. 
 [caption rewriter](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/skills/music-caption-rewriter/SKILL.md)
 and [prompt guide](https://github.com/MiniMax-AI/skills/blob/main/skills/minimax-music-gen/references/prompt_guide.md)
 are the source references. The requested duration is an upper bound, not a guarantee.
+The app therefore treats it as a target and measures the delivered WAV before accepting
+the result. MiniMax must deliver at least 90% of the target.
 
 For `acestep`, use concise comma-separated genre, instrumentation, mood and tempo tags. The
 generation pipeline supplies its `[inst]` sentinel automatically. ACE-Step is seed-sensitive and its
@@ -121,7 +123,12 @@ The UI queues multiple requests serially. Generate shows an acceptance wipe and 
 available once queued. Pending jobs can be reordered or removed; the active card shows a
 labelled progress estimate before becoming a waveform. Serial rendering avoids competing
 Metal jobs. Queue and history live on the local server, so browsers share the same state.
-An active render cannot yet be cancelled safely.
+Every completed WAV is checked for a readable, finite, non-silent sample stream and its
+measured duration. A short render remains in history as `SHORT`, with delivered and target
+lengths shown separately. When the user has not locked a seed, the UI retries one short
+render with a new seed; a repeated shortfall becomes a visible failed queue job. A fixed
+seed is not retried because it would reproduce the same result. An active render cannot
+yet be cancelled safely.
 
 **Analyse measurable properties** - tempo, strongest pitch, transient placement and
 relative start/end loudness:
@@ -142,7 +149,7 @@ judge musical quality.
 | Flag | Effect |
 |---|---|
 | `--model` / `-m` | Backend to use |
-| `--duration` / `-d` | Seconds (each backend enforces its own cap) |
+| `--duration` / `-d` | Target seconds (each backend enforces its own cap and output acceptance policy) |
 | `--count` / `-n` | Variations per prompt |
 | `--guidance` / `-g` | Prompt adherence. Default is the backend's own (`acestep` 15, `musicgen` 3); `minimax-mlx` exposes none and refuses the flag |
 | `--seed` | Reproduce a specific track |
@@ -181,12 +188,17 @@ than blending - see [docs/gotchas.md](docs/gotchas.md).
 
 ## Reproducibility
 
-Every WAV gets a matching `.json` sidecar recording the prompt, seed, model and applied
-settings. Unsupported controls are `null`. The UI uses these files as its persistent
-history rather than keeping a separate database.
+Every WAV gets a matching `.json` sidecar recording the prompt, seed, model, applied
+settings, requested duration, measured duration, duration ratio, audit status, frame count,
+sample rate, channel count, file size and peak amplitude. Unsupported controls are `null`.
+The UI measures legacy WAVs directly, because sidecars written before 1.1 stored the target
+under `duration`. It uses the files as its persistent history rather than keeping a separate
+database.
 
 ```bash
-./.venv/bin/python -m synth.cli gen "<prompt from json>" --seed <seed from json> -m <backend from json>
+./.venv/bin/python -m synth.cli gen "<prompt from json>" \
+  --duration <requested_duration from json> --seed <seed from json> \
+  -m <backend from json>
 ```
 
 ## Layout

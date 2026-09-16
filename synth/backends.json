@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "default_backend": "acestep",
   "backends": {
     "acestep": {
@@ -12,6 +12,11 @@
       "prompt_style": "tags",
       "instrumental_tag": "[inst]",
       "supports_lyrics": true,
+      "output_audit": {
+        "minimum_duration_ratio": 0.98,
+        "duration_tolerance_seconds": 0.0,
+        "random_seed_retries": 1
+      },
       "runtime": {
         "probe_modules": ["acestep.pipeline_ace_step"],
         "timeout_seconds": null
@@ -22,8 +27,8 @@
           "minimum": 1,
           "maximum": 240,
           "step": 1,
-          "label": "Duration (s)",
-          "info": "ACE-Step supports 1 to 240 seconds.",
+          "label": "Target duration (s)",
+          "info": "ACE-Step supports 1 to 240 seconds. Delivered audio is measured and checked.",
           "integer": false
         },
         "steps": {
@@ -56,6 +61,11 @@
       "prompt_style": "caption",
       "instrumental_tag": "[Instrumental]",
       "supports_lyrics": true,
+      "output_audit": {
+        "minimum_duration_ratio": 0.9,
+        "duration_tolerance_seconds": 0.0,
+        "random_seed_retries": 1
+      },
       "runtime": {
         "probe_modules": ["mlx_minimax_music3.cli"],
         "timeout_seconds": 7200
@@ -66,8 +76,8 @@
           "minimum": 1,
           "maximum": 300,
           "step": 1,
-          "label": "Duration (s)",
-          "info": "MiniMax Music 3 supports 1 to 300 seconds.",
+          "label": "Target duration (s)",
+          "info": "MiniMax supports up to 300 seconds but may end early. Delivered audio must reach 90% of this target; an unlocked UI seed gets one retry.",
           "integer": false
         },
         "steps": {
@@ -92,6 +102,11 @@
       "prompt_style": "tags",
       "instrumental_tag": "",
       "supports_lyrics": false,
+      "output_audit": {
+        "minimum_duration_ratio": 0.98,
+        "duration_tolerance_seconds": 0.0,
+        "random_seed_retries": 1
+      },
       "runtime": {
         "probe_modules": ["soundfile", "torch", "transformers"],
         "timeout_seconds": 7200
@@ -102,8 +117,8 @@
           "minimum": 1,
           "maximum": 30,
           "step": 1,
-          "label": "Duration (s)",
-          "info": "MusicGen is architecturally capped at 30 seconds.",
+          "label": "Target duration (s)",
+          "info": "MusicGen is architecturally capped at 30 seconds. Delivered audio is measured and checked.",
           "integer": false
         },
         "steps": null,

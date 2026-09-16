@@ -15,7 +15,11 @@ def _print_track(track: core.Track, as_json: bool) -> None:
         print(json.dumps({**json.loads(track.sidecar_path().read_text(encoding="utf-8")),
                           "path": str(track.path)}))
     else:
-        print(f"  -> {track.path.name}  ({track.elapsed_seconds}s, seed {track.seed})")
+        print(
+            f"  -> {track.path.name}  ({track.duration:.1f}s delivered / "
+            f"{track.requested_duration:g}s target, {track.elapsed_seconds}s render, "
+            f"seed {track.seed})"
+        )
 
 
 def cmd_gen(args: argparse.Namespace) -> int:
@@ -115,7 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def add_common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--duration", "-d", type=float, default=60.0,
-                       help="length in seconds (default: 60)")
+                       help="target length in seconds (default: 60)")
         p.add_argument("--steps", type=int, default=None,
                        help="inference steps; lower is faster, rougher "
                             "(default: the backend's own, see `models`)")

@@ -85,6 +85,27 @@ bfloat16 errors on macOS. Upstream says pass `--bf16 false`; the equivalent here
 
 ## Runtime
 
+### MiniMax duration is a ceiling, not a promise
+
+**Symptom:** a request says 240 or 300 seconds, but the WAV is only 17 to 42 seconds long.
+Sidecars written before phase 1.1 also showed the requested number as `duration`, so the UI
+made the short result look compliant.
+
+**Cause:** the pinned MLX package converts `audio_duration` into `max_frames`, then stops
+as soon as the language model samples `audio_end_token_id`. The public duration flag does
+not impose a minimum or guarantee the requested length.
+
+**Fix:** never infer delivered length from the request. Audit the WAV after generation,
+record requested and measured duration separately, and compare it with the backend's
+manifest policy. The boundary also rejects unreadable, empty, silent and non-finite audio.
+Retain a short creative asset and its sidecar, but raise an output-audit failure so CLI and
+queue automation cannot silently accept it. The UI may retry an unlocked seed once; if the
+retry is also short, leave the failed job visible for investigation.
+
+This is an acceptance and evidence process, not a claim that MiniMax can be forced to a
+specific length. Supporting guaranteed long-form structure needs either an upstream
+minimum-duration control or a separately designed continuation/assembly workflow.
+
 ### Exit code zero does not prove that a runner produced audio
 
 **Symptom:** a CLI call appeared successful, or a UI job reached the end of its estimate,

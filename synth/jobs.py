@@ -14,6 +14,14 @@ from pathlib import Path
 from typing import Callable
 
 
+class GenerationFailure(RuntimeError):
+    """A visible queue failure carrying corrected facts for its summary card."""
+
+    def __init__(self, message: str, *, summary_updates: dict | None = None) -> None:
+        super().__init__(message)
+        self.summary_updates = dict(summary_updates or {})
+
+
 @dataclass
 class GenerationJob:
     id: str
@@ -170,11 +178,17 @@ class GenerationQueue:
                 with self._condition:
                     job.status = "failed"
                     job.error = str(exc)
+                    if isinstance(exc, GenerationFailure):
+                        job.summary.update(exc.summary_updates)
                     job.completed_at = self._clock()
                     self._condition.notify_all()
             else:
                 with self._condition:
                     job.status = "complete"
                     job.output_path = str(output_path)
+                    if hasattr(track, "seed"):
+                        job.summary["seed"] = track.seed
+                    if hasattr(track, "duration"):
+                        job.summary["delivered_duration"] = track.duration
                     job.completed_at = self._clock()
                     self._condition.notify_all()
