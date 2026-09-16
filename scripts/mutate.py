@@ -60,8 +60,6 @@ MUTATIONS = [
      '        "--duration", str(int(float(job["duration"]))),'),
     ("UI history oldest first", "app.py",
      'reverse=True)', 'reverse=False)'),
-    ("UI ignores selected model", "app.py",
-     "            model=backend.name,", "            model=core.DEFAULT_MODEL,"),
     ("queued UI job ignores selected model", "app.py",
      '        "guidance_scale": guidance,\n'
      '        "model": backend.name,\n'
@@ -141,6 +139,12 @@ MUTATIONS = [
     ("new browser trusts stale session history", "app.py",
      "    return _load_history()\n\n\ndef _poll_ui",
      "    return _session_value\n\n\ndef _poll_ui"),
+    ("queue singleton initialisation loses its lock", "app.py",
+     "        with _JOB_QUEUE_LOCK:\n"
+     "            if _JOB_QUEUE is None:\n"
+     "                _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job)",
+     "        if _JOB_QUEUE is None:\n"
+     "            _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job)"),
     ("runner subprocess has no timeout", "synth/backends.py",
      "        stdout, stderr = proc.communicate(input_text, timeout=timeout_seconds)",
      "        stdout, stderr = proc.communicate(input_text, timeout=None)"),

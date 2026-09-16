@@ -1015,6 +1015,66 @@ print(json.dumps({
             self.assertEqual(app._queue_items_for_render(["stale job"]), ["job"])
             self.assertEqual(app._history_items_for_render(["stale track"]), ["track"])
 
+    def test_concurrent_first_access_creates_one_server_queue(self):
+        previous_queue = app._JOB_QUEUE
+        app._JOB_QUEUE = None
+        self.addCleanup(setattr, app, "_JOB_QUEUE", previous_queue)
+        first_constructor_entered = threading.Event()
+        release_first_constructor = threading.Event()
+        second_caller_reached_boundary = threading.Event()
+        created = []
+        created_lock = threading.Lock()
+
+        class ObservedLock:
+            def __init__(self):
+                self.lock = threading.Lock()
+                self.entry_count = 0
+                self.entry_count_lock = threading.Lock()
+
+            def __enter__(self):
+                with self.entry_count_lock:
+                    self.entry_count += 1
+                    if self.entry_count == 2:
+                        second_caller_reached_boundary.set()
+                self.lock.acquire()
+                return self
+
+            def __exit__(self, _exc_type, _exc, _traceback):
+                self.lock.release()
+
+        def construct(_runner):
+            queue = object()
+            with created_lock:
+                index = len(created)
+                created.append(queue)
+            if index == 0:
+                first_constructor_entered.set()
+                release_first_constructor.wait(timeout=1)
+            else:
+                # Only the lock-removal mutation can reach a second constructor.
+                second_caller_reached_boundary.set()
+            return queue
+
+        returned = []
+        with mock.patch.object(app, "_JOB_QUEUE_LOCK", ObservedLock()), \
+                mock.patch.object(app.jobs, "GenerationQueue", side_effect=construct):
+            first = threading.Thread(target=lambda: returned.append(app._get_job_queue()))
+            second = threading.Thread(target=lambda: returned.append(app._get_job_queue()))
+            first.start()
+            self.assertTrue(first_constructor_entered.wait(timeout=1))
+            second.start()
+            try:
+                self.assertTrue(second_caller_reached_boundary.wait(timeout=1))
+            finally:
+                release_first_constructor.set()
+            first.join(timeout=1)
+            second.join(timeout=1)
+
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertEqual(len(created), 1)
+        self.assertEqual(returned, [created[0], created[0]])
+
     def test_enqueue_captures_selected_backend_and_returns_button_immediately(self):
         queue = mock.Mock()
         queue.enqueue.return_value = {"id": "job-1"}
@@ -1060,37 +1120,6 @@ print(json.dumps({
         }]
         with mock.patch.object(app, "_load_history", return_value=corrupt):
             self.assertEqual(app._estimate_runtime("minimax-mlx", 10), 33)
-
-    def test_generate_passes_the_selected_backend_and_refreshes_history(self):
-        self_path = Path("/tmp/generated.wav")
-        track = core.Track(
-            path=self_path,
-            prompt="probe",
-            duration=30,
-            seed=7,
-            infer_step=None,
-            guidance_scale=3.0,
-            lyrics="",
-            backend="musicgen",
-            model="facebook/musicgen-stereo-large",
-            dtype="float32",
-            generated_at="20260915-120000",
-            elapsed_seconds=1.0,
-        )
-        with mock.patch.object(app.core, "generate", return_value=track) as generate, \
-                mock.patch.object(app, "_load_history", return_value=[{"path": str(self_path)}]):
-            status, seed, history = app._generate("musicgen", " probe ", 30, 60, 4.5, 7, True)
-        generate.assert_called_once_with(
-            prompt="probe",
-            duration=30,
-            seed=7,
-            infer_step=None,
-            guidance_scale=4.5,
-            model="musicgen",
-        )
-        self.assertEqual((seed, history), (7, [{"path": str(self_path)}]))
-        self.assertIn("first in the track history", status)
-
 
 class DocumentationContract(unittest.TestCase):
     MINIMAX_PACKAGE_COMMIT = "b42e07bd2c0ffd14cc6b75ca19d9a96e5397eaf9"

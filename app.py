@@ -11,6 +11,7 @@ import json
 import math
 import random
 import statistics
+import threading
 from functools import lru_cache
 from pathlib import Path
 
@@ -440,6 +441,7 @@ def _history_waveform(track: dict) -> str:
 
 
 _JOB_QUEUE: jobs.GenerationQueue | None = None
+_JOB_QUEUE_LOCK = threading.Lock()
 
 
 def _run_queued_job(payload: dict) -> core.Track:
@@ -449,7 +451,9 @@ def _run_queued_job(payload: dict) -> core.Track:
 def _get_job_queue() -> jobs.GenerationQueue:
     global _JOB_QUEUE
     if _JOB_QUEUE is None:
-        _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job)
+        with _JOB_QUEUE_LOCK:
+            if _JOB_QUEUE is None:
+                _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job)
     return _JOB_QUEUE
 
 
@@ -598,38 +602,6 @@ def _generation_started():
 
 def _generation_finished():
     return gr.update(value="Generate", interactive=True, variant="primary")
-
-
-def _generate(model, prompt, duration, steps, guidance, seed, use_seed):
-    if not prompt or not prompt.strip():
-        raise gr.Error("Enter a prompt first.")
-    backend = backends.get(model)
-    try:
-        duration = backend.duration.validate(duration, f"{backend.name} duration")
-        steps = (
-            backend.steps.validate(steps, f"{backend.name} steps")
-            if backend.steps is not None else None
-        )
-        guidance = (
-            backend.guidance.validate(guidance, f"{backend.name} guidance")
-            if backend.guidance is not None else None
-        )
-        track = core.generate(
-            prompt=prompt.strip(),
-            duration=duration,
-            seed=int(seed) if use_seed else None,
-            infer_step=steps,
-            guidance_scale=guidance,
-            model=backend.name,
-        )
-    except Exception as exc:
-        raise gr.Error(str(exc)) from exc
-    status = (
-        f"**Generated {track.path.name}**  \n"
-        f"Seed `{track.seed}` · {track.elapsed_seconds}s to generate · {track.duration:.0f}s long. "
-        "It is now first in the track history."
-    )
-    return status, track.seed, _load_history()
 
 
 def build_ui() -> gr.Blocks:
