@@ -136,7 +136,15 @@ When adding a backend, read its runtime's CLI source for the flags it really tak
 ### Duration caps are per-model
 
 MusicGen is architecturally capped at 30s. Asking for more used to return 30s silently.
-Backends now declare `max_duration` and raise. Respect the cap rather than working around it.
+Backends now declare their full numeric control contracts and raise outside them. Respect
+the selected backend's cap rather than working around it.
+
+Gradio component schemas are static even when `gr.update()` changes a slider in the browser.
+If the component is initially built from a shorter default model, the API can reject a valid
+request for a longer model before the handler runs. Build the static component from the
+union of backend contracts, then narrow it visually and validate the selected backend in
+the handler. This is why MiniMax's 300-second requests must not inherit ACE-Step's
+240-second component schema.
 
 ### Concurrent generations distort timings
 

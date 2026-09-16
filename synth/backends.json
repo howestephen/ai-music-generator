@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "default_backend": "acestep",
+  "backends": {
+    "acestep": {
+      "model_id": "ACE-Step/ACE-Step-v1-3.5B",
+      "venv": ".venv",
+      "runner": null,
+      "licence": "Apache-2.0 (commercial OK)",
+      "notes": "Song-form model. Weak at orchestral/cinematic: tends toward band instrumentation.",
+      "dtype": "float32",
+      "prompt_style": "tags",
+      "instrumental_tag": "[inst]",
+      "supports_lyrics": true,
+      "controls": {
+        "duration": {
+          "default": 60,
+          "minimum": 1,
+          "maximum": 240,
+          "step": 1,
+          "label": "Duration (s)",
+          "info": "ACE-Step supports 1 to 240 seconds.",
+          "integer": false
+        },
+        "steps": {
+          "default": 60,
+          "minimum": 1,
+          "maximum": 200,
+          "step": 1,
+          "label": "Steps",
+          "info": "Lower is faster and rougher. ACE-Step defaults to 60.",
+          "integer": true
+        },
+        "guidance": {
+          "default": 15,
+          "minimum": 0,
+          "maximum": 30,
+          "step": 0.1,
+          "label": "Prompt adherence",
+          "info": "ACE-Step guidance scale. Default: 15.",
+          "integer": false
+        }
+      }
+    },
+    "minimax-mlx": {
+      "model_id": "vanch007/MiniMax-Music3-MLX-8bit",
+      "venv": ".venv-mlx",
+      "runner": "minimax_mlx_runner.py",
+      "licence": "MiniMax Community (commercial OK w/ attribution; >$20M revenue needs authorisation)",
+      "notes": "Native Apple MLX/Metal, 8-bit. 13GB vs 54GB fp32. Preferred build on Apple Silicon.",
+      "dtype": "8-bit (MLX)",
+      "prompt_style": "caption",
+      "instrumental_tag": "[Instrumental]",
+      "supports_lyrics": true,
+      "controls": {
+        "duration": {
+          "default": 60,
+          "minimum": 1,
+          "maximum": 300,
+          "step": 1,
+          "label": "Duration (s)",
+          "info": "MiniMax Music 3 supports 1 to 300 seconds.",
+          "integer": false
+        },
+        "steps": {
+          "default": 30,
+          "minimum": 1,
+          "maximum": null,
+          "step": 1,
+          "label": "Steps",
+          "info": "Lower is faster and rougher. MiniMax defaults to 30.",
+          "integer": true
+        },
+        "guidance": null
+      }
+    },
+    "musicgen": {
+      "model_id": "facebook/musicgen-stereo-large",
+      "venv": ".venv",
+      "runner": "musicgen_runner.py",
+      "licence": "CC-BY-NC-4.0, NON-COMMERCIAL ONLY",
+      "notes": "Strong instrumental model, but 30s per generation.",
+      "dtype": "float32",
+      "prompt_style": "tags",
+      "instrumental_tag": "",
+      "supports_lyrics": false,
+      "controls": {
+        "duration": {
+          "default": 30,
+          "minimum": 1,
+          "maximum": 30,
+          "step": 1,
+          "label": "Duration (s)",
+          "info": "MusicGen is architecturally capped at 30 seconds.",
+          "integer": false
+        },
+        "steps": null,
+        "guidance": {
+          "default": 3,
+          "minimum": 0,
+          "maximum": 30,
+          "step": 0.1,
+          "label": "Prompt adherence",
+          "info": "MusicGen guidance scale. Default: 3.",
+          "integer": false
+        }
+      }
+    }
+  }
+}

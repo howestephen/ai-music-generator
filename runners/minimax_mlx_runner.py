@@ -24,7 +24,7 @@ def main() -> int:
         sys.executable, "-m", "mlx_minimax_music3.cli", "generate",
         "--model", MODEL_ID,
         "--prompt", job["prompt"],
-        "--duration", str(int(float(job["duration"]))),
+        "--duration", str(float(job["duration"])),
         "--seed", str(int(job["seed"])),
         "--output", job["output_path"],
     ]

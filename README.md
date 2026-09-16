@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-15
+updated: 2026-09-16
 ---
 
 # AI Music Generator
@@ -93,6 +93,8 @@ can lose structure, so compare seeds rather than treating one result as represen
 The model dropdown exposes every registered backend. Switching model updates the duration
 cap, supported controls, licence information and prompt guidance; presets are converted to
 the selected backend's prompt style using separate tag and structured-caption versions.
+The browser and API read those settings from the same versioned JSON manifest, so neither
+can impose another model's limits.
 Generated tracks remain in a playable history to the right of the controls, newest first,
 in a balanced 50/50 layout. Each complete waveform is fitted to the available width and
 remains clickable for seeking. The history is rebuilt from `output/` when the UI starts, so
@@ -172,7 +174,8 @@ its persistent history; it does not keep a separate database.
 
 ```
 synth/core.py      generate() - single entry point, dispatches to a backend
-synth/backends.py  model registry: venv, runner, caps, licence, prompt style
+synth/backends.json versioned model manifest: runtime, controls, licence, prompt style
+synth/backends.py  strict manifest loader and runtime registry
 synth/cli.py       gen / batch / models / ui
 synth/analyze.py   measure output against a brief
 runners/           per-backend subprocess entry points (isolated environments)
@@ -184,7 +187,8 @@ docs/              decisions and gotchas
 
 Backends whose dependencies conflict run as subprocesses in their own venv - ACE-Step pins
 `transformers==4.50` while MiniMax needs `>=5`, so they can't share one. Adding a model is a
-runner script plus a registry entry.
+manifest entry plus a runner implementing the existing JSON job contract. The model then
+appears automatically in the CLI, dropdown, validation and model-specific UI controls.
 
 ## Environments
 

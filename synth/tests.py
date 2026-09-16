@@ -53,7 +53,8 @@ class GenerateSeam(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.out, ignore_errors=True)
 
     def gen(self, **kw) -> core.Track:
-        return core.generate(prompt="probe", duration=5.0, seed=1, output_dir=self.out, **kw)
+        duration = kw.pop("duration", 5.0)
+        return core.generate(prompt="probe", duration=duration, seed=1, output_dir=self.out, **kw)
 
     # --- steps -----------------------------------------------------------
     def test_explicit_steps_reach_minimax(self):
@@ -75,6 +76,23 @@ class GenerateSeam(unittest.TestCase):
 
     def test_musicgen_sidecar_records_no_step_count(self):
         self.assertIsNone(self.gen(model="musicgen").infer_step)
+
+    def test_minimax_accepts_duration_beyond_acestep_cap(self):
+        track = self.gen(model="minimax-mlx", duration=270)
+        self.assertEqual(track.duration, 270)
+        self.assertEqual(self.stub.last_job["duration"], 270)
+
+    def test_fractional_duration_matches_runner_request_and_sidecar(self):
+        track = self.gen(model="minimax-mlx", duration=1.5)
+        sidecar = json.loads(track.sidecar_path().read_text(encoding="utf-8"))
+        self.assertEqual(self.stub.last_job["duration"], 1.5)
+        self.assertEqual(track.duration, 1.5)
+        self.assertEqual(sidecar["duration"], 1.5)
+
+    def test_each_backend_enforces_its_own_duration_cap(self):
+        for model, duration in (("acestep", 241), ("minimax-mlx", 301), ("musicgen", 31)):
+            with self.subTest(model=model), self.assertRaises(ValueError):
+                self.gen(model=model, duration=duration)
 
     # --- guidance --------------------------------------------------------
     def test_minimax_refuses_guidance_rather_than_dropping_it(self):
@@ -174,6 +192,10 @@ class MinimaxRunnerArgv(unittest.TestCase):
         cmd = self._run(self._job())
         self.assertFalse(any("guidance" in c or "cfg" in c for c in cmd))
 
+    def test_fractional_duration_reaches_the_float_cli_without_truncation(self):
+        cmd = self._run(self._job(duration=1.5))
+        self.assertEqual(cmd[cmd.index("--duration") + 1], "1.5")
+
 
 class CliDefaults(unittest.TestCase):
     def test_steps_and_guidance_default_to_none_so_backend_defaults_win(self):
@@ -194,6 +216,86 @@ class Registry(unittest.TestCase):
 
     def test_musicgen_is_flagged_non_commercial(self):
         self.assertIn("NON-COMMERCIAL", backends.get("musicgen").licence)
+
+    def test_each_backend_owns_its_numeric_control_contract(self):
+        self.assertEqual(backends.get("acestep").duration.maximum, 240)
+        self.assertEqual(backends.get("minimax-mlx").duration.maximum, 300)
+        self.assertEqual(backends.get("musicgen").duration.maximum, 30)
+        self.assertIsNone(backends.get("musicgen").steps)
+        self.assertIsNone(backends.get("minimax-mlx").guidance)
+
+    def test_control_validation_rejects_non_finite_fractional_and_out_of_range_values(self):
+        with self.assertRaises(ValueError):
+            backends.get("minimax-mlx").duration.validate(float("inf"), "duration")
+        with self.assertRaises(ValueError):
+            backends.get("minimax-mlx").steps.validate(3.5, "steps")
+        with self.assertRaises(ValueError):
+            backends.get("acestep").guidance.validate(31, "guidance")
+
+    def test_manifest_declares_the_default_and_every_registered_backend(self):
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
+        self.assertEqual(list(document["backends"]), list(backends.BACKENDS))
+
+    def test_new_manifest_backend_gets_runtime_and_ui_settings_without_python_edits(self):
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        probe = json.loads(json.dumps(document["backends"]["minimax-mlx"]))
+        probe["model_id"] = "example/probe-model"
+        probe["runner"] = "probe_runner.py"
+        probe["controls"]["duration"]["maximum"] = 123
+        document["backends"]["probe"] = probe
+        path = Path(tempfile.mkdtemp()) / "backends.json"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        default, loaded = backends.load_manifest(path)
+
+        self.assertEqual(default, "acestep")
+        self.assertEqual(loaded["probe"].model_id, "example/probe-model")
+        self.assertEqual(loaded["probe"].duration.maximum, 123)
+        self.assertEqual(loaded["probe"].steps.default, 30)
+
+    def test_manifest_rejects_unknown_fields_instead_of_silently_dropping_them(self):
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        document["backends"]["acestep"]["mystery_setting"] = True
+        path = Path(tempfile.mkdtemp()) / "backends.json"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "unknown fields: mystery_setting"):
+            backends.load_manifest(path)
+
+    def test_manifest_rejects_non_finite_numeric_control_fields(self):
+        for field, value in (
+            ("default", float("nan")),
+            ("minimum", float("-inf")),
+            ("maximum", float("inf")),
+            ("step", float("nan")),
+        ):
+            with self.subTest(field=field):
+                document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+                document["backends"]["minimax-mlx"]["controls"]["duration"][field] = value
+                path = Path(tempfile.mkdtemp()) / "backends.json"
+                self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+                path.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "must be a finite number"):
+                    backends.load_manifest(path)
+
+    def test_manifest_rejects_booleans_and_wrong_numeric_field_types(self):
+        for field, value in (
+            ("default", True),
+            ("minimum", "1"),
+            ("maximum", False),
+            ("step", "1"),
+        ):
+            with self.subTest(field=field):
+                document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+                document["backends"]["minimax-mlx"]["controls"]["duration"][field] = value
+                path = Path(tempfile.mkdtemp()) / "backends.json"
+                self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+                path.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "must be a finite number"):
+                    backends.load_manifest(path)
 
 
 class GenerationQueueTests(unittest.TestCase):
@@ -392,8 +494,16 @@ class UiModelSelection(unittest.TestCase):
     def test_switching_to_musicgen_clamps_duration_and_hides_steps(self):
         updates = app._model_updates("musicgen", 60, None)
         self.assertEqual(updates[1]["value"], 30)
+        self.assertEqual(updates[1]["maximum"], 30)
         self.assertFalse(updates[2]["visible"])
         self.assertEqual(updates[3]["value"], 3.0)
+
+    def test_switching_to_minimax_exposes_its_full_duration_and_only_its_controls(self):
+        updates = app._model_updates("minimax-mlx", 270, None)
+        self.assertEqual((updates[1]["value"], updates[1]["maximum"]), (270, 300))
+        self.assertEqual(updates[2]["value"], 30)
+        self.assertIsNone(updates[2]["maximum"])
+        self.assertFalse(updates[3]["visible"])
 
     def test_minimax_presets_are_structured_captions(self):
         prompt = app._preset_prompt("Lo-fi / relaxed", "minimax-mlx")
@@ -412,6 +522,10 @@ model_id = next(
     component_id for component_id, component in components.items()
     if component["type"] == "dropdown" and component["props"].get("label") == "Model"
 )
+duration_id = next(
+    component_id for component_id, component in components.items()
+    if component["type"] == "slider" and component["props"].get("label") == "Duration (s)"
+)
 generate_id = next(
     component_id for component_id, component in components.items()
     if component["type"] == "button" and component["props"].get("value") == "Generate"
@@ -423,12 +537,17 @@ submission = next(
 submission_id = submission["id"]
 print(json.dumps({
     "models": [value for _label, value in components[model_id]["props"]["choices"]],
+    "duration_api_maximum": components[duration_id]["props"].get("maximum"),
     "buttons": [
         component["props"].get("value") for component in components.values()
         if component["type"] == "button"
     ],
     "model_change": any(
         dependency["targets"] == [(model_id, "change")]
+        for dependency in config["dependencies"]
+    ),
+    "model_load": any(
+        any(target[1] == "load" for target in dependency["targets"])
         for dependency in config["dependencies"]
     ),
     "render_count": sum(
@@ -465,9 +584,11 @@ print(json.dumps({
         self.assertEqual(result.returncode, 0, result.stderr)
         config = json.loads(result.stdout)
         self.assertEqual(config["models"], list(backends.BACKENDS))
+        self.assertEqual(config["duration_api_maximum"], 300)
         self.assertIn("Generate", config["buttons"])
         self.assertIn("Refresh history", config["buttons"])
         self.assertTrue(config["model_change"])
+        self.assertTrue(config["model_load"])
         self.assertGreaterEqual(config["render_count"], 2)
         self.assertTrue(config["queue_poll"])
         self.assertTrue(config["submission_outputs_queue"])
@@ -492,11 +613,13 @@ print(json.dumps({
                 mock.patch.object(app, "_estimate_runtime", return_value=90), \
                 mock.patch.object(app.random, "randint", return_value=123):
             status, seed, snapshot = app._enqueue_generation(
-                "minimax-mlx", " probe ", 60, 30, 15, 42, False,
+                "minimax-mlx", " probe ", 270, 30, 15, 42, False,
             )
         payload, summary, expected = queue.enqueue.call_args.args
         self.assertEqual(payload["model"], "minimax-mlx")
         self.assertEqual(payload["prompt"], "probe")
+        self.assertEqual(payload["duration"], 270)
+        self.assertIsNone(payload["guidance_scale"])
         self.assertEqual(payload["seed"], 123)
         self.assertEqual((summary["model"], expected), ("minimax-mlx", 90))
         self.assertEqual((seed, snapshot[0]["status"]), (123, "queued"))
@@ -508,6 +631,16 @@ print(json.dumps({
                 app._enqueue_generation(
                     "acestep", "probe", duration, 60, 15, 42, True,
                 )
+
+    def test_enqueue_enforces_the_selected_backend_not_the_default_backend(self):
+        for model, duration in (("acestep", 241), ("minimax-mlx", 301), ("musicgen", 31)):
+            with self.subTest(model=model), self.assertRaises(app.gr.Error):
+                app._enqueue_generation(model, "probe", duration, 60, 15, 42, True)
+
+    def test_enqueue_rejects_model_specific_control_values(self):
+        for steps, guidance in ((3.5, 15), (201, 15), (60, 31)):
+            with self.subTest(steps=steps, guidance=guidance), self.assertRaises(app.gr.Error):
+                app._enqueue_generation("acestep", "probe", 60, steps, guidance, 42, True)
 
     def test_runtime_estimate_ignores_non_finite_history_metadata(self):
         corrupt = [{

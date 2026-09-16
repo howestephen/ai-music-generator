@@ -24,32 +24,66 @@ PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
     ("drop steps from job dict", "synth/core.py", '            "steps": steps,', "            "),
-    ("musicgen guidance back to 15", "synth/backends.py", "default_guidance=3.0,", "default_guidance=15.0,"),
+    ("musicgen guidance back to 15", "synth/backends.json",
+     '          "default": 3,\n'
+     '          "minimum": 0,\n'
+     '          "maximum": 30,\n'
+     '          "step": 0.1,\n'
+     '          "label": "Prompt adherence",\n'
+     '          "info": "MusicGen guidance scale. Default: 3.",',
+     '          "default": 15,\n'
+     '          "minimum": 0,\n'
+     '          "maximum": 30,\n'
+     '          "step": 0.1,\n'
+     '          "label": "Prompt adherence",\n'
+     '          "info": "MusicGen guidance scale. Default: 15.",'),
     ("stamp float32 for everyone", "synth/core.py", "dtype=backend.dtype,", 'dtype="float32",'),
     ("sidecar backend = model_id", "synth/core.py", "backend=backend.name,", "backend=backend.model_id,"),
     ("silently drop unsupported knob", "synth/core.py",
      '            raise ValueError(f"{backend.name} has no {knob} control (got {value!r})")', "            pass"),
-    ("musicgen accepts lyrics", "synth/backends.py", "supports_lyrics=False,", "supports_lyrics=True,"),
-    ("minimax default steps = 60", "synth/backends.py", "default_steps=30,", "default_steps=60,"),
+    ("musicgen accepts lyrics", "synth/backends.json",
+     '      "supports_lyrics": false,', '      "supports_lyrics": true,'),
+    ("minimax default steps = 60", "synth/backends.json",
+     '          "default": 30,\n'
+     '          "minimum": 1,\n'
+     '          "maximum": null,',
+     '          "default": 60,\n'
+     '          "minimum": 1,\n'
+     '          "maximum": null,'),
     ("runner drops steps=0", "runners/minimax_mlx_runner.py",
      '    if job.get("steps") is not None:', '    if job.get("steps"):'),
     ("runner uses stale console script", "runners/minimax_mlx_runner.py",
      '        sys.executable, "-m", "mlx_minimax_music3.cli", "generate",',
      '        "mlx-minimax-music3", "generate",'),
+    ("runner truncates fractional duration", "runners/minimax_mlx_runner.py",
+     '        "--duration", str(float(job["duration"])),',
+     '        "--duration", str(int(float(job["duration"]))),'),
     ("UI history oldest first", "app.py",
      'reverse=True)', 'reverse=False)'),
     ("UI ignores selected model", "app.py",
      "            model=backend.name,", "            model=core.DEFAULT_MODEL,"),
     ("queued UI job ignores selected model", "app.py",
-     '        "guidance_scale": guidance if backend.default_guidance is not None else None,\n'
+     '        "guidance_scale": guidance,\n'
      '        "model": backend.name,\n'
      '    }',
-     '        "guidance_scale": guidance if backend.default_guidance is not None else None,\n'
+     '        "guidance_scale": guidance,\n'
      '        "model": core.DEFAULT_MODEL,\n'
      '    }'),
     ("UI exposes unsupported step control", "app.py",
-     "gr.update(value=backend.default_steps or 60, visible=backend.default_steps is not None),",
-     "gr.update(value=backend.default_steps or 60, visible=True),"),
+     "        _control_update(backend.steps),",
+     "        gr.update(visible=True),"),
+    ("UI API schema keeps ACE duration cap", "app.py",
+     "                        duration_minimum, duration_maximum,",
+     "                        duration_minimum, initial_backend.max_duration,"),
+    ("MiniMax duration is capped like ACE", "synth/backends.json",
+     '          "maximum": 300,\n'
+     '          "step": 1,\n'
+     '          "label": "Duration (s)",\n'
+     '          "info": "MiniMax Music 3 supports 1 to 300 seconds.",',
+     '          "maximum": 240,\n'
+     '          "step": 1,\n'
+     '          "label": "Duration (s)",\n'
+     '          "info": "MiniMax Music 3 supports 1 to 240 seconds.",'),
     ("MiniMax preset stays as tags", "app.py",
      '    return prompts[backends.get(model).prompt_style]',
      '    return prompts["tags"]'),
@@ -87,9 +121,20 @@ MUTATIONS = [
      "            and math.isfinite(elapsed)",
      "            True\n"
      "            and True"),
-    ("UI accepts infinite duration", "app.py",
-     "    if not math.isfinite(duration) or duration <= 0:",
-     "    if duration <= 0:"),
+    ("numeric controls accept infinite values", "synth/backends.py",
+     "        if not math.isfinite(number):",
+     "        if False:"),
+    ("manifest accepts non-finite numeric fields", "synth/backends.py",
+     "                or not math.isfinite(value)",
+     "                or False"),
+    ("manifest accepts booleans as numeric fields", "synth/backends.py",
+     "                isinstance(value, bool)\n"
+     "                or not isinstance(value, (int, float))",
+     "                False\n"
+     "                or not isinstance(value, (int, float))"),
+    ("core truncates fractional duration", "synth/core.py",
+     '    duration = backend.duration.validate(duration, f"{backend.name} duration")',
+     '    duration = int(backend.duration.validate(duration, f"{backend.name} duration"))'),
     ("new browser trusts stale session queue", "app.py",
      "    return _queue_snapshot()\n\n\ndef _history_items_for_render",
      "    return _session_value\n\n\ndef _history_items_for_render"),

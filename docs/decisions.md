@@ -13,25 +13,34 @@ than re-argued from scratch.
 
 ---
 
+## 2026-09-16 - UI controls are backend-owned contracts
+
+**Decided:** model configuration lives in the versioned `synth/backends.json` manifest.
+It declares runtime, prompting metadata and numeric controls. The strict loader rejects
+unknown fields; core, browser and API use the loaded contract.
+
+**Why:** Gradio's static schema inherited ACE-Step's 240-second slider and rejected a valid
+270-second MiniMax request before the handler ran.
+
+**Implementation:** Gradio sees the union of manifest contracts; model selection narrows
+the UI; the handler and core enforce the selected one. A new subprocess model needs a
+manifest entry and JSON runner, then appears automatically in the CLI and UI.
+
+**Would revisit if:** a backend needs another control type or runner contract.
+
+---
+
 ## 2026-09-16 - UI generations use one serial worker
 
-**Decided:** the UI queues multiple requests but runs one model job at a time. Pending jobs
-can be reordered or removed. The button is released when the queue accepts a job.
+**Decided:** the UI accepts reorderable, removable pending jobs but renders serially. The
+button is released on acceptance because concurrent Metal jobs ran two to four times slower.
 
-**Why:** concurrent generations compete for Metal and made jobs two to four times slower.
-Keeping the button disabled until a job started would also prevent stacking future renders.
+**Progress:** runners expose start and finish, not trustworthy callbacks. The active card
+labels its history-derived percentage as estimated and stays below 100% until output exists.
 
-**Progress honesty:** current model seams expose start and finish, not trustworthy progress
-callbacks. The active card therefore labels its moving percentage as an estimate derived
-from completed jobs for the same backend and caps it below completion. It reaches 100% only
-after the runner returns and the output exists.
+**Cancellation:** active jobs cannot yet be cancelled safely; that needs subprocess ownership.
 
-**Cancellation:** pending jobs can be removed; an active job cannot yet be cancelled. Safe
-active cancellation requires subprocess ownership for every backend and belongs with the
-runner-seam work, not a UI kill switch.
-
-**Browser sessions:** cards read the process-wide queue and history reads `output/`, so every
-browser shows the same current work and completed tracks.
+**Browser sessions:** queue state is process-wide; history comes from `output/`.
 
 **Would revisit if:** backends expose stable step callbacks, or isolated hardware makes
 parallel jobs genuinely faster rather than merely concurrent.
@@ -40,13 +49,11 @@ parallel jobs genuinely faster rather than merely concurrent.
 
 ## 2026-09-15 - UI history uses generated files as its source of truth
 
-**Decided:** the Gradio UI rebuilds its track history from `output/*.wav` and each matching
-JSON sidecar. It does not add a database, manifest or browser-only history. Tracks are
-ordered by WAV modification time, newest first.
+**Decided:** track history is the newest-first view of `output/*.wav` and sidecars, with no
+database or browser-only copy.
 
-**Why:** the WAV and sidecar pair already persists every generated result and the settings
-needed to reproduce it. A second store could drift, while reading the existing files also
-makes older tracks and CLI-generated tracks visible in the UI.
+**Why:** those files already persist results and reproducibility settings. Reusing them also
+shows older and CLI-generated tracks without a store that can drift.
 
 **Would revisit if:** the output collection becomes large enough to need pagination,
 search or indexed metadata.
@@ -55,21 +62,17 @@ search or indexed metadata.
 
 ## 2026-09-10 - Backends declare their knobs; core refuses what it cannot honour
 
-**Decided:** `Backend` carries `default_steps`, `default_guidance` (`None` = the backend has
-no such control), `supports_lyrics` and `dtype`. `core.generate` applies the backend's own
-defaults and raises on a value the backend cannot use. The sidecar gains a `backend` key
-(the registry name `--model` takes) and keeps `model` (the weights id); `dtype` is the
-backend's real precision.
+**Decided:** backends declare steps, guidance, lyrics support and dtype. Core applies each
+backend's defaults and refuses unsupported values. Sidecars add the CLI's `backend` key,
+while retaining the weights ID in `model`.
 
-**Why:** the 2026-09-09 audit found `--steps` and `--guidance` never reached `minimax-mlx`,
-MusicGen always ran at guidance 15, and the README's reproduction command failed because
-the sidecar's `model` field was not a `--model` choice. Silent drops that leave a false
-record are the worst kind; loud refusal is cheaper.
+**Why:** the audit found controls never reached MiniMax, MusicGen used guidance 15, and
+sidecars could not reproduce their backend. Loud refusal is safer than recording a setting
+that did not apply.
 
 **Kept additive:** old sidecars still parse; new ones carry one extra key.
 
-**Would revisit if:** a backend exposes guidance later (set its `default_guidance`) or
-the sidecar needs a schema version.
+**Would revisit if:** a backend gains another control or sidecars need schema versioning.
 
 ---
 

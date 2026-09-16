@@ -287,18 +287,62 @@ def _backend_summary(model: str) -> str:
     )
 
 
+def _control_value(control: backends.NumericControl, current=None) -> int | float:
+    """Keep a valid current value, otherwise clamp it into the selected model's range."""
+    try:
+        value = float(current)
+    except (TypeError, ValueError, OverflowError):
+        value = control.default
+    if not math.isfinite(value):
+        value = control.default
+    value = max(control.minimum, value)
+    if control.maximum is not None:
+        value = min(control.maximum, value)
+    return int(value) if control.integer else value
+
+
+def _control_update(
+    control: backends.NumericControl | None,
+    current=None,
+    preserve_current: bool = False,
+):
+    if control is None:
+        return gr.update(visible=False)
+    value = _control_value(control, current) if preserve_current else control.default
+    return gr.update(
+        minimum=control.minimum,
+        maximum=control.maximum,
+        step=control.step,
+        value=value,
+        label=control.label,
+        info=control.info,
+        visible=True,
+    )
+
+
+def _control_envelope(attribute: str) -> tuple[float, float | None, float]:
+    controls = [
+        control
+        for backend in backends.BACKENDS.values()
+        if (control := getattr(backend, attribute)) is not None
+    ]
+    minimum = min(control.minimum for control in controls)
+    maximum = (
+        None
+        if any(control.maximum is None for control in controls)
+        else max(control.maximum for control in controls)
+    )
+    return minimum, maximum, min(control.step for control in controls)
+
+
 def _model_updates(model, duration, preset):
     backend = backends.get(model)
-    duration = min(float(duration), backend.max_duration)
     prompt = _preset_prompt(preset, model) if preset else gr.update()
     return (
         _backend_summary(model),
-        gr.update(maximum=int(backend.max_duration), value=duration),
-        gr.update(value=backend.default_steps or 60, visible=backend.default_steps is not None),
-        gr.update(
-            value=backend.default_guidance or 15,
-            visible=backend.default_guidance is not None,
-        ),
+        _control_update(backend.duration, duration, preserve_current=True),
+        _control_update(backend.steps),
+        _control_update(backend.guidance),
         _prompt_hint(backend),
         prompt,
     )
@@ -439,18 +483,25 @@ def _enqueue_generation(model, prompt, duration, steps, guidance, seed, use_seed
     if not prompt or not prompt.strip():
         raise gr.Error("Enter a prompt first.")
     backend = backends.get(model)
-    duration = float(duration)
-    if not math.isfinite(duration) or duration <= 0:
-        raise gr.Error("Duration must be a positive number.")
-    if duration > backend.max_duration:
-        raise gr.Error(f"{backend.name} caps at {backend.max_duration:.0f}s")
+    try:
+        duration = backend.duration.validate(duration, f"{backend.name} duration")
+        steps = (
+            backend.steps.validate(steps, f"{backend.name} steps")
+            if backend.steps is not None else None
+        )
+        guidance = (
+            backend.guidance.validate(guidance, f"{backend.name} guidance")
+            if backend.guidance is not None else None
+        )
+    except ValueError as exc:
+        raise gr.Error(str(exc)) from exc
     chosen_seed = int(seed) if use_seed else random.randint(0, 2**31 - 1)
     payload = {
         "prompt": prompt.strip(),
         "duration": duration,
         "seed": chosen_seed,
-        "infer_step": int(steps) if backend.default_steps is not None else None,
-        "guidance_scale": guidance if backend.default_guidance is not None else None,
+        "infer_step": steps,
+        "guidance_scale": guidance,
         "model": backend.name,
     }
     summary = {
@@ -554,13 +605,21 @@ def _generate(model, prompt, duration, steps, guidance, seed, use_seed):
         raise gr.Error("Enter a prompt first.")
     backend = backends.get(model)
     try:
+        duration = backend.duration.validate(duration, f"{backend.name} duration")
+        steps = (
+            backend.steps.validate(steps, f"{backend.name} steps")
+            if backend.steps is not None else None
+        )
+        guidance = (
+            backend.guidance.validate(guidance, f"{backend.name} guidance")
+            if backend.guidance is not None else None
+        )
         track = core.generate(
             prompt=prompt.strip(),
             duration=duration,
             seed=int(seed) if use_seed else None,
-            # Only hand over the knobs this backend actually has; None means its default.
-            infer_step=int(steps) if backend.default_steps is not None else None,
-            guidance_scale=guidance if backend.default_guidance is not None else None,
+            infer_step=steps,
+            guidance_scale=guidance,
             model=backend.name,
         )
     except Exception as exc:
@@ -575,6 +634,9 @@ def _generate(model, prompt, duration, steps, guidance, seed, use_seed):
 
 def build_ui() -> gr.Blocks:
     initial_backend = backends.get(core.DEFAULT_MODEL)
+    duration_minimum, duration_maximum, duration_step = _control_envelope("duration")
+    steps_minimum, steps_maximum, steps_step = _control_envelope("steps")
+    guidance_minimum, guidance_maximum, guidance_step = _control_envelope("guidance")
     model_choices = [
         (f"{name} · {backend.model_id}", name)
         for name, backend in backends.BACKENDS.items()
@@ -600,18 +662,34 @@ def build_ui() -> gr.Blocks:
                 )
                 prompt_help = gr.Markdown(_prompt_hint(initial_backend))
                 with gr.Row():
-                    duration = gr.Slider(10, int(initial_backend.max_duration),
-                                         value=min(60, int(initial_backend.max_duration)),
-                                         step=5, label="Duration (s)")
-                    steps = gr.Slider(20, 120, value=initial_backend.default_steps or 60,
-                                      step=1, label="Steps",
-                                      info="Lower = faster, rougher",
-                                      visible=initial_backend.default_steps is not None)
+                    # Components use the union of every backend's schema so Gradio's
+                    # static API preprocessor never rejects a value that is valid for
+                    # another model. The selected backend narrows these in the browser,
+                    # and the submission handler enforces the same backend contract.
+                    duration = gr.Slider(
+                        duration_minimum, duration_maximum,
+                        value=initial_backend.duration.default,
+                        step=duration_step,
+                        label=initial_backend.duration.label,
+                        info=initial_backend.duration.info,
+                    )
+                    steps = gr.Number(
+                        value=initial_backend.steps.default,
+                        minimum=steps_minimum,
+                        maximum=steps_maximum,
+                        step=steps_step,
+                        precision=0,
+                        label=initial_backend.steps.label,
+                        info=initial_backend.steps.info,
+                    )
                 with gr.Row():
-                    guidance = gr.Slider(1, 30, value=initial_backend.default_guidance or 15,
-                                         step=0.5,
-                                         label="Prompt adherence",
-                                         visible=initial_backend.default_guidance is not None)
+                    guidance = gr.Slider(
+                        guidance_minimum, guidance_maximum,
+                        value=initial_backend.guidance.default,
+                        step=guidance_step,
+                        label=initial_backend.guidance.label,
+                        info=initial_backend.guidance.info,
+                    )
                     seed = gr.Number(value=42, precision=0, label="Seed")
                 use_seed = gr.Checkbox(
                     value=False, label="Lock seed",
@@ -695,6 +773,12 @@ def build_ui() -> gr.Blocks:
             _model_updates,
             [model, duration, preset],
             [model_summary, duration, steps, guidance, prompt_help, prompt],
+        )
+        demo.load(
+            _model_updates,
+            [model, duration, preset],
+            [model_summary, duration, steps, guidance, prompt_help, prompt],
+            queue=False,
         )
         preset.change(_preset_prompt, [preset, model], prompt)
 

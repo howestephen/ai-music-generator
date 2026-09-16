@@ -26,7 +26,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = PROJECT_ROOT / "output"
 PROMPTS_DIR = PROJECT_ROOT / "prompts"
 
-DEFAULT_MODEL = "acestep"  # switch to "minimax-mlx" once its output is judged better
+DEFAULT_MODEL = backends.DEFAULT_BACKEND
 
 _pipeline = None
 
@@ -121,15 +121,14 @@ def generate(
             f"Backend {backend.name!r} is not set up: expected interpreter at "
             f"{backend.python}. See README for install steps."
         )
-    if duration > backend.max_duration:
-        raise ValueError(
-            f"{backend.name} caps at {backend.max_duration:.0f}s (asked for {duration:.0f}s)"
-        )
+    duration = backend.duration.validate(duration, f"{backend.name} duration")
 
     steps = _resolve(backend, "step count", infer_step, backend.default_steps)
-    if steps is not None and int(steps) < 1:
-        raise ValueError(f"step count must be at least 1 (got {steps!r})")
+    if steps is not None:
+        steps = backend.steps.validate(steps, f"{backend.name} steps")
     guidance = _resolve(backend, "guidance", guidance_scale, backend.default_guidance)
+    if guidance is not None:
+        guidance = backend.guidance.validate(guidance, f"{backend.name} guidance")
 
     # Each backend spells 'no vocals' differently, and one has no lyrics channel at all.
     if lyrics is not None and not backend.supports_lyrics:
