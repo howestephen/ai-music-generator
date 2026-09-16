@@ -55,6 +55,21 @@ orchestral and cinematic material, where it drifts toward rock band instrumentat
 `musicgen` is capable but slow on Metal (~15× realtime) and capped at 30 seconds.
 Non-commercial weights.
 
+### Prompting reference
+
+For `minimax-mlx`, write vivid English sentences under `Global Metadata`, `Vocal Details`
+and `Arrangement`. State instrumental intent and the lead texture explicitly, anchor only
+two or three instruments, and describe a coherent section-by-section evolution. The
+[official model guide](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/README.md),
+[caption rewriter](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/skills/music-caption-rewriter/SKILL.md)
+and [prompt guide](https://github.com/MiniMax-AI/skills/blob/main/skills/minimax-music-gen/references/prompt_guide.md)
+are the source references. The requested duration is an upper bound, not a guarantee.
+
+For `acestep`, use concise comma-separated genre, instrumentation, mood and tempo tags. The
+generation pipeline supplies its `[inst]` sentinel automatically. ACE-Step is seed-sensitive and its
+own [model card](https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B) warns that long output
+can lose structure, so compare seeds rather than treating one result as representative.
+
 ## Usage
 
 **One track:**
