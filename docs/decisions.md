@@ -2,13 +2,31 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-16
+updated: 2026-09-17
 ---
 
 # Decisions
 
 Why the stack looks the way it does. Newest first. Each entry records the decision,
 rationale and reason to revisit it.
+
+---
+
+## 2026-09-17 - MiniMax duration is enforced during autoregressive generation
+
+**Decided:** the MiniMax runner passes the selected duration as both its maximum and its
+minimum. A project-owned wrapper masks the model's audio-end token until that minimum frame
+count exists, then delegates the rest of generation to the exact pinned MLX package. The
+post-generation WAV audit remains the independent acceptance check.
+
+**Why:** a 300-second request reached the pinned runtime correctly but it sampled its end
+token after 16.7 seconds. Retrying and rejecting short output made the failure visible but
+did not make the requested music. The maintained `appautomaton/mlx-minimax-music3`
+implementation independently uses the same stop-token constraint for `min_audio_duration`.
+
+**Would revisit if:** the pinned runtime gains a native minimum-duration option, or
+long-duration listening tests show that forcing one pass harms musical quality enough to
+justify a separately designed continuation workflow.
 
 ---
 
@@ -39,8 +57,9 @@ qualify.
 token much earlier. Twenty recent MiniMax renders delivered roughly 6% to 36% of their target,
 while their old sidecars and UI presented the target as though it were measured output.
 
-**Would revisit if:** a runner exposes a supported minimum-duration constraint or a
-continuation workflow that can extend a short musical result coherently.
+**Revisited 2026-09-17:** the runner now enforces the selected minimum during generation;
+the output contract remains because enforcement and delivered-file verification are
+different boundaries.
 
 ---
 

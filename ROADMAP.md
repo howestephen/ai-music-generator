@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-16
+updated: 2026-09-17
 ---
 
 # ROADMAP
@@ -19,8 +19,9 @@ they are never buried in a chat.
 
 - Goal: describe music in words, render it locally on Apple Silicon, and keep the
   architecture easy to add models to
-- Current phase: Phase 1.1 complete; next direction pending owner review
-- Biggest known risk: MiniMax treats requested duration as a maximum and often ends early
+- Current phase: Phase 1.2 complete; next direction pending owner review
+- Biggest known risk: forced long MiniMax renders still need listening assessment for
+  musical structure and quality across the full duration
 - Default backend: `minimax-mlx` (owner decision, resolved 2026-09-17)
 
 ## Phase 0: Retrofit and remediation
@@ -49,7 +50,8 @@ they are never buried in a chat.
 
 | # | Title | Status | Why it matters | Spec | Deps |
 |---|---|---|---|---|---|
-| 1.1 | Duration and basic audio audit | `done` | MiniMax accepted 16.76–33.59 second files for 240-second requests and 41.56 seconds for a 300-second request, while sidecars and the UI displayed the target as measured. Every WAV is now audited; requested and delivered facts are separate; short assets remain visible but fail acceptance; an unlocked UI seed retries once. Completed and independently re-audited 2026-09-16 on `codex/output-duration-audit`; the current suite has 100 unit tests and 74 mutations | none | 0.4 |
+| 1.1 | Duration and basic audio audit | `done` | MiniMax accepted 16.76–33.59 second files for 240-second requests and 41.56 seconds for a 300-second request, while sidecars and the UI displayed the target as measured. Every WAV is now audited; requested and delivered facts are separate; short assets remain visible but fail acceptance; an unlocked UI seed retries once. Completed and independently re-audited 2026-09-16 on `codex/output-duration-audit` | none | 0.4 |
+| 1.2 | Enforce MiniMax target duration | `done` | The pinned runtime's duration flag only capped frames and accepted an end token at 16.7 seconds for a 300-second request. Its project-owned wrapper now suppresses that token until the target frame count, while the separate WAV audit still verifies the delivered file. A real render with the known early-stop seed delivered 20.016 seconds for a 20-second target. Completed and independently audited 2026-09-17 on `codex/minimax-duration-enforcement`; 104 unit tests and all 76 mutations pass | none | 1.1 |
 
 ## Deferred ideas
 
@@ -73,7 +75,9 @@ they are never buried in a chat.
 
 ## Current next step
 
-- Current milestone: Phase 1.1 complete and merged
+- Current milestone: Phase 1.2 complete and independently audited on its feature branch,
+  pending owner review
 - Then: agree the next product or research phase
-- Phase 1.1 exit gates: existing short outputs display their measured length; 100 unit tests
-  and 74 mutations pass; installed model probes pass; independent audit is clean
+- Phase 1.2 exit gates: the runner passes one target as both minimum and maximum; a real
+  render reaches its requested duration; unit tests, mutations and validators pass;
+  installed model probes pass; independent audit is clean

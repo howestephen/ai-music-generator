@@ -82,9 +82,10 @@ two or three instruments, and describe a coherent section-by-section evolution. 
 [official model guide](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/README.md),
 [caption rewriter](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/skills/music-caption-rewriter/SKILL.md)
 and [prompt guide](https://github.com/MiniMax-AI/skills/blob/main/skills/minimax-music-gen/references/prompt_guide.md)
-are the source references. The requested duration is an upper bound, not a guarantee.
-The app therefore treats it as a target and measures the delivered WAV before accepting
-the result. MiniMax must deliver at least 90% of the target.
+are the source references. The pinned MLX runtime normally treats duration as an upper
+bound; this project suppresses its early-stop token until the selected target is reached,
+then measures the delivered WAV independently. MiniMax must deliver at least 90% of the
+target to pass that separate output audit.
 
 For `acestep`, use concise comma-separated genre, instrumentation, mood and tempo tags. The
 generation pipeline supplies its `[inst]` sentinel automatically. ACE-Step is seed-sensitive and its

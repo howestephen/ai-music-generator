@@ -85,7 +85,7 @@ bfloat16 errors on macOS. Upstream says pass `--bf16 false`; the equivalent here
 
 ## Runtime
 
-### MiniMax duration is a ceiling, not a promise
+### The pinned MiniMax duration flag is only a ceiling without the project wrapper
 
 **Symptom:** a request says 240 or 300 seconds, but the WAV is only 17 to 42 seconds long.
 Sidecars written before phase 1.1 also showed the requested number as `duration`, so the UI
@@ -95,16 +95,15 @@ made the short result look compliant.
 as soon as the language model samples `audio_end_token_id`. The public duration flag does
 not impose a minimum or guarantee the requested length.
 
-**Fix:** never infer delivered length from the request. Audit the WAV after generation,
-record requested and measured duration separately, and compare it with the backend's
-manifest policy. The boundary also rejects unreadable, empty, silent and non-finite audio.
-Retain a short creative asset and its sidecar, but raise an output-audit failure so CLI and
-queue automation cannot silently accept it. The UI may retry an unlocked seed once; if the
-retry is also short, leave the failed job visible for investigation.
+**Fix:** the internal generation mode in `runners/minimax_mlx_runner.py` masks the audio-end token until the selected
+target frame count exists, using the same mechanism as the maintained MLX runtime's
+`min_audio_duration`. The outer runner passes the selected duration as both minimum and
+maximum. Do not remove `--min-duration` or call the pinned package CLI directly.
 
-This is an acceptance and evidence process, not a claim that MiniMax can be forced to a
-specific length. Supporting guaranteed long-form structure needs either an upstream
-minimum-duration control or a separately designed continuation/assembly workflow.
+Still never infer delivered length from the request. Audit the WAV after generation, record
+requested and measured duration separately, and compare it with the backend's manifest
+policy. The boundary also rejects unreadable, empty, silent and non-finite audio. Retain a
+failed creative asset and its sidecar for investigation rather than deleting it.
 
 ### Exit code zero does not prove that a runner produced audio
 
@@ -127,9 +126,10 @@ tries to execute Python from the repository's previous location.
 **Cause:** the generated console script embeds the virtual environment's absolute path.
 Moving the repository does not rewrite it, even though `.venv-mlx/bin/python` still works.
 
-**Fix:** the runner invokes `sys.executable -m mlx_minimax_music3.cli` instead of the
-generated console script. This uses the interpreter that launched the runner and survives a
-repository move.
+**Fix:** the runner starts its own `_generate` mode with `sys.executable`, then that mode
+imports the pinned `mlx_minimax_music3.cli`. Both processes therefore use the interpreter
+that launched the runner rather than the generated console script, so a repository move
+does not leave either invocation pointing at the old path.
 
 ### MiniMax audio conversion belongs to the installed MLX package
 

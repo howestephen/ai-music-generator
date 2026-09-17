@@ -56,8 +56,14 @@ MUTATIONS = [
     ("runner drops steps=0", "runners/minimax_mlx_runner.py",
      '    if job.get("steps") is not None:', '    if job.get("steps"):'),
     ("runner uses stale console script", "runners/minimax_mlx_runner.py",
-     '        sys.executable, "-m", "mlx_minimax_music3.cli", "generate",',
+     '        sys.executable, MIN_DURATION_WRAPPER, "_generate", "generate",',
      '        "mlx-minimax-music3", "generate",'),
+    ("runner stops enforcing MiniMax minimum duration", "runners/minimax_mlx_runner.py",
+     '        "--min-duration", str(float(job["duration"])),',
+     '        "--min-duration", "1.0",'),
+    ("MiniMax wrapper allows an early stop token", "runners/minimax_mlx_runner.py",
+     "        if completed_frames < minimum_frames:",
+     "        if False:"),
     ("runner truncates fractional duration", "runners/minimax_mlx_runner.py",
      '        "--duration", str(float(job["duration"])),',
      '        "--duration", str(int(float(job["duration"]))),'),
@@ -84,11 +90,11 @@ MUTATIONS = [
      '          "maximum": 300,\n'
      '          "step": 1,\n'
      '          "label": "Target duration (s)",\n'
-     '          "info": "MiniMax supports up to 300 seconds but may end early. Delivered audio must reach 90% of this target; an unlocked UI seed gets one retry.",',
+     '          "info": "MiniMax supports up to 300 seconds. Its stop token is suppressed until the target, then the delivered WAV is measured independently.",',
      '          "maximum": 240,\n'
      '          "step": 1,\n'
      '          "label": "Target duration (s)",\n'
-     '          "info": "MiniMax supports up to 240 seconds but may end early. Delivered audio must reach 90% of this target; an unlocked UI seed gets one retry.",'),
+     '          "info": "MiniMax supports up to 240 seconds. Its stop token is suppressed until the target, then the delivered WAV is measured independently.",'),
     ("MiniMax preset stays as tags", "app.py",
      '    return prompts[backends.get(model).prompt_style]',
      '    return prompts["tags"]'),

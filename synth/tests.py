@@ -490,7 +490,14 @@ class MinimaxRunnerArgv(unittest.TestCase):
 
     def test_uses_current_interpreter_not_a_relocatable_console_script(self):
         cmd = self._run(self._job())
-        self.assertEqual(cmd[:3], [sys.executable, "-m", "mlx_minimax_music3.cli"])
+        self.assertEqual(cmd[0], sys.executable)
+        self.assertEqual(Path(cmd[1]).name, "minimax_mlx_runner.py")
+        self.assertEqual(cmd[2:4], ["_generate", "generate"])
+
+    def test_requested_duration_is_also_the_minimum_duration(self):
+        cmd = self._run(self._job(duration=300))
+        self.assertEqual(cmd[cmd.index("--duration") + 1], "300.0")
+        self.assertEqual(cmd[cmd.index("--min-duration") + 1], "300.0")
 
     def test_zero_steps_is_passed_not_dropped(self):
         cmd = self._run(self._job(steps=0))
@@ -519,6 +526,86 @@ class MinimaxRunnerArgv(unittest.TestCase):
             runner.COMMAND_TIMEOUT_SECONDS,
             backends.get("minimax-mlx").timeout_seconds,
         )
+
+
+class MinimaxMinimumDurationWrapper(unittest.TestCase):
+    def _load(self):
+        spec = importlib.util.spec_from_file_location(
+            "minimax_min_duration",
+            core.PROJECT_ROOT / "runners" / "minimax_mlx_runner.py",
+        )
+        wrapper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(wrapper)
+        return wrapper
+
+    def test_wrapper_flag_is_removed_before_upstream_cli(self):
+        wrapper = self._load()
+        minimum, forwarded = wrapper._parse_wrapper_args([
+            "generate", "--duration", "300", "--min-duration", "300",
+        ])
+        self.assertEqual(minimum, 300)
+        self.assertEqual(forwarded, ["generate", "--duration", "300"])
+
+    def test_invalid_minimum_duration_is_rejected(self):
+        wrapper = self._load()
+        for value in ("0", "-1", "nan", "inf"):
+            with self.subTest(value=value), self.assertRaises(SystemExit):
+                wrapper._parse_wrapper_args(["--min-duration", value])
+
+    def test_stop_token_is_masked_until_minimum_frames_are_complete(self):
+        wrapper = self._load()
+        import types
+        import numpy as np
+
+        sampled_vocabularies = []
+
+        def original_guidance(logits, allowed_vocab, cfg_scale=1.5, conditional_top_k=50):
+            sampled_vocabularies.append(np.array(allowed_vocab, copy=True))
+            return logits
+
+        mlx = types.ModuleType("mlx")
+        mlx_core = types.ModuleType("mlx.core")
+        mlx_core.arange = np.arange
+        mlx_core.where = np.where
+        mlx_core.inf = np.inf
+        mlx.core = mlx_core
+
+        package = types.ModuleType("mlx_minimax_music3")
+        pipeline = types.ModuleType("mlx_minimax_music3.pipeline")
+        pipeline.semantic_guided_logits = original_guidance
+        config = types.ModuleType("mlx_minimax_music3.config")
+
+        class ModelConfig:
+            audio_end_token_id = 4
+
+        class GenerationConfig:
+            def __init__(self, audio_duration):
+                self.audio_duration = audio_duration
+
+            def max_frames(self, model):
+                return 2
+
+        config.ModelConfig = ModelConfig
+        config.GenerationConfig = GenerationConfig
+        package.pipeline = pipeline
+
+        fake_modules = {
+            "mlx": mlx,
+            "mlx.core": mlx_core,
+            "mlx_minimax_music3": package,
+            "mlx_minimax_music3.pipeline": pipeline,
+            "mlx_minimax_music3.config": config,
+        }
+        with mock.patch.dict(sys.modules, fake_modules):
+            self.assertEqual(wrapper._install_minimum_duration(2), 2)
+            logits = np.zeros((2, 6))
+            allowed = np.ones(6, dtype=bool)
+            for _ in range(4):
+                pipeline.semantic_guided_logits(logits, allowed)
+
+        for call in sampled_vocabularies[:3]:
+            self.assertFalse(call[4])
+        self.assertTrue(sampled_vocabularies[3][4])
 
 
 class CliDefaults(unittest.TestCase):

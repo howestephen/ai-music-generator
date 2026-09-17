@@ -77,7 +77,7 @@
           "maximum": 300,
           "step": 1,
           "label": "Target duration (s)",
-          "info": "MiniMax supports up to 300 seconds but may end early. Delivered audio must reach 90% of this target; an unlocked UI seed gets one retry.",
+          "info": "MiniMax supports up to 300 seconds. Its stop token is suppressed until the target, then the delivered WAV is measured independently.",
           "integer": false
         },
         "steps": {
