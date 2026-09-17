@@ -19,10 +19,9 @@ they are never buried in a chat.
 
 - Goal: describe music in words, render it locally on Apple Silicon, and keep the
   architecture easy to add models to
-- Current phase: Phase 1.1 complete; owner review before merge
+- Current phase: Phase 1.1 complete; next direction pending owner review
 - Biggest known risk: MiniMax treats requested duration as a maximum and often ends early
-- Default backend: `acestep`, pending a listening test against `minimax-mlx`
-  (owner decision, open since 2026-08-14)
+- Default backend: `minimax-mlx` (owner decision, resolved 2026-09-17)
 
 ## Phase 0: Retrofit and remediation
 
@@ -50,7 +49,7 @@ they are never buried in a chat.
 
 | # | Title | Status | Why it matters | Spec | Deps |
 |---|---|---|---|---|---|
-| 1.1 | Duration and basic audio audit | `done` | MiniMax accepted 16.76–33.59 second files for 240-second requests and 41.56 seconds for a 300-second request, while sidecars and the UI displayed the target as measured. Every WAV is now audited; requested and delivered facts are separate; short assets remain visible but fail acceptance; an unlocked UI seed retries once. Completed and independently re-audited 2026-09-16 on `codex/output-duration-audit`: 100 unit tests and 73 mutations pass | none | 0.4 |
+| 1.1 | Duration and basic audio audit | `done` | MiniMax accepted 16.76–33.59 second files for 240-second requests and 41.56 seconds for a 300-second request, while sidecars and the UI displayed the target as measured. Every WAV is now audited; requested and delivered facts are separate; short assets remain visible but fail acceptance; an unlocked UI seed retries once. Completed and independently re-audited 2026-09-16 on `codex/output-duration-audit`; the current suite has 100 unit tests and 74 mutations | none | 0.4 |
 
 ## Deferred ideas
 
@@ -66,8 +65,7 @@ they are never buried in a chat.
 
 ## Owner decisions open
 
-1. Default backend: `acestep` stays until Stephen has listened to `minimax-mlx` on
-   the same brief. Nothing in the code can settle this
+1. Resolved 2026-09-17: `minimax-mlx` is the default backend on Stephen's instruction
 2. Resolved 2026-09-10: the finished client brief`briefs/` was deleted on
    Stephen's instruction; `briefs/` stays declared for future prompt sets
 3. Resolved 2026-09-10: no new top-level file at this level; the pinned `.venv-mlx`
@@ -75,7 +73,7 @@ they are never buried in a chat.
 
 ## Current next step
 
-- Current milestone: Phase 1.1 owner review
-- Then: merge after owner approval, then agree the next product or research phase
+- Current milestone: Phase 1.1 complete and merged
+- Then: agree the next product or research phase
 - Phase 1.1 exit gates: existing short outputs display their measured length; 100 unit tests
-  and 73 mutations pass; installed model probes pass; independent audit is clean
+  and 74 mutations pass; installed model probes pass; independent audit is clean

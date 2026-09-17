@@ -566,6 +566,7 @@ class Registry(unittest.TestCase):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
         self.assertEqual(document["schema_version"], 3)
         self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
+        self.assertEqual(backends.DEFAULT_BACKEND, "minimax-mlx")
         self.assertEqual(list(document["backends"]), list(backends.BACKENDS))
 
     def test_every_backend_declares_a_valid_output_audit_policy(self):
@@ -608,7 +609,7 @@ class Registry(unittest.TestCase):
 
         default, loaded = backends.load_manifest(path)
 
-        self.assertEqual(default, "acestep")
+        self.assertEqual(default, "minimax-mlx")
         self.assertEqual(loaded["probe"].model_id, "example/probe-model")
         self.assertEqual(loaded["probe"].duration.maximum, 123)
         self.assertEqual(loaded["probe"].steps.default, 30)
@@ -1061,6 +1062,10 @@ duration_id = next(
     component_id for component_id, component in components.items()
     if component["type"] == "slider" and component["props"].get("label") == "Target duration (s)"
 )
+guidance_id = next(
+    component_id for component_id, component in components.items()
+    if component["type"] == "slider" and component["props"].get("label") == "Prompt adherence"
+)
 generate_id = next(
     component_id for component_id, component in components.items()
     if component["type"] == "button" and component["props"].get("value") == "Generate"
@@ -1072,6 +1077,8 @@ submission = next(
 submission_id = submission["id"]
 print(json.dumps({
     "models": [value for _label, value in components[model_id]["props"]["choices"]],
+    "default_model": components[model_id]["props"].get("value"),
+    "default_guidance_visible": components[guidance_id]["props"].get("visible", True),
     "duration_api_maximum": components[duration_id]["props"].get("maximum"),
     "buttons": [
         component["props"].get("value") for component in components.values()
@@ -1119,6 +1126,8 @@ print(json.dumps({
         self.assertEqual(result.returncode, 0, result.stderr)
         config = json.loads(result.stdout)
         self.assertEqual(config["models"], list(backends.BACKENDS))
+        self.assertEqual(config["default_model"], "minimax-mlx")
+        self.assertFalse(config["default_guidance_visible"])
         self.assertEqual(config["duration_api_maximum"], 300)
         self.assertIn("Generate", config["buttons"])
         self.assertIn("Refresh history", config["buttons"])
@@ -1208,17 +1217,17 @@ print(json.dumps({
                 mock.patch.object(app, "_estimate_runtime", return_value=90), \
                 mock.patch.object(app.random, "randint", return_value=123):
             status, seed, snapshot = app._enqueue_generation(
-                "minimax-mlx", " probe ", 270, 30, 15, 42, False,
+                "acestep", " probe ", 120, 60, 15, 42, False,
             )
         payload, summary, expected = queue.enqueue.call_args.args
-        self.assertEqual(payload["model"], "minimax-mlx")
+        self.assertEqual(payload["model"], "acestep")
         self.assertEqual(payload["prompt"], "probe")
-        self.assertEqual(payload["duration"], 270)
-        self.assertIsNone(payload["guidance_scale"])
+        self.assertEqual(payload["duration"], 120)
+        self.assertEqual(payload["guidance_scale"], 15)
         self.assertEqual(payload["seed"], 123)
         self.assertEqual(payload["_duration_retries"], 1)
         self.assertTrue(payload["_retry_seed"])
-        self.assertEqual((summary["model"], expected), ("minimax-mlx", 90))
+        self.assertEqual((summary["model"], expected), ("acestep", 90))
         self.assertEqual((seed, snapshot[0]["status"]), (123, "queued"))
         self.assertIn("ready for another job", status)
 

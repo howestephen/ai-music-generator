@@ -23,6 +23,9 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("default backend reverts to ACE-Step", "synth/backends.json",
+     '  "default_backend": "minimax-mlx",',
+     '  "default_backend": "acestep",'),
     ("drop steps from job dict", "synth/core.py", '            "steps": steps,', "            "),
     ("musicgen guidance back to 15", "synth/backends.json",
      '          "default": 3,\n'
@@ -74,9 +77,9 @@ MUTATIONS = [
     ("UI exposes unsupported step control", "app.py",
      "        _control_update(backend.steps),",
      "        gr.update(visible=True),"),
-    ("UI API schema keeps ACE duration cap", "app.py",
+    ("UI API schema is capped below MiniMax", "app.py",
      "                        duration_minimum, duration_maximum,",
-     "                        duration_minimum, initial_backend.max_duration,"),
+     "                        duration_minimum, 240,"),
     ("MiniMax duration is capped like ACE", "synth/backends.json",
      '          "maximum": 300,\n'
      '          "step": 1,\n'

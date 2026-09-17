@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "default_backend": "acestep",
+  "default_backend": "minimax-mlx",
   "backends": {
     "acestep": {
       "model_id": "ACE-Step/ACE-Step-v1-3.5B",

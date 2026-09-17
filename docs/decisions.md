@@ -12,6 +12,17 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-17 - MiniMax is the default backend
+
+**Decided:** `minimax-mlx` is the manifest default, so the UI opens with MiniMax selected
+and CLI generation uses it when `--model` is omitted.
+
+**Why:** Stephen selected MiniMax as the default for the current generation workflow.
+
+**Would revisit if:** the preferred everyday model changes.
+
+---
+
 ## 2026-09-16 - Generated audio must pass a measured output contract
 
 **Decided:** a runner is successful only when the delivered WAV is readable, finite,

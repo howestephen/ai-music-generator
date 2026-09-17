@@ -62,7 +62,7 @@ Three backends behind one CLI. Each runs in whatever environment it needs.
 
 | Backend | Model | Max | Prompt style | Licence |
 |---|---|---|---|---|
-| `minimax-mlx` | MiniMax Music 3 (MLX 8-bit) | 300s | caption | MiniMax Community |
+| `minimax-mlx` | MiniMax Music 3 (MLX 8-bit, default) | 300s | caption | MiniMax Community |
 | `acestep` | ACE-Step v1 3.5B | 240s | tags | Apache-2.0 |
 | `musicgen` | MusicGen stereo-large | 30s | tags | **CC-BY-NC - non-commercial** |
 

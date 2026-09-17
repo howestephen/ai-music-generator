@@ -685,6 +685,14 @@ def build_ui() -> gr.Blocks:
     duration_minimum, duration_maximum, duration_step = _control_envelope("duration")
     steps_minimum, steps_maximum, steps_step = _control_envelope("steps")
     guidance_minimum, guidance_maximum, guidance_step = _control_envelope("guidance")
+    initial_steps = initial_backend.steps or next(
+        backend.steps for backend in backends.BACKENDS.values() if backend.steps is not None
+    )
+    initial_guidance = initial_backend.guidance or next(
+        backend.guidance
+        for backend in backends.BACKENDS.values()
+        if backend.guidance is not None
+    )
     model_choices = [
         (f"{name} · {backend.model_id}", name)
         for name, backend in backends.BACKENDS.items()
@@ -722,21 +730,23 @@ def build_ui() -> gr.Blocks:
                         info=initial_backend.duration.info,
                     )
                     steps = gr.Number(
-                        value=initial_backend.steps.default,
+                        value=initial_steps.default,
                         minimum=steps_minimum,
                         maximum=steps_maximum,
                         step=steps_step,
                         precision=0,
-                        label=initial_backend.steps.label,
-                        info=initial_backend.steps.info,
+                        label=initial_steps.label,
+                        info=initial_steps.info,
+                        visible=initial_backend.steps is not None,
                     )
                 with gr.Row():
                     guidance = gr.Slider(
                         guidance_minimum, guidance_maximum,
-                        value=initial_backend.guidance.default,
+                        value=initial_guidance.default,
                         step=guidance_step,
-                        label=initial_backend.guidance.label,
-                        info=initial_backend.guidance.info,
+                        label=initial_guidance.label,
+                        info=initial_guidance.info,
+                        visible=initial_backend.guidance is not None,
                     )
                     seed = gr.Number(value=42, precision=0, label="Seed")
                 use_seed = gr.Checkbox(
