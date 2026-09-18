@@ -33,8 +33,11 @@ House defaults, with this project's tightening:
 
 - Default branch is `main`, never `master`
 - Commit without asking: yes
-- Push without asking: yes on a branch, never on main. There is no remote yet; the
-  moment one exists, feature branches push immediately as backup
+- Push without asking: yes, including main. The remote is
+  `github.com/howestephen/ai-music-generator`. This project is at layer zero, where
+  getting it functional beats branch ceremony, so small work commits straight to main
+  (owner instruction, 2026-09-18). Branch when a change stops being small, and revisit
+  this rule when the project leaves layer zero
 - Create new top-level folders: no. The structure is declared below and locked by
   `scripts/validate.config.json`
 - Delete files: never without listing what changes and what references it.
