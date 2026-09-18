@@ -23,7 +23,8 @@ or textures for music production, a larger studio engine, and other artistic exp
 ## Installation
 
 Needs Apple Silicon with Metal, Python 3.12 and [`uv`](https://docs.astral.sh/uv/). Both
-environments are tested on 3.12.9.
+environments are tested on 3.12.9. `requirements.txt` is a full lock: every dependency is
+pinned to a version or a commit.
 
 ```bash
 uv venv --python 3.12 .venv
@@ -67,8 +68,9 @@ but slow on Metal (about 15x realtime) and capped at 30 seconds.
 # one track
 ./.venv/bin/python -m synth.cli gen "<prompt>" --model minimax-mlx --duration 70
 
-# batch: a directory of prompt files, one prompt per line, # for comments
-./.venv/bin/python -m synth.cli batch --dir briefs/my-brief --model minimax-mlx --duration 60
+# batch: every prompt in prompts/, one prompt per line, # for comments
+./.venv/bin/python -m synth.cli batch --model minimax-mlx --duration 60
+./.venv/bin/python -m synth.cli batch --dir path/to/other-prompts --model acestep
 
 # web UI
 ./.venv/bin/python app.py
@@ -80,10 +82,10 @@ but slow on Metal (about 15x realtime) and capped at 30 seconds.
 | `--duration` / `-d` | Target seconds (each backend enforces its own cap and acceptance policy) |
 | `--count` / `-n` | Variations per prompt |
 | `--guidance` / `-g` | Prompt adherence. Backend default (`acestep` 15, `musicgen` 3); `minimax-mlx` exposes none and refuses the flag |
-| `--seed` | Reproduce a specific track |
+| `--seed` | Reproduce a specific track (`gen` only) |
 | `--steps` | Inference steps, lower is faster and rougher. Backend default; `musicgen` has none and refuses the flag |
 | `--lyrics` | Defaults to the backend's instrumental sentinel; `musicgen` has no lyrics channel and refuses the flag |
-| `--json` | Machine-readable output, one JSON object per line |
+| `--json` | Machine-readable output, one JSON object per line (`gen` only) |
 
 The UI dropdown exposes every registered backend and redraws its controls, duration cap,
 licence and presets from the same manifest the API uses. Requests queue serially to avoid
@@ -177,7 +179,7 @@ synth/cli.py       gen / batch / models / ui
 synth/analyze.py   measure requested audio properties
 runners/           per-backend subprocess entry points (isolated environments)
 app.py             Gradio web UI
-briefs/            prompt sets per project
+prompts/           prompt sets, one prompt per line
 output/            generated audio + sidecars (gitignored)
 docs/              decisions and gotchas
 ```
