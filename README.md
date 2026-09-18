@@ -2,24 +2,17 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-16
+updated: 2026-09-18
 ---
 
 # AI Music Generator
 
-A local workbench for **verbal music synthesis** - describing music in words and rendering
+A local workbench for **verbal music synthesis**: describing music in words and rendering
 it locally as audio.
 
 Runs on Apple Silicon (M3 Max, 128 GB). No cloud, no per-track licensing, no upload of
-anything you're working on.
-
-## What this is for
-
-Deliberately open-ended: soundtrack and underscore, vocal parts or textures for music
-production, a larger studio engine, and other artistic experiments.
-
-The project prioritises **organisation and recorded reasoning**. Decisions retain their
-rationale and traps are recorded once.
+anything you're working on. Deliberately open-ended: soundtrack and underscore, vocal parts
+or textures for music production, a larger studio engine, and other artistic experiments.
 
 | Document | Purpose |
 |---|---|
@@ -29,16 +22,16 @@ rationale and traps are recorded once.
 
 ## Installation
 
-This project needs Apple Silicon with Metal, Python 3.12 and
-[`uv`](https://docs.astral.sh/uv/). Create the main environment from its full lock:
+Needs Apple Silicon with Metal, Python 3.12 and [`uv`](https://docs.astral.sh/uv/). Both
+environments are tested on 3.12.9.
 
 ```bash
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
-MiniMax has an incompatible dependency stack, so install its adapter at the exact tested
-source commit in a second environment:
+MiniMax has an incompatible dependency stack, so its adapter installs into a second
+environment at the exact tested source commit:
 
 ```bash
 uv venv --python 3.12 .venv-mlx
@@ -49,127 +42,87 @@ uv pip check --python .venv-mlx/bin/python
 ./.venv/bin/python -m synth.cli models
 ```
 
-Both environments are tested with Python 3.12.9. Model weights download on first use to
-`~/.cache/`: MiniMax MLX is about 13 GB, MusicGen 19 GB and ACE-Step 7.7 GB.
+Weights download on first use to `~/.cache/`: MiniMax MLX about 13 GB, MusicGen 19 GB,
+ACE-Step 7.7 GB.
 
 ## Models
 
-Three backends behind one CLI. Each runs in whatever environment it needs.
-
-```bash
-./.venv/bin/python -m synth.cli models
-```
+Three backends behind one CLI, each in whatever environment it needs.
+`./.venv/bin/python -m synth.cli models` probes all three.
 
 | Backend | Model | Max | Prompt style | Licence |
 |---|---|---|---|---|
 | `minimax-mlx` | MiniMax Music 3 (MLX 8-bit, default) | 300s | caption | MiniMax Community |
 | `acestep` | ACE-Step v1 3.5B | 240s | tags | Apache-2.0 |
-| `musicgen` | MusicGen stereo-large | 30s | tags | **CC-BY-NC - non-commercial** |
+| `musicgen` | MusicGen stereo-large | 30s | tags | **CC-BY-NC, non-commercial** |
 
-`minimax-mlx` alone has explicit **BPM, key and scale** control and runs through MLX/Metal.
-
-`acestep` is fast (roughly realtime) but is a song-form model - it is demonstrably weak at
-orchestral and cinematic material, where it drifts toward rock band instrumentation.
-
-`musicgen` is capable but slow on Metal (~15× realtime) and capped at 30 seconds.
-Non-commercial weights.
-
-### Prompting reference
-
-For `minimax-mlx`, write vivid English sentences under `Global Metadata`, `Vocal Details`
-and `Arrangement`. State instrumental intent and the lead texture explicitly, anchor only
-two or three instruments, and describe a coherent section-by-section evolution. The
-[official model guide](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/README.md),
-[caption rewriter](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/skills/music-caption-rewriter/SKILL.md)
-and [prompt guide](https://github.com/MiniMax-AI/skills/blob/main/skills/minimax-music-gen/references/prompt_guide.md)
-are the source references. The pinned MLX runtime normally treats duration as an upper
-bound; this project suppresses its early-stop token until the selected target is reached,
-then measures the delivered WAV independently. MiniMax must deliver at least 90% of the
-target to pass that separate output audit.
-
-For `acestep`, use concise comma-separated genre, instrumentation, mood and tempo tags. The
-generation pipeline supplies its `[inst]` sentinel automatically. ACE-Step is seed-sensitive and its
-own [model card](https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B) warns that long output
-can lose structure, so compare seeds rather than treating one result as representative.
+`minimax-mlx` alone has explicit BPM, key and scale control, and runs through MLX/Metal.
+`acestep` is roughly realtime but song-form, and demonstrably weak at orchestral and
+cinematic material, where it drifts toward rock band instrumentation. `musicgen` is capable
+but slow on Metal (about 15x realtime) and capped at 30 seconds.
 
 ## Usage
 
-**One track:**
-
 ```bash
+# one track
 ./.venv/bin/python -m synth.cli gen "<prompt>" --model minimax-mlx --duration 70
-```
 
-**Batch** - put prompts in a directory, one per line, `#` for comments:
-
-```bash
+# batch: a directory of prompt files, one prompt per line, # for comments
 ./.venv/bin/python -m synth.cli batch --dir briefs/my-brief --model minimax-mlx --duration 60
-```
 
-**Web UI:**
-
-```bash
+# web UI
 ./.venv/bin/python app.py
 ```
 
-The model dropdown exposes every registered backend. Switching it updates duration,
-controls, licence, guidance and prompt-style-specific presets from the same versioned JSON
-manifest used by the API.
-Generated tracks remain in a newest-first playable history beside the controls. Each
-waveform fits the available width and remains seekable. History rebuilds from `output/`, so
-closing the browser does not lose earlier tracks. Use **Refresh history** to include files
-generated elsewhere while the UI is already open.
+| Flag | Effect |
+|---|---|
+| `--model` / `-m` | Backend to use |
+| `--duration` / `-d` | Target seconds (each backend enforces its own cap and acceptance policy) |
+| `--count` / `-n` | Variations per prompt |
+| `--guidance` / `-g` | Prompt adherence. Backend default (`acestep` 15, `musicgen` 3); `minimax-mlx` exposes none and refuses the flag |
+| `--seed` | Reproduce a specific track |
+| `--steps` | Inference steps, lower is faster and rougher. Backend default; `musicgen` has none and refuses the flag |
+| `--lyrics` | Defaults to the backend's instrumental sentinel; `musicgen` has no lyrics channel and refuses the flag |
+| `--json` | Machine-readable output, one JSON object per line |
 
-The UI queues multiple requests serially. Generate shows an acceptance wipe and becomes
-available once queued. Pending jobs can be reordered or removed; the active card shows a
-labelled progress estimate before becoming a waveform. Serial rendering avoids competing
-Metal jobs. Queue and history live on the local server, so browsers share the same state.
+The UI dropdown exposes every registered backend and redraws its controls, duration cap,
+licence and presets from the same manifest the API uses. Requests queue serially to avoid
+competing Metal jobs, and pending jobs can be reordered or removed. Queue and history live
+on the local server, so browsers share one state and history rebuilds from `output/`.
+**Refresh history** picks up files generated elsewhere while the UI is open.
+
 Every completed WAV is checked for a readable, finite, non-silent sample stream and its
-measured duration. A short render remains in history as `SHORT`, with delivered and target
-lengths shown separately. When the user has not locked a seed, the UI retries one short
-render with a new seed; a repeated shortfall becomes a visible failed queue job. A fixed
-seed is not retried because it would reproduce the same result. An active render cannot
-yet be cancelled safely.
+measured duration. A short render stays in history marked `SHORT`, with delivered and target
+lengths shown separately. An unlocked seed is retried once; a fixed seed is not, because it
+would reproduce the same result. An active render cannot yet be cancelled.
 
-**Analyse measurable properties** - tempo, strongest pitch, transient placement and
-relative start/end loudness:
+### Analysis
 
 ```bash
 ./.venv/bin/python -m synth.analyze output/*.wav
 ./.venv/bin/python -m synth.analyze output/*.wav --key D --scale mixolydian
 ```
 
-Pitch-class collection coverage is opt-in through `--key` and `--scale`. It cannot
-distinguish relative keys or modes that contain the same notes. Start/end results only say
-that an edge is quiet relative to the track median; they do not detect a fade or sweep. One
-unreadable file does not abort the batch, but produces a non-zero exit. Measurements do not
-judge musical quality.
-
-### Flags
-
-| Flag | Effect |
-|---|---|
-| `--model` / `-m` | Backend to use |
-| `--duration` / `-d` | Target seconds (each backend enforces its own cap and output acceptance policy) |
-| `--count` / `-n` | Variations per prompt |
-| `--guidance` / `-g` | Prompt adherence. Default is the backend's own (`acestep` 15, `musicgen` 3); `minimax-mlx` exposes none and refuses the flag |
-| `--seed` | Reproduce a specific track |
-| `--steps` | Inference steps, lower is faster and rougher. Default is the backend's own; `musicgen` has none and refuses the flag |
-| `--lyrics` | Defaults to the backend's instrumental sentinel; `musicgen` has no lyrics channel and refuses the flag |
-| `--json` | Machine-readable output, one JSON object per line |
+Measures tempo, strongest pitch, transient placement and relative start/end loudness.
+Pitch-class coverage is opt-in through `--key` and `--scale` and cannot distinguish relative
+keys or modes sharing the same notes. Edge results say only that an edge is quiet against
+the track median, not that a fade or sweep exists. One unreadable file does not abort the
+batch but produces a non-zero exit. **Measurements do not judge musical quality.**
 
 ## Prompting
 
-**Prompt style differs by backend** and using the wrong one degrades output badly.
+Prompt style differs by backend, and using the wrong one degrades output badly.
 
-`acestep` and `musicgen` want comma-separated style tags:
+`acestep` and `musicgen` want comma-separated tags. The pipeline supplies ACE-Step's
+`[inst]` sentinel automatically, and ACE-Step is seed-sensitive, so compare seeds rather
+than treating one result as representative.
 
 ```
 lo-fi hip hop, warm rhodes piano, vinyl crackle, 85bpm, instrumental
 ```
 
-`minimax-mlx` wants a **Structured Caption** in prose. This is where its BPM/key/scale
-control lives, and it is the only way to reach those controls:
+`minimax-mlx` wants a **Structured Caption** in prose. This is the only route to its BPM,
+key and scale control:
 
 ```
 Genre: cinematic orchestral, medieval. BPM: 120. Key: D. Scale: Mixolydian.
@@ -179,22 +132,30 @@ four-bar cycle; distant horn swells; soft sweep leading in and out.
 Instrumental only, no vocals.
 ```
 
-Documented caption sections are **Global Metadata** (genre, BPM, key, scale, emotional
-progression, listening scenario, production profile), **Vocal Details**, and
-**Arrangement** (primary/secondary instruments, section-level evolution, groove, bass,
-percussion, textures, spatial effects).
+Its caption sections are **Global Metadata** (genre, BPM, key, scale, emotional progression,
+listening scenario, production profile), **Vocal Details** and **Arrangement** (primary and
+secondary instruments, section-level evolution, groove, bass, percussion, textures, spatial
+effects). State instrumental intent and the lead texture explicitly, anchor only two or
+three instruments, and describe a coherent section-by-section evolution. The source
+references are the
+[model guide](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/README.md),
+[caption rewriter](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/skills/music-caption-rewriter/SKILL.md)
+and [prompt guide](https://github.com/MiniMax-AI/skills/blob/main/skills/minimax-music-gen/references/prompt_guide.md).
 
-Keep prompts focused. Stacking many competing directives tends to average into mush rather
-than blending - see [docs/gotchas.md](docs/gotchas.md).
+The pinned MLX runtime treats duration as an upper bound, so this project suppresses its
+early-stop token until the selected target is reached, then measures the delivered WAV
+independently. MiniMax must deliver at least 90% of the target to pass that audit.
+
+Keep prompts focused. Stacking competing directives averages into mush rather than blending,
+see [docs/gotchas.md](docs/gotchas.md).
 
 ## Reproducibility
 
-Every WAV gets a matching `.json` sidecar recording the prompt, seed, model, applied
-settings, requested duration, measured duration, duration ratio, audit status, frame count,
-sample rate, channel count, file size and peak amplitude. Unsupported controls are `null`.
-The UI measures legacy WAVs directly, because sidecars written before 1.1 stored the target
-under `duration`. It uses the files as its persistent history rather than keeping a separate
-database.
+Every WAV gets a matching `.json` sidecar: prompt, seed, model, applied settings, requested
+and measured duration, duration ratio, audit status, frame count, sample rate, channel
+count, file size and peak amplitude. Unsupported controls are `null`. Sidecars written
+before milestone 1.1 stored the target under `duration`, so the UI measures those WAVs
+directly.
 
 ```bash
 ./.venv/bin/python -m synth.cli gen "<prompt from json>" \
@@ -217,11 +178,9 @@ output/            generated audio + sidecars (gitignored)
 docs/              decisions and gotchas
 ```
 
-Backends whose dependencies conflict run as subprocesses in their own venv - ACE-Step pins
-`transformers==4.50` while MiniMax needs `>=5`, so they can't share one. Adding a model is a
-manifest entry plus a runner implementing the existing JSON job contract. The model then
-appears automatically in the CLI, dropdown, validation and model-specific UI controls.
-The manifest also declares modules used to verify the environment and a finite timeout for
-each subprocess runner. A runner is successful only after its JSON result and readable
-audio file at a fresh path have both been checked. A timed-out runner and its model child
-are terminated together.
+Backends whose dependencies conflict run as subprocesses in their own venv: ACE-Step pins
+`transformers==4.50` while MiniMax needs `>=5`. Adding a model is a manifest entry plus a
+runner implementing the existing JSON job contract, after which it appears automatically in
+the CLI, dropdown, validation and UI controls. A runner succeeds only once both its JSON
+result and a readable audio file at a fresh path have been checked, and a timed-out runner
+is terminated together with its model child.
