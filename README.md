@@ -87,14 +87,18 @@ but slow on Metal (about 15x realtime) and capped at 30 seconds.
 
 The UI dropdown exposes every registered backend and redraws its controls, duration cap,
 licence and presets from the same manifest the API uses. Requests queue serially to avoid
-competing Metal jobs, and pending jobs can be reordered or removed. Queue and history live
-on the local server, so browsers share one state and history rebuilds from `output/`.
-**Refresh history** picks up files generated elsewhere while the UI is open.
+competing Metal jobs, and pending jobs can be reordered or removed. An active render shows
+a labelled percentage estimate before becoming a waveform, and cannot yet be cancelled.
+Finished tracks sit in a newest-first history beside the controls, each waveform playable
+and seekable. Queue and history live on the local server, so browsers share one state and
+history rebuilds from `output/`. **Refresh history** picks up files generated elsewhere
+while the UI is open.
 
 Every completed WAV is checked for a readable, finite, non-silent sample stream and its
-measured duration. A short render stays in history marked `SHORT`, with delivered and target
-lengths shown separately. An unlocked seed is retried once; a fixed seed is not, because it
-would reproduce the same result. An active render cannot yet be cancelled.
+measured duration, on the CLI and in the UI alike. A short render stays in the UI history
+marked `SHORT`, with delivered and target lengths shown separately. **Only the UI retries**,
+and only on an unlocked seed: a fixed seed is left alone because it would reproduce the same
+result. `gen` and `batch` never retry, so there a short render is simply a failure.
 
 ### Analysis
 
