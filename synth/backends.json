@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "default_backend": "minimax-mlx",
   "backends": {
     "acestep": {
@@ -15,7 +15,8 @@
       "output_audit": {
         "minimum_duration_ratio": 0.98,
         "duration_tolerance_seconds": 0.0,
-        "random_seed_retries": 1
+        "random_seed_retries": 1,
+        "duration_contract": "best_effort"
       },
       "runtime": {
         "probe_modules": ["acestep.pipeline_ace_step"],
@@ -64,7 +65,8 @@
       "output_audit": {
         "minimum_duration_ratio": 0.9,
         "duration_tolerance_seconds": 0.0,
-        "random_seed_retries": 1
+        "random_seed_retries": 1,
+        "duration_contract": "best_effort"
       },
       "runtime": {
         "probe_modules": ["mlx_minimax_music3.cli"],
@@ -105,7 +107,8 @@
       "output_audit": {
         "minimum_duration_ratio": 0.98,
         "duration_tolerance_seconds": 0.0,
-        "random_seed_retries": 1
+        "random_seed_retries": 1,
+        "duration_contract": "best_effort"
       },
       "runtime": {
         "probe_modules": ["soundfile", "torch", "transformers"],

@@ -220,6 +220,25 @@ MUTATIONS = [
     ("UI disables the short-output retry", "app.py",
      '        "_duration_retries": backend.output_audit.random_seed_retries if not use_seed else 0,',
      '        "_duration_retries": 0,'),
+    ("exact contract loses its upper bound on delivered duration", "synth/backends.py",
+     '        if self.duration_contract != "exact":\n'
+     "            return math.inf",
+     '        if self.duration_contract != "never":\n'
+     "            return math.inf"),
+    ("core stops rejecting an overlong render", "synth/core.py",
+     "        elif delivered_duration > maximum_duration:\n"
+     '            audit_status = "long"',
+     "        elif False:\n"
+     '            audit_status = "long"'),
+    ("exact contract may also tolerate a short render", "synth/backends.py",
+     "            if ratio != 1:",
+     "            if False:"),
+    ("exact contract may also ask for a retry", "synth/backends.py",
+     "            if retries != 0:",
+     "            if False:"),
+    ("manifest accepts any duration contract string", "synth/backends.py",
+     "        if contract not in DURATION_CONTRACTS:",
+     "        if False:"),
     ("duration policy permits a zero-second floor", "synth/backends.py",
      "        return max(\n"
      "            0.0,\n"

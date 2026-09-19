@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import math
 import os
 import signal
 import shutil
@@ -112,6 +113,78 @@ class GenerateSeam(unittest.TestCase):
         self.assertEqual(sidecar["duration"], 1.5)
         self.assertEqual(sidecar["requested_duration"], 1.5)
         self.assertEqual(sidecar["audit_status"], "passed")
+
+    def _as_exact_backend(self, name="minimax-mlx", tolerance=0.05):
+        """Give a real backend an exact duration contract for one test."""
+        backend = backends.get(name)
+        policy = backends.OutputAuditPolicy.from_manifest(
+            {
+                "minimum_duration_ratio": 1,
+                "duration_tolerance_seconds": tolerance,
+                "random_seed_retries": 0,
+                "duration_contract": "exact",
+            },
+            "probe",
+        )
+        patched = dict(backends.BACKENDS)
+        patched[name] = replace(backend, output_audit=policy)
+        patcher = mock.patch.dict(backends.BACKENDS, patched, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _fixed_length_runner(self, seconds):
+        def runner(backend, job):
+            path = Path(job["output_path"])
+            _write_test_wav(path, frames=int(seconds * 8000))
+            return {"path": str(path), "elapsed_seconds": 1.0}
+
+        return runner
+
+    def test_exact_contract_passes_a_render_inside_its_tolerance(self):
+        self._as_exact_backend()
+        with mock.patch.object(
+            backends, "run_subprocess", self._fixed_length_runner(60.02)
+        ):
+            track = self.gen(model="minimax-mlx", duration=60)
+        self.assertEqual(track.audit_status, "passed")
+
+    def test_exact_contract_rejects_an_overlong_render_instead_of_accepting_it(self):
+        """A best-effort backend would accept anything at or above its ratio, so a
+        model that overshoots its target would pass silently. Under an exact contract
+        that is an integration fault and must fail."""
+        self._as_exact_backend()
+        with mock.patch.object(
+            backends, "run_subprocess", self._fixed_length_runner(75)
+        ):
+            with self.assertRaises(core.OutputAuditError) as raised:
+                self.gen(model="minimax-mlx", duration=60)
+        track = raised.exception.track
+        sidecar = json.loads(track.sidecar_path().read_text(encoding="utf-8"))
+        self.assertTrue(track.path.is_file())
+        self.assertEqual(track.audit_status, "long")
+        self.assertEqual(sidecar["audit_status"], "long")
+        self.assertEqual(track.duration, 75)
+        self.assertEqual(track.requested_duration, 60)
+        self.assertIn("Overlong output retained", str(raised.exception))
+        self.assertIn("maximum accepted", str(raised.exception))
+
+    def test_exact_contract_rejects_a_render_a_hair_under_its_target(self):
+        """The 0.9 ratio that MiniMax needs would wave this through at 54s."""
+        self._as_exact_backend()
+        with mock.patch.object(
+            backends, "run_subprocess", self._fixed_length_runner(59.5)
+        ):
+            with self.assertRaises(core.OutputAuditError) as raised:
+                self.gen(model="minimax-mlx", duration=60)
+        self.assertEqual(raised.exception.track.audit_status, "short")
+
+    def test_best_effort_contract_still_accepts_an_overlong_render(self):
+        """Only an exact contract gains an upper bound; nothing else changes."""
+        with mock.patch.object(
+            backends, "run_subprocess", self._fixed_length_runner(75)
+        ):
+            track = self.gen(model="minimax-mlx", duration=60)
+        self.assertEqual(track.audit_status, "passed")
 
     def test_short_output_is_retained_audited_and_rejected(self):
         def short_runner(backend, job):
@@ -651,7 +724,7 @@ class Registry(unittest.TestCase):
 
     def test_manifest_declares_the_default_and_every_registered_backend(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 3)
+        self.assertEqual(document["schema_version"], 4)
         self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
         self.assertEqual(backends.DEFAULT_BACKEND, "minimax-mlx")
         self.assertEqual(list(document["backends"]), list(backends.BACKENDS))
@@ -682,6 +755,63 @@ class Registry(unittest.TestCase):
                 path.write_text(json.dumps(document), encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, message):
                     backends.load_manifest(path)
+
+    def test_manifest_rejects_an_unknown_duration_contract(self):
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        document["backends"]["minimax-mlx"]["output_audit"]["duration_contract"] = "whenever"
+        path = Path(tempfile.mkdtemp()) / "backends.json"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "must be one of"):
+            backends.load_manifest(path)
+
+    def test_exact_contract_cannot_also_accept_or_retry_a_wrong_length(self):
+        """An exact contract claims the length is guaranteed, so the same manifest
+        entry must not simultaneously describe a short result as acceptable, ask for
+        a retry that can only reproduce the same length, or demand bit-exactness that
+        sample-rate rounding cannot deliver."""
+        base = {
+            "minimum_duration_ratio": 1,
+            "duration_tolerance_seconds": 0.05,
+            "random_seed_retries": 0,
+            "duration_contract": "exact",
+        }
+        self.assertEqual(
+            backends.OutputAuditPolicy.from_manifest(base, "probe").duration_contract,
+            "exact",
+        )
+        cases = (
+            ({"minimum_duration_ratio": 0.9}, "must be 1 under an exact contract"),
+            ({"random_seed_retries": 1}, "must be 0 under an exact contract"),
+            ({"duration_tolerance_seconds": 0}, "must be positive under an exact"),
+        )
+        for override, message in cases:
+            with self.subTest(override=override):
+                with self.assertRaisesRegex(ValueError, message):
+                    backends.OutputAuditPolicy.from_manifest({**base, **override}, "probe")
+
+    def test_only_an_exact_contract_bounds_the_delivered_duration_from_above(self):
+        best_effort = backends.get("minimax-mlx").output_audit
+        self.assertEqual(best_effort.duration_contract, "best_effort")
+        self.assertEqual(best_effort.maximum_duration(240), math.inf)
+        exact = backends.OutputAuditPolicy.from_manifest(
+            {
+                "minimum_duration_ratio": 1,
+                "duration_tolerance_seconds": 0.05,
+                "random_seed_retries": 0,
+                "duration_contract": "exact",
+            },
+            "probe",
+        )
+        self.assertAlmostEqual(exact.maximum_duration(240), 240.05)
+        self.assertAlmostEqual(exact.minimum_duration(240), 239.95)
+
+    def test_every_backend_declares_a_known_duration_contract(self):
+        for backend in backends.BACKENDS.values():
+            with self.subTest(backend=backend.name):
+                self.assertIn(
+                    backend.output_audit.duration_contract, backends.DURATION_CONTRACTS
+                )
 
     def test_new_manifest_backend_gets_runtime_and_ui_settings_without_python_edits(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))

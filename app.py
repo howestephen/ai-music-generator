@@ -399,7 +399,13 @@ def _load_history(output_dir: Path | None = None) -> list[dict]:
                 backend = backends.BACKENDS.get(str(metadata.get("backend")))
                 if backend is not None:
                     minimum = backend.output_audit.minimum_duration(target)
-                    audit_status = "passed" if measured_duration >= minimum else "short"
+                    maximum = backend.output_audit.maximum_duration(target)
+                    if measured_duration < minimum:
+                        audit_status = "short"
+                    elif measured_duration > maximum:
+                        audit_status = "long"
+                    else:
+                        audit_status = "passed"
         except (TypeError, ValueError, OverflowError):
             requested_duration = None
         tracks.append({
@@ -441,7 +447,7 @@ def _history_copy(track: dict) -> str:
         except (TypeError, ValueError, OverflowError):
             pass
     audit_status = track.get("audit_status")
-    if audit_status in {"short", "invalid"}:
+    if audit_status in {"short", "long", "invalid"}:
         details.append(str(audit_status).upper())
     if track["seed"] is not None:
         details.append(f"seed {html.escape(str(track['seed']))}")

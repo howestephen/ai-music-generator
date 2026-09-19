@@ -23,6 +23,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = Path(__file__).with_name("backends.json")
 TERMINATE_GRACE_SECONDS = 5
+# How a backend answers a duration request. "best_effort" models may stop early,
+# so a ratio decides acceptance and a fresh seed may be worth trying. "exact"
+# models are fixed-length by construction, so any deviation is an integration
+# fault rather than a creative miss, and retrying would change nothing.
+DURATION_CONTRACTS = frozenset({"best_effort", "exact"})
 
 
 def _expect_keys(data: dict, required: set[str], location: str) -> None:
@@ -111,6 +116,7 @@ class OutputAuditPolicy:
     minimum_duration_ratio: float
     duration_tolerance_seconds: float
     random_seed_retries: int
+    duration_contract: str
 
     @classmethod
     def from_manifest(cls, data, location: str) -> "OutputAuditPolicy":
@@ -122,12 +128,14 @@ class OutputAuditPolicy:
                 "minimum_duration_ratio",
                 "duration_tolerance_seconds",
                 "random_seed_retries",
+                "duration_contract",
             },
             location,
         )
         ratio = data["minimum_duration_ratio"]
         tolerance = data["duration_tolerance_seconds"]
         retries = data["random_seed_retries"]
+        contract = data["duration_contract"]
         if (
             isinstance(ratio, bool)
             or not isinstance(ratio, (int, float))
@@ -146,7 +154,29 @@ class OutputAuditPolicy:
             )
         if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
             raise ValueError(f"{location}.random_seed_retries must be a non-negative integer")
-        return cls(float(ratio), float(tolerance), retries)
+        if contract not in DURATION_CONTRACTS:
+            raise ValueError(
+                f"{location}.duration_contract must be one of "
+                f"{', '.join(sorted(DURATION_CONTRACTS))}"
+            )
+        # An exact contract is a claim that the runtime delivers the requested length,
+        # so the manifest must not also describe a short result as acceptable or
+        # ask for a retry that could only ever reproduce the same length.
+        if contract == "exact":
+            if ratio != 1:
+                raise ValueError(
+                    f"{location}.minimum_duration_ratio must be 1 under an exact contract"
+                )
+            if retries != 0:
+                raise ValueError(
+                    f"{location}.random_seed_retries must be 0 under an exact contract"
+                )
+            if tolerance <= 0:
+                raise ValueError(
+                    f"{location}.duration_tolerance_seconds must be positive under an "
+                    "exact contract, to absorb sample-rate rounding"
+                )
+        return cls(float(ratio), float(tolerance), retries, contract)
 
     def minimum_duration(self, requested_duration: float) -> float:
         return max(
@@ -154,6 +184,12 @@ class OutputAuditPolicy:
             requested_duration * self.minimum_duration_ratio
             - self.duration_tolerance_seconds,
         )
+
+    def maximum_duration(self, requested_duration: float) -> float:
+        """Upper bound on an acceptable delivery. Only an exact contract has one."""
+        if self.duration_contract != "exact":
+            return math.inf
+        return requested_duration + self.duration_tolerance_seconds
 
 
 @dataclass(frozen=True)
@@ -324,7 +360,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
     if not isinstance(document, dict):
         raise ValueError("backend manifest must contain one JSON object")
     _expect_keys(document, {"schema_version", "default_backend", "backends"}, "manifest")
-    if document["schema_version"] != 3:
+    if document["schema_version"] != 4:
         raise ValueError(f"unsupported backend manifest schema {document['schema_version']!r}")
     raw_backends = document["backends"]
     if not isinstance(raw_backends, dict) or not raw_backends:

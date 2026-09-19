@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 import re
@@ -85,13 +86,26 @@ class Track:
 class OutputAuditError(RuntimeError):
     """A creative asset was retained, but it did not satisfy its output contract."""
 
-    def __init__(self, track: Track, minimum_duration: float):
+    def __init__(
+        self,
+        track: Track,
+        minimum_duration: float,
+        maximum_duration: float = math.inf,
+    ):
         self.track = track
         self.minimum_duration = minimum_duration
+        self.maximum_duration = maximum_duration
+        # Decided from the bounds, not the track's status field, so the message is
+        # right for any caller that constructs this directly.
+        if track.duration > maximum_duration:
+            bound = f"maximum accepted is {maximum_duration:.2f}s"
+            kept = "Overlong output retained"
+        else:
+            bound = f"minimum accepted is {minimum_duration:.2f}s"
+            kept = "Short output retained"
         super().__init__(
             f"{track.backend} returned {track.duration:.2f}s for a "
-            f"{track.requested_duration:g}s target; minimum accepted is "
-            f"{minimum_duration:.2f}s. Short output retained at {track.path}"
+            f"{track.requested_duration:g}s target; {bound}. {kept} at {track.path}"
         )
 
 
@@ -229,7 +243,13 @@ def generate(
         delivered_duration = audio_audit.duration_seconds
         duration_ratio = delivered_duration / float(duration)
         minimum_duration = backend.output_audit.minimum_duration(float(duration))
-        audit_status = "passed" if delivered_duration >= minimum_duration else "short"
+        maximum_duration = backend.output_audit.maximum_duration(float(duration))
+        if delivered_duration < minimum_duration:
+            audit_status = "short"
+        elif delivered_duration > maximum_duration:
+            audit_status = "long"
+        else:
+            audit_status = "passed"
 
         track = Track(
             path=path,
@@ -255,7 +275,7 @@ def generate(
         )
         track.write_sidecar()
         if audit_status != "passed":
-            raise OutputAuditError(track, minimum_duration)
+            raise OutputAuditError(track, minimum_duration, maximum_duration)
         return track
     finally:
         reservation.unlink(missing_ok=True)

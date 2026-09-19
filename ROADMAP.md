@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-18
+updated: 2026-09-19
 ---
 
 # ROADMAP
@@ -39,8 +39,8 @@ they are never buried in a chat.
 | 0.3 | Model selector and persistent UI history | `done` | The UI was locked to ACE-Step and replaced the visible result after every generation. It now selects any registered backend, adapts controls and presets to that backend, and rebuilds a newest-first playable history from the existing WAV files and sidecars. Landed 2026-09-15. Button-level generation progress followed, then the balanced history and fitted waveforms. UI helpers are covered in `synth/tests.py` | none | 0.2 |
 | 0.3.1 | Serial UI render queue | `done` | Submissions become reorderable and removable pending cards immediately while one worker renders at a time. The button is released once queued; the active card shows a labelled estimate because runners expose only start and finish. Queue and history state is server-owned across browsers. A process-wide lock guarantees concurrent first access creates one worker. Independently re-audited 2026-09-16 | none | 0.3 |
 | 0.3.2 | Manifest-driven UI controls | `done` | `synth/backends.json` is the versioned source of truth for model runtime, controls, licence and prompting metadata. Gradio's static schema accepts the union of its contracts; model selection narrows visible controls; the API handler and core enforce the selected backend. MiniMax reaches 300 seconds, ACE-Step remains at 240 and MusicGen at 30. Unsupported controls are hidden. A new subprocess model needs one manifest entry and its JSON runner adapter, then appears automatically in the CLI and UI. Completed 2026-09-16; 58 unit tests, 33 mutations and a manual fake-queue endpoint smoke test cover the original 270-second failure | none | 0.3.1 |
-| 0.4 | Harden the runner seam | `done` | Manifest probes import the modules each backend actually invokes. Subprocesses use explicit UTF-8 and finite nested timeouts; process-group cleanup prevents an orphaned GPU child. Malformed final JSON, an unexpected path, invalid timing, an existing path and unreadable or empty audio all fail loudly. Collision-safe names prevent same-second overwrites. Duration minimums come from each model contract. Completed 2026-09-16 | none | 0.2 |
-| 0.5 | Make `analyze.py` honest | `done` | Optional pitch-class collection coverage replaces the hardcoded D Mixolydian score and cannot distinguish modes sharing notes. Strongest chroma is a peak, not a tonic. Quiet edge flags do not claim a sweep or fade, and short edge windows never become empty. Silent or non-finite tonal and onset measurements stay unscored; no eligible hit boundary displays `--`; warnings remain visible; one bad file does not abort the batch but returns failure. Completed 2026-09-16 | none | 0.1 |
+| 0.4 | Harden the runner seam | `done` | Probes import the modules each backend really invokes. Subprocesses use explicit UTF-8, finite nested timeouts and process-group cleanup, so no orphaned GPU child survives. Malformed JSON, an unexpected or existing path, invalid timing and unreadable audio all fail loudly. Completed 2026-09-16 | none | 0.2 |
+| 0.5 | Make `analyze.py` honest | `done` | Optional pitch-class coverage replaces the hardcoded D Mixolydian score and cannot separate modes sharing notes. Strongest chroma is a peak, not a tonic. Quiet edges no longer claim a fade. Silent or non-finite measurements stay unscored, warnings stay visible, and one bad file fails the run without aborting it. Completed 2026-09-16 | none | 0.1 |
 | 0.6 | Docs match the code | `done` | README now recreates the locked main environment and pins the isolated MiniMax package to the tested source commit. Environment checks and model probes are documented. Gotchas now describe the actual MLX package conversion boundary and name each XET setting. Completed and independently re-audited 2026-09-16 | none | 0.2 |
 
 ## Phase 1: Output acceptance
@@ -52,6 +52,16 @@ they are never buried in a chat.
 |---|---|---|---|---|---|
 | 1.1 | Duration and basic audio audit | `done` | MiniMax accepted 16.76–33.59 second files for 240-second requests and 41.56 seconds for a 300-second request, while sidecars and the UI displayed the target as measured. Every WAV is now audited; requested and delivered facts are separate; short assets remain visible but fail acceptance; an unlocked UI seed retries once. Completed and independently re-audited 2026-09-16 | none | 0.4 |
 | 1.2 | Enforce MiniMax target duration | `done` | The pinned runtime's duration flag only capped frames and accepted an end token at 16.7 seconds for a 300-second request. Its project-owned wrapper now suppresses that token until the target frame count, while the separate WAV audit still verifies the delivered file. A real render with the known early-stop seed delivered 20.016 seconds for a 20-second target. Completed and independently audited 2026-09-17; 104 unit tests and all 76 mutations pass | none | 1.1 |
+
+## Phase 2: Any model, any length
+
+- Status: `in_progress`
+- Goal: adding or upgrading a model is a manifest entry plus a runner, and a model that
+  delivers an exact length is not policed as though it might stop early
+
+| # | Title | Status | Why it matters | Spec | Deps |
+|---|---|---|---|---|---|
+| 2.1 | Per-backend duration contract | `done` | Acceptance assumed every model may stop early, so a fixed-length model was judged by a ratio it cannot miss and an overshoot passed silently. A backend now declares `best_effort` or `exact`. The sample-stream audit still runs everywhere; only the duration policy varies. An exact contract gains an upper bound, and the manifest refuses to pair it with a short-render tolerance or a retry. Landed 2026-09-19 | none | 1.2 |
 
 ## Deferred ideas
 
@@ -75,9 +85,9 @@ they are never buried in a chat.
 
 ## Current next step
 
-- Current milestone: Phase 1.2 complete, independently audited and merged to main on
-  2026-09-18, pending owner review
-- Then: agree the next product or research phase
+- Current milestone: Phase 2, expanding the model set on owner instruction (2026-09-19):
+  update models that have newer versions and add good ones the project lacks
+- Then: Stable Audio 3 and ACE-Step 1.5 as backends
 - Phase 1.2 exit gates: the runner passes one target as both minimum and maximum; a real
   render reaches its requested duration; unit tests, mutations and validators pass;
   installed model probes pass; independent audit is clean
