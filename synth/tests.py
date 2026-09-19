@@ -114,6 +114,26 @@ class GenerateSeam(unittest.TestCase):
         self.assertEqual(sidecar["requested_duration"], 1.5)
         self.assertEqual(sidecar["audit_status"], "passed")
 
+    def test_manifest_runner_options_reach_the_runner_job(self):
+        """Loading them into the registry is not enough. If core drops them the
+        runner silently falls back to a default checkpoint, which is invisible in
+        the audio and in the sidecar."""
+        backend = backends.get("minimax-mlx")
+        patched = dict(backends.BACKENDS)
+        patched["minimax-mlx"] = replace(
+            backend, runner_options=(("decoder", "same-s"), ("dit", "sm-music")),
+        )
+        with mock.patch.dict(backends.BACKENDS, patched, clear=True):
+            self.gen(model="minimax-mlx")
+        self.assertEqual(
+            self.stub.last_job["options"], {"dit": "sm-music", "decoder": "same-s"}
+        )
+
+    def test_a_backend_without_runner_options_still_gets_the_key(self):
+        """The runner reads job['options'], so the key must always be present."""
+        self.gen(model="minimax-mlx")
+        self.assertEqual(self.stub.last_job["options"], {})
+
     def _as_exact_backend(self, name="minimax-mlx", tolerance=0.05):
         """Give a real backend an exact duration contract for one test."""
         backend = backends.get(name)
