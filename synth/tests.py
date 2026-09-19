@@ -134,6 +134,68 @@ class GenerateSeam(unittest.TestCase):
         self.gen(model="minimax-mlx")
         self.assertEqual(self.stub.last_job["options"], {})
 
+    def _init_wav(self) -> Path:
+        source = self.out / "source.wav"
+        _write_test_wav(source, frames=60 * 8000)
+        return source
+
+    def test_inpaint_request_reaches_the_runner_intact(self):
+        source = self._init_wav()
+        patched = dict(backends.BACKENDS)
+        patched["minimax-mlx"] = replace(
+            backends.get("minimax-mlx"), supports_editing=True
+        )
+        with mock.patch.dict(backends.BACKENDS, patched, clear=True):
+            self.gen(
+                model="minimax-mlx", duration=60,
+                init_audio=source, inpaint_range=(32.0, 48.0),
+            )
+        job = self.stub.last_job
+        self.assertEqual(job["init_audio"], str(source))
+        self.assertEqual(job["inpaint_range"], [32.0, 48.0])
+
+    def test_a_backend_that_cannot_edit_refuses_instead_of_ignoring(self):
+        """Silently dropping a control the model cannot honour is the exact fault
+        milestone 0.2 fixed. An edit aimed at MiniMax must fail loudly."""
+        source = self._init_wav()
+        self.assertFalse(backends.get("minimax-mlx").supports_editing)
+        for kwargs in (
+            {"init_audio": source},
+            {"inpaint_range": (1.0, 2.0)},
+            {"init_audio": source, "inpaint_range": (1.0, 2.0)},
+        ):
+            with self.subTest(kwargs=sorted(kwargs)):
+                with self.assertRaisesRegex(ValueError, "cannot edit existing audio"):
+                    self.gen(model="minimax-mlx", duration=60, **kwargs)
+
+    def test_edit_arguments_are_validated_before_any_render(self):
+        source = self._init_wav()
+        patched = dict(backends.BACKENDS)
+        patched["minimax-mlx"] = replace(
+            backends.get("minimax-mlx"), supports_editing=True
+        )
+        cases = (
+            ({"inpaint_range": (1.0, 2.0)}, "needs init_audio"),
+            ({"init_audio": self.out / "absent.wav"}, "not a file"),
+            ({"init_audio": source, "inpaint_range": (10.0, 10.0)}, "increasing span"),
+            ({"init_audio": source, "inpaint_range": (-1.0, 5.0)}, "increasing span"),
+            ({"init_audio": source, "inpaint_range": (10.0, 90.0)}, "past the"),
+            ({"init_audio": source, "init_noise_level": -1}, "non-negative"),
+            ({"init_noise_level": 0.5}, "needs init_audio"),
+        )
+        with mock.patch.dict(backends.BACKENDS, patched, clear=True):
+            for kwargs, message in cases:
+                with self.subTest(kwargs=sorted(kwargs)):
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.gen(model="minimax-mlx", duration=60, **kwargs)
+
+    def test_a_plain_render_carries_no_edit_fields(self):
+        self.gen(model="minimax-mlx", duration=5)
+        job = self.stub.last_job
+        self.assertIsNone(job["init_audio"])
+        self.assertIsNone(job["inpaint_range"])
+        self.assertIsNone(job["init_noise_level"])
+
     def _as_exact_backend(self, name="minimax-mlx", tolerance=0.05):
         """Give a real backend an exact duration contract for one test."""
         backend = backends.get(name)
@@ -744,7 +806,7 @@ class Registry(unittest.TestCase):
 
     def test_manifest_declares_the_default_and_every_registered_backend(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 5)
+        self.assertEqual(document["schema_version"], 6)
         self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
         self.assertEqual(backends.DEFAULT_BACKEND, "stable-audio-medium")
         self.assertEqual(list(document["backends"]), list(backends.BACKENDS))
@@ -1005,6 +1067,19 @@ class Registry(unittest.TestCase):
                 self.assertEqual(backend.output_audit.duration_contract, "exact")
                 self.assertEqual(backend.output_audit.random_seed_retries, 0)
                 self.assertFalse(backend.supports_lyrics)
+
+    def test_only_stable_audio_declares_editing_support(self):
+        editable = {n for n, b in backends.BACKENDS.items() if b.supports_editing}
+        self.assertEqual(editable, {"stable-audio-sm", "stable-audio-medium"})
+
+    def test_manifest_rejects_a_non_boolean_editing_flag(self):
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        document["backends"]["minimax-mlx"]["supports_editing"] = "yes"
+        path = Path(tempfile.mkdtemp()) / "backends.json"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "supports_editing must be true or false"):
+            backends.load_manifest(path)
 
     def test_every_declared_runner_script_exists(self):
         for backend in backends.BACKENDS.values():

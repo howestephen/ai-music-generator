@@ -153,6 +153,9 @@ def generate(
     lyrics: str | None = None,
     output_dir: Path | None = None,
     model: str = DEFAULT_MODEL,
+    init_audio: Path | str | None = None,
+    init_noise_level: float | None = None,
+    inpaint_range: tuple[float, float] | None = None,
 ) -> Track:
     """Generate one track.
 
@@ -167,6 +170,12 @@ def generate(
 
     `seed` is recorded in the sidecar so a track you like can be reproduced or
     nudged one parameter at a time. Omit it for a random one.
+
+    `init_audio` starts from an existing WAV instead of noise. With `inpaint_range`
+    (start, end in seconds) only that span is regenerated and the rest is preserved,
+    which is the one route to bar-accurate structural edits. `init_noise_level` sets
+    how far a plain audio-to-audio pass may travel from the original. A backend that
+    cannot edit refuses all three rather than ignoring them.
     """
     if not prompt.strip():
         raise ValueError("prompt is empty")
@@ -192,6 +201,43 @@ def generate(
     if lyrics is None:
         lyrics = backend.instrumental_tag
 
+    edit_request = init_audio is not None or inpaint_range is not None
+    if edit_request and not backend.supports_editing:
+        raise ValueError(
+            f"{backend.name} cannot edit existing audio; it has no init-audio or "
+            "inpaint support"
+        )
+    if init_audio is not None:
+        init_audio = Path(init_audio)
+        if not init_audio.is_file():
+            raise ValueError(f"init audio is not a file: {init_audio}")
+    elif inpaint_range is not None:
+        raise ValueError("inpaint_range needs init_audio to inpaint into")
+    if init_noise_level is not None:
+        if init_audio is None:
+            raise ValueError("init_noise_level needs init_audio")
+        if not math.isfinite(init_noise_level) or init_noise_level < 0:
+            raise ValueError(
+                f"init_noise_level must be a non-negative number (got {init_noise_level!r})"
+            )
+    if inpaint_range is not None:
+        try:
+            span_start, span_end = (float(value) for value in inpaint_range)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"inpaint_range must be two numbers (got {inpaint_range!r})") from exc
+        if not (math.isfinite(span_start) and math.isfinite(span_end)):
+            raise ValueError("inpaint_range must be finite")
+        if span_start < 0 or span_end <= span_start:
+            raise ValueError(
+                f"inpaint_range must be an increasing span inside the track "
+                f"(got {span_start:g} to {span_end:g})"
+            )
+        if span_end > float(duration):
+            raise ValueError(
+                f"inpaint_range ends at {span_end:g}s, past the {duration:g}s target"
+            )
+        inpaint_range = (span_start, span_end)
+
     output_dir = Path(output_dir) if output_dir else OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -214,6 +260,9 @@ def generate(
                 "guidance": guidance,
                 "output_path": str(path),
                 "options": dict(backend.runner_options),
+                "init_audio": str(init_audio) if init_audio else None,
+                "init_noise_level": init_noise_level,
+                "inpaint_range": list(inpaint_range) if inpaint_range else None,
             })
             elapsed = result.get("elapsed_seconds", time.time() - started)
             audio_audit = result.get("_audio_audit")

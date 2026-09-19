@@ -223,6 +223,9 @@ class Backend:
     guidance: NumericControl | None
     output_audit: OutputAuditPolicy
     prompt_style: str = "tags"  # see PROMPT_STYLES
+    # Can regenerate part of an existing track (init audio, inpaint range). Asking a
+    # backend without it would be a silent no-op, which milestone 0.2 already fixed.
+    supports_editing: bool = False
     instrumental_tag: str = "[inst]"
     supports_lyrics: bool = True
     probe_modules: tuple[str, ...] = ()
@@ -239,7 +242,7 @@ class Backend:
             {
                 "model_id", "venv", "runner", "licence", "notes", "dtype",
                 "prompt_style", "instrumental_tag", "supports_lyrics", "runtime",
-                "controls", "output_audit",
+                "controls", "output_audit", "supports_editing",
             },
             f"backends.{name}",
         )
@@ -305,6 +308,8 @@ class Backend:
         )
         if duration is None or duration.maximum is None:
             raise ValueError(f"backends.{name}.controls.duration requires a maximum")
+        if not isinstance(data["supports_editing"], bool):
+            raise ValueError(f"backends.{name}.supports_editing must be true or false")
         if data["prompt_style"] not in PROMPT_STYLES:
             raise ValueError(
                 f"backends.{name}.prompt_style must be one of "
@@ -329,6 +334,7 @@ class Backend:
                 data["output_audit"], f"backends.{name}.output_audit",
             ),
             prompt_style=data["prompt_style"],
+            supports_editing=data["supports_editing"],
             instrumental_tag=data["instrumental_tag"],
             supports_lyrics=data["supports_lyrics"],
             probe_modules=tuple(probe_modules),
@@ -390,7 +396,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
     if not isinstance(document, dict):
         raise ValueError("backend manifest must contain one JSON object")
     _expect_keys(document, {"schema_version", "default_backend", "backends"}, "manifest")
-    if document["schema_version"] != 5:
+    if document["schema_version"] != 6:
         raise ValueError(f"unsupported backend manifest schema {document['schema_version']!r}")
     raw_backends = document["backends"]
     if not isinstance(raw_backends, dict) or not raw_backends:

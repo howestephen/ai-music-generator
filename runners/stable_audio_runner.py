@@ -71,6 +71,19 @@ def main() -> int:
     if job.get("guidance") is not None:
         cmd += ["--cfg", str(float(job["guidance"]))]
 
+    # Editing an existing track. `--inpaint-range` regenerates only that span and
+    # keeps the rest, which is the one route this model has to bar-accurate
+    # structural control; without it, init audio is a plain audio-to-audio pass.
+    init_audio = job.get("init_audio")
+    if init_audio:
+        cmd += ["--init-audio", str(init_audio)]
+        if job.get("init_noise_level") is not None:
+            cmd += ["--init-noise-level", str(float(job["init_noise_level"]))]
+        span = job.get("inpaint_range")
+        if span:
+            start, end = (float(value) for value in span)
+            cmd += ["--inpaint-range", f"{start:g},{end:g}"]
+
     try:
         proc = subprocess.run(
             cmd,
