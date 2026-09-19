@@ -18,6 +18,7 @@ a larger studio engine, and other experiments.
 |---|---|
 | [docs/decisions.md](docs/decisions.md) | Why the stack looks the way it does |
 | [docs/gotchas.md](docs/gotchas.md) | Setup traps, symptoms, and fixes |
+| [docs/prompting.md](docs/prompting.md) | How each backend wants to be asked |
 | [CLAUDE.md](CLAUDE.md) | Working rules for AI assistance in this repo |
 
 ## Installation
@@ -66,19 +67,19 @@ Three backends behind one CLI, each in whatever environment it needs.
 
 | Backend | Model | Max | Prompt style | Licence |
 |---|---|---|---|---|
-| `minimax-mlx` | MiniMax Music 3 (MLX 8-bit, default) | 300s | caption | MiniMax Community |
+| `stable-audio-medium` | Stable Audio 3 medium (1.4B DiT, default) | 380s | description | Stability Community |
 | `stable-audio-sm` | Stable Audio 3 small (50M DiT) | 120s | description | Stability Community |
-| `stable-audio-medium` | Stable Audio 3 medium (1.4B DiT) | 380s | description | Stability Community |
+| `minimax-mlx` | MiniMax Music 3 (MLX 8-bit) | 300s | caption | MiniMax Community |
 | `acestep` | ACE-Step v1 3.5B | 240s | tags | Apache-2.0 |
 | `musicgen` | MusicGen stereo-large | 30s | tags | **CC-BY-NC, non-commercial** |
 
-The two `stable-audio` backends are fixed-length latent diffusion at 44.1 kHz stereo,
-trained on licensed data, and are the only ones whose delivered length is exact by
-construction rather than audited against a tolerance. `minimax-mlx` alone has explicit
-BPM, key and scale control, and runs through MLX/Metal.
-`acestep` is roughly realtime but song-form and weak at orchestral and cinematic material,
-where it drifts toward rock instrumentation. `musicgen` is capable but slow on Metal (about
-15x realtime) and capped at 30 seconds.
+The `stable-audio` backends are fixed-length latent diffusion at 44.1 kHz stereo, trained
+on licensed data, and the only ones whose delivered length is exact by construction rather
+than audited against a tolerance. They have no key or scale control: the model conditions
+on text and duration alone. `minimax-mlx` alone has explicit BPM, key and scale, through
+its caption.
+`acestep` is roughly realtime but song-form and weak at orchestral material. `musicgen` is
+capable but slow on Metal and capped at 30 seconds.
 
 ## Usage
 
@@ -105,8 +106,10 @@ where it drifts toward rock instrumentation. `musicgen` is capable but slow on M
 | `--lyrics` | Defaults to the backend's instrumental sentinel; refused where there is no lyrics channel |
 | `--json` | Machine-readable output, one JSON object per line (`gen` only) |
 
-The UI dropdown exposes every backend and redraws its controls, cap, licence and presets
-from the manifest. Requests queue serially to avoid competing Metal jobs; pending jobs can
+The UI dropdown exposes every backend and redraws its controls, cap and licence from the
+manifest. A **Genre** dropdown writes the prompt for you in the selected backend's own
+style, drawing on that genre's vocabulary and typical tempo; **Regenerate** gives another
+variation, and the tempo control is written into the prompt. Requests queue serially to avoid competing Metal jobs; pending jobs can
 be reordered or removed, an active one shows a labelled percentage estimate and cannot yet
 be cancelled. Finished tracks sit in a newest-first history, each waveform playable and
 seekable. Queue and history live on the server, so browsers share one state and history
@@ -131,45 +134,18 @@ sharing notes. A quiet edge means only that, not that a fade exists.
 
 ## Prompting
 
-Prompt style differs by backend, and using the wrong one degrades output badly.
+Prompt style differs by backend, and the wrong one degrades output badly. The UI's
+**Genre** dropdown writes the right style for you; **[docs/prompting.md](docs/prompting.md)**
+is the full reference for writing them by hand.
 
-`acestep` and `musicgen` want comma-separated tags. The pipeline supplies ACE-Step's
-`[inst]` sentinel, and ACE-Step is seed-sensitive, so compare seeds rather than treating
-one result as representative.
-
-```
-lo-fi hip hop, warm rhodes piano, vinyl crackle, 85bpm, instrumental
-```
-
-`minimax-mlx` wants a **Structured Caption** in prose. This is the only route to its BPM,
-key and scale control:
-
-```
-Genre: cinematic orchestral, medieval. BPM: 120. Key: D. Scale: Mixolydian.
-Mood: serious, restrained, building subtly. Listening scenario: background score
-under voiceover. Arrangement: low cello ostinato carries the pulse; frame drum on a
-four-bar cycle; distant horn swells; soft sweep leading in and out.
-Instrumental only, no vocals.
-```
-
-Its sections are **Global Metadata** (genre, BPM, key, scale, emotional progression,
-listening scenario, production profile), **Vocal Details** and **Arrangement**. State
-instrumental intent explicitly, anchor two or three instruments, and describe a
-section-by-section evolution. Sources: the
-[model guide](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/README.md),
-[caption rewriter](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/skills/music-caption-rewriter/SKILL.md)
-and [prompt guide](https://github.com/MiniMax-AI/skills/blob/main/skills/minimax-music-gen/references/prompt_guide.md).
-
-`stable-audio-*` wants one plain sentence, not tags and not a caption:
-`a slow cinematic build, low strings and a rising drone, no drums`.
+In short: `stable-audio-*` wants AudioSparx tags and a plain sentence, `minimax-mlx` wants a
+Structured Caption (its only route to BPM, key and scale), and `acestep` and `musicgen` want
+comma-separated tags.
 
 The pinned MLX runtime treats duration as an upper bound, so this project suppresses its
 early-stop token until the target is reached, then measures the delivered WAV. MiniMax must
 deliver at least 90% of the target to pass. Stable Audio needs none of this: it is
 fixed-length, so its contract is exact and it is never retried.
-
-Keep prompts focused. Stacking competing directives averages into mush rather than blending,
-see [docs/gotchas.md](docs/gotchas.md).
 
 ## Reproducibility
 

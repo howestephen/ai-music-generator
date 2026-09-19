@@ -12,6 +12,34 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-19 - The UI polls from its own JS, through the queue
+
+**Decided:** the queue and history panels refresh by a hidden button that this app's
+JavaScript clicks once a second, and every handler feeding a `@gr.render` block runs
+through Gradio's queue rather than with `queue=False`.
+
+**Why:** `gr.Timer` does not fire at all in this Gradio build, proved with a Blocks app
+containing nothing but a Timer. Separately, `@gr.render` does not re-run for an event
+dispatched with `queue=False`, so the panels updated their state and never redrew. Together
+these made a completed render look like a crashed one.
+
+**Would revisit if:** a Gradio upgrade makes `gr.Timer` fire, or `@gr.render` gains
+re-execution for unqueued events. Both are worth retesting with the throwaway probe rather
+than assumed.
+
+---
+
+## 2026-09-19 - Prompting guidance lives in docs/, not the README
+
+**Decided:** per-backend prompt shapes, tags and worked examples moved to
+[prompting.md](prompting.md); the README keeps a three-line summary and a link.
+
+**Why:** the README is a visitor-facing overview with a word budget, and it now carries five
+backends, three prompt styles and three install procedures. The prompting detail is
+reference material consulted while writing a prompt, which is what `docs/` is for.
+
+**Would revisit if:** the backend set shrinks enough that the detail fits back in the README.
+
 ## 2026-09-19 - Stable Audio 3 runs on Stability's own MLX runtime
 
 **Decided:** the `stable-audio-sm` and `stable-audio-medium` backends drive Stability's

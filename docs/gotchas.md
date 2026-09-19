@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-16
+updated: 2026-09-19
 ---
 
 # Gotchas
@@ -40,6 +40,64 @@ runs, then dies writing the file - the most annoying possible place.
 **Cause:** current torchaudio delegates `save()` to TorchCodec.
 
 **Fix:** `uv pip install torchcodec`.
+
+### Gradio: a panel that silently stops updating
+
+**Symptom:** the queue card freezes at `0s elapsed` while the render completes
+normally, and stays on screen after the queue has emptied. Looks exactly like a
+crashed render. Cost hours on 2026-09-19.
+
+**Causes, both real and independent:**
+
+- **`gr.Timer` never fires** in this Gradio build. A Blocks app containing nothing
+  but a Timer does not tick either, queued or not. Do not rely on it; drive polling
+  from this app's own JS, which does run (see `startPolling` in `UI_JS`).
+- **`@gr.render` does not re-run for an event dispatched with `queue=False`.** The
+  state updates and the render never fires. Every handler writing to a component
+  that feeds a render block must go through the queue. A test in `synth/tests.py`
+  now fails if one does not.
+
+**How to tell them apart:** add a plain `gr.HTML` to the handler's outputs and print
+a timestamp into it. If that element updates while the render block does not, the
+poll is fine and the render is the problem. Reading the code will not show this.
+
+### Gradio copies every file you hand `gr.Audio`
+
+**Symptom:** the server stalls as track history grows; audio URLs point at
+`/T/gradio/<hash>/...` rather than at `output/`.
+
+**Cause:** `gr.Audio(value=path)` postprocesses by copying the file into Gradio's
+temp cache, and the whole history re-renders whenever a render finishes. A dozen
+67 MB tracks copied about a gigabyte per update.
+
+**Fix:** render a plain `<audio>` element pointing at `/gradio_api/file=<abs path>`.
+`launch(allowed_paths=[output])` already lets the browser fetch the real file, with
+range requests intact, so nothing needs copying.
+
+### Gradio serves no file you have not allowed
+
+**Symptom:** every player in the UI is silent. The WAV on disk is valid, and the
+server logs nothing.
+
+**Cause:** Gradio serves only declared paths. Without `allowed_paths`, a request for
+a generated track returns 403 with `File not allowed`, which the audio element shows
+as silence.
+
+**Fix:** `launch(allowed_paths=[str(core.OUTPUT_DIR)])`. Verify with a range request:
+it should return 206 and `audio/x-wav`, not 403.
+
+### A render estimate must be fitted, not assumed
+
+**Symptom:** a job that finishes in 26 seconds crawls at 5% and reads as hung.
+
+**Cause:** render cost is a fixed overhead plus a small per-second rate, not a
+multiple of track length. A 380s Stable Audio render takes less wall time than a
+180s one did. Separately, a backend's first render also pays for a multi-gigabyte
+weight download, and averaging that in as render time poisons every later estimate.
+
+**Fix:** fit `overhead + rate * duration` from the most recent renders only, and keep
+measured per-backend fallbacks. Elapsed seconds are shown next to the percentage so a
+wrong estimate reads as wrong rather than as hung.
 
 ### Hugging Face Xet backend hangs silently
 

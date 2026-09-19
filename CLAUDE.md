@@ -64,7 +64,7 @@ Every top-level directory is declared here and in `top_dirs` of
 | `briefs/` | prompt sets per project |
 | `prompts/` | default batch prompts |
 | `output/` | generated audio and sidecars, gitignored |
-| `docs/` | `decisions.md` and `gotchas.md`; a new doc here uses a lowercase-dash name |
+| `docs/` | `decisions.md`, `gotchas.md`, `prompting.md`; a new doc uses a lowercase-dash name |
 | `specs/` | milestone specs, named `YYYY-MM-DD-topic.md` |
 | `handoffs/` | cross-tool work items, `YYYY-MM-DD-topic.md`, from `handoffs/TEMPLATE.md` |
 | `scripts/` | `validate.py` (gate shim), `bootstrap.sh`, `validate.config.json` |
