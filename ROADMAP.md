@@ -17,11 +17,10 @@ they are never buried in a chat.
 
 ## Project summary
 
-- Goal: describe music in words, render it locally on Apple Silicon, and keep the
-  architecture easy to add models to
+- Goal: describe music in words, render it locally on Apple Silicon, and keep adding
+  models cheap
 - Current phase: Phase 1.2 complete; next direction pending owner review
-- Biggest known risk: forced long MiniMax renders still need listening assessment for
-  musical structure and quality across the full duration
+- Biggest known risk: no listening assessment has been done on any output
 - Default backend: `minimax-mlx` (owner decision, resolved 2026-09-17)
 
 ## Phase 0: Retrofit and remediation
@@ -56,9 +55,8 @@ they are never buried in a chat.
 ## Phase 2: Any model, any length
 
 - Status: `in_progress`
-- Goal: adding or upgrading a model is a manifest entry plus a runner, a model that
-  delivers an exact length is not policed as though it might stop early, and the UI
-  tells the truth about what is happening. Detail in git and
+- Goal: adding a model is a manifest entry plus a runner, an exact-length model is not
+  policed as though it might stop early, and the UI tells the truth. Detail in
   [docs/decisions.md](docs/decisions.md), traps in [docs/gotchas.md](docs/gotchas.md)
 
 | # | Title | Status | Landed |
@@ -74,31 +72,37 @@ they are never buried in a chat.
 | 2.10 | Prompts vary in shape and vocabulary, not just adjectives | `done` | 2026-09-19 |
 
 | 2.11 | Menus compose the prompt | `done` | Prompting meant writing prose into a box. Genre, tempo, mood, voice, instruments and character are now controls, with a keywords box folded in, and any change recomposes the prompt in the selected backend's own style. Picking a genre also sets its typical tempo. Lyrics appear only where a backend has a channel for them, and words aimed at one that cannot sing are refused rather than dropped | none | 2.10 |
-| 2.9 | Section editing through inpainting | `in_progress` | Stable Audio has no section tokens, so prose is the only pre-generation structure control; regenerating a span of a finished track is the real mechanism, and bars convert to seconds once BPM is known. Core, manifest and runner carry init audio and an inpaint range, refused loudly where unsupported; proven on a real render. A **Rework a section** panel picks a track, tempo, start bar and length. New track and Rework are now separate tabs, and a rework accepts an uploaded file as well as a history pick, converting an odd sample rate or an MP3 rather than refusing it. Still to do: exposing the noise level for whole-track remixing, and a structure builder | none | 2.8 |
+| 2.9 | Section editing through inpainting | `in_progress` | Stable Audio has no section tokens, so prose is the only pre-generation structure control; regenerating a span of a finished track is the real mechanism, and bars convert to seconds once BPM is known. Core, manifest and runner carry init audio and an inpaint range, refused loudly where unsupported, proven on a real render. New track and Rework are separate tabs, and a rework takes an uploaded file as well as a history pick, converting an odd sample rate or an MP3 rather than refusing it. Still to do: the noise level for whole-track remixing, and a structure builder | none | 2.8 |
+
+## Phase 3: Design pass
+
+- Status: `planned`, and it comes before the stem and vocal work below
+- Goal: the UI is functional and plain, and has grown a model picker, genre and parameter
+  menus, a queue, a history and a rework tab. Design it rather than letting it accrete
+- Owner instruction 2026-09-19: run this with Fable for the product design work
+
+| # | Title | Status | Why it matters |
+|---|---|---|---|
+| 3.1 | Product design pass on the whole surface | `planned` | Visual hierarchy, grouping and naming across generate, queue, history and rework, so the growing control set stays readable. Phone layout is part of the brief, not an afterthought |
+| 3.2 | Rebuild the UI against that design | `planned` | Gradio constrains layout, so this is custom CSS and JS over its components, as the queue cards already are. Read [docs/gotchas.md](docs/gotchas.md) first: `gr.Timer` never fires here and `@gr.render` will not re-run for a `queue=False` event; a redesign can silently reintroduce both |
 
 ## Deferred ideas
 
 - Runner diagnostics (`device`, `sampling_rate`, `load_seconds`) into the sidecar.
-  Why deferred: a second sidecar format change; do it with 0.2 or not at all.
-  Trigger: a track whose device is in doubt
-- Runtime notice when generating with the CC-BY-NC MusicGen backend. Why deferred:
-  the licence is already stated in the registry, README and decisions. Trigger: any
-  output leaving personal use
-- Research current local music models and alternative generation architectures. Compare
-  Apple Silicon support, licence, duration, controllability, genre evidence, runtime and
-  integration cost before proposing additions. Trigger: after Phase 0 owner review
-- Deliver vocals and instruments as separate audio files. Compare the routes before
-  building, rather than assuming one: ACE-Step 1.5 lists Track Separation and Vocal2BGM
-  natively (MIT); Demucs runs locally and works on any audio including tracks already in
-  `output/`; LALAL.AI is installed on Stephen's Mac with paid credit, so a file handed to
-  it is a third route with no install cost. Whatever wins, a stem is a generated asset and
-  needs its own sidecar and audit. Why deferred: nothing needs an isolated stem yet.
-  Trigger: the first track that does
+  Why deferred: a second sidecar format change. Trigger: a track whose device is in doubt
+- Runtime notice on the CC-BY-NC MusicGen backend. Why deferred: the licence is already
+  stated in the registry, README and decisions. Trigger: any output leaving personal use
+- Research further local music models. Compare Apple Silicon support, licence, duration,
+  controllability, genre evidence, runtime and integration cost before proposing any
+- Deliver vocals and instruments as separate audio files. Compare the routes rather than
+  assuming one: ACE-Step 1.5 lists Track Separation and Vocal2BGM natively (MIT); Demucs
+  runs locally on any audio, including tracks already in `output/`; LALAL.AI is installed
+  with paid credit, so it costs no install. Whichever wins, a stem is a generated asset
+  and needs its own sidecar and audit. Trigger: the first track that needs one
 - Vocal-specific synthesis, so a written topline can be sung. SoulX-Singer (Feb 2026,
-  zero-shot, 42k hours, English/Mandarin/Cantonese) takes a melody as F0 or MIDI plus
-  lyrics, not a text prompt, so it needs a different input surface from every backend
-  here. Why deferred: no Apple Silicon or MLX build was found, and the training-data
-  provenance is less clearly stated than Stability's, which matters commercially.
+  zero-shot) takes a melody as F0 or MIDI plus lyrics rather than a text prompt, so it
+  needs an input surface no backend here has. Open questions: no Apple Silicon build was
+  found, and its training-data provenance is less clearly stated than Stability's.
   Trigger: wanting to sing a melody written in Ableton
 
 ## Owner decisions open
