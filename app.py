@@ -11,6 +11,7 @@ import json
 import math
 import random
 import statistics
+import tempfile
 import threading
 from functools import lru_cache
 from pathlib import Path
@@ -578,6 +579,44 @@ def _bars_to_seconds(bpm: float, bars: float) -> float:
     return bars * BEATS_PER_BAR * 60.0 / float(bpm)
 
 
+def _prepare_edit_source(path_string: str) -> tuple[Path, str | None]:
+    """Return a WAV the runtime will accept, converting the file if it has to.
+
+    Stability's runtime reads 44.1 kHz 16-bit PCM. An Ableton bounce at 48 kHz or a
+    320 kbps MP3 is a perfectly reasonable thing to hand it, so convert rather than
+    refuse. A conversion is written beside the original as a new file; nothing the
+    user supplied is ever overwritten.
+    """
+    source = Path(path_string)
+    with sf.SoundFile(str(source)) as handle:
+        rate, subtype, frames = handle.samplerate, handle.subtype, len(handle)
+    if rate == EDIT_SAMPLE_RATE and subtype == "PCM_16":
+        return source, None
+
+    import numpy as np
+
+    data, _ = sf.read(str(source), dtype="float32", always_2d=True)
+    if rate != EDIT_SAMPLE_RATE:
+        # Linear resample. Good enough for a model input, and it avoids adding a
+        # dependency for something the model's own encoder will re-analyse anyway.
+        target_frames = int(round(len(data) * EDIT_SAMPLE_RATE / rate))
+        source_index = np.linspace(0, len(data) - 1, target_frames)
+        data = np.stack(
+            [np.interp(source_index, np.arange(len(data)), data[:, channel])
+             for channel in range(data.shape[1])],
+            axis=1,
+        )
+    if data.shape[1] == 1:
+        data = np.repeat(data, 2, axis=1)
+    # Not output/: a converted input is not a generated asset, and anything left
+    # in output/ appears in the track history as a sidecar-less mystery file.
+    converted = Path(tempfile.gettempdir()) / f"sa3-input-{source.stem}-44k1.wav"
+    sf.write(str(converted), data, EDIT_SAMPLE_RATE, subtype="PCM_16")
+    return converted, (
+        f"converted {rate} Hz {subtype} to {EDIT_SAMPLE_RATE} Hz 16-bit"
+    )
+
+
 def _editable_track_choices() -> list[tuple[str, str]]:
     choices = []
     for track in _load_history():
@@ -721,13 +760,21 @@ def _editable_track_choices_update():
     return gr.update(choices=_editable_track_choices())
 
 
-def _enqueue_edit(model, track_path, prompt, bpm, start_bar, bars, steps, guidance):
-    """Queue a rework of one span of an existing track."""
+def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps,
+                  guidance):
+    """Queue a rework of one span of an existing track, or of an uploaded file."""
     backend = backends.get(model)
     if not backend.supports_editing:
         raise gr.Error(f"{backend.name} cannot rework audio. Pick a Stable Audio model.")
+    track_path = upload or track_path
     if not track_path:
-        raise gr.Error("Pick a track to rework.")
+        raise gr.Error("Pick a track from the history, or upload one.")
+    note = None
+    try:
+        track_path, note = _prepare_edit_source(str(track_path))
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise gr.Error(f"Could not read that audio: {exc}") from exc
+    track_path = str(track_path)
     if not prompt or not prompt.strip():
         raise gr.Error("Describe what the section should become.")
     source = Path(track_path)
@@ -739,9 +786,15 @@ def _enqueue_edit(model, track_path, prompt, bpm, start_bar, bars, steps, guidan
         raise gr.Error(f"That file is not readable audio: {error}")
     if audit.sample_rate != EDIT_SAMPLE_RATE:
         raise gr.Error(
-            f"Rework needs {EDIT_SAMPLE_RATE} Hz input; that track is "
-            f"{audit.sample_rate} Hz. Stable Audio tracks qualify, ACE-Step ones do not."
+            f"Rework needs {EDIT_SAMPLE_RATE} Hz input and conversion did not produce "
+            f"it (got {audit.sample_rate} Hz)."
         )
+    if duration_cap := backend.duration.maximum:
+        if audit.duration_seconds > duration_cap:
+            raise gr.Error(
+                f"That track is {audit.duration_seconds:.0f}s; {backend.name} caps at "
+                f"{duration_cap:g}s. Rework a shorter track."
+            )
     start = _bars_to_seconds(bpm, max(0.0, start_bar - 1))
     end = start + _bars_to_seconds(bpm, bars)
     duration = audit.duration_seconds
@@ -788,9 +841,11 @@ def _enqueue_edit(model, track_path, prompt, bpm, start_bar, bars, steps, guidan
     }
     queue = _get_job_queue()
     queue.enqueue(payload, summary, _estimate_runtime(model, duration))
+    detail = f" · {note}" if note else ""
     return (
         f"**Queued a rework of {source.name[:40]}** · bars {start_bar:g}-"
-        f"{start_bar + bars - 1:g} ({start:.1f}s to {end:.1f}s) · seed `{chosen_seed}`",
+        f"{start_bar + bars - 1:g} ({start:.1f}s to {end:.1f}s) · "
+        f"seed `{chosen_seed}`{detail}",
         queue.snapshot(),
     )
 
@@ -950,92 +1005,100 @@ def build_ui() -> gr.Blocks:
                     label="Model",
                 )
                 model_summary = gr.Markdown(_backend_summary(core.DEFAULT_MODEL))
-                with gr.Row():
-                    genre = gr.Dropdown(
-                        choices=prompting.genre_names(), label="Genre", value=None,
-                        scale=3,
-                        info="Writes a prompt in this model's own style. Then edit it.",
-                    )
-                    regenerate = gr.Button("Regenerate", scale=1)
-                bpm = gr.Slider(
-                    50, 200, value=120, step=1, label="Tempo (BPM)",
-                    info="Written into the prompt. No model takes a tempo directly.",
-                )
-                prompt = gr.Textbox(
-                    label="Prompt", lines=3,
-                    placeholder="lo-fi hip hop, warm rhodes piano, soft vinyl crackle, 85bpm, instrumental",
-                )
-                prompt_help = gr.Markdown(_prompt_hint(initial_backend))
-                with gr.Row():
-                    # Components use the union of every backend's schema so Gradio's
-                    # static API preprocessor never rejects a value that is valid for
-                    # another model. The selected backend narrows these in the browser,
-                    # and the submission handler enforces the same backend contract.
-                    duration = gr.Slider(
-                        duration_minimum, duration_maximum,
-                        value=initial_backend.duration.default,
-                        step=duration_step,
-                        label=initial_backend.duration.label,
-                        info=initial_backend.duration.info,
-                    )
-                    steps = gr.Number(
-                        value=initial_steps.default,
-                        minimum=steps_minimum,
-                        maximum=steps_maximum,
-                        step=steps_step,
-                        precision=0,
-                        label=initial_steps.label,
-                        info=initial_steps.info,
-                        visible=initial_backend.steps is not None,
-                    )
-                with gr.Row():
-                    guidance = gr.Slider(
-                        guidance_minimum, guidance_maximum,
-                        value=initial_guidance.default,
-                        step=guidance_step,
-                        label=initial_guidance.label,
-                        info=initial_guidance.info,
-                        visible=initial_backend.guidance is not None,
-                    )
-                    seed = gr.Number(value=42, precision=0, label="Seed")
-                use_seed = gr.Checkbox(
-                    value=False, label="Lock seed",
-                    info="Off = new random seed each time. On = reproduce an exact track.",
-                )
-                go = gr.Button("Generate", variant="primary", elem_id="generate-button")
-                status = gr.Markdown("Ready to queue a generation.")
+                with gr.Tabs():
+                    with gr.Tab("New track"):
+                        with gr.Row():
+                            genre = gr.Dropdown(
+                                choices=prompting.genre_names(), label="Genre", value=None,
+                                scale=3,
+                                info="Writes a prompt in this model's own style. Then edit it.",
+                            )
+                            regenerate = gr.Button("Regenerate", scale=1)
+                        bpm = gr.Slider(
+                            50, 200, value=120, step=1, label="Tempo (BPM)",
+                            info="Written into the prompt. No model takes a tempo directly.",
+                        )
+                        prompt = gr.Textbox(
+                            label="Prompt", lines=3,
+                            placeholder="lo-fi hip hop, warm rhodes piano, soft vinyl crackle, 85bpm, instrumental",
+                        )
+                        prompt_help = gr.Markdown(_prompt_hint(initial_backend))
+                        with gr.Row():
+                            # Components use the union of every backend's schema so Gradio's
+                            # static API preprocessor never rejects a value that is valid for
+                            # another model. The selected backend narrows these in the browser,
+                            # and the submission handler enforces the same backend contract.
+                            duration = gr.Slider(
+                                duration_minimum, duration_maximum,
+                                value=initial_backend.duration.default,
+                                step=duration_step,
+                                label=initial_backend.duration.label,
+                                info=initial_backend.duration.info,
+                            )
+                            steps = gr.Number(
+                                value=initial_steps.default,
+                                minimum=steps_minimum,
+                                maximum=steps_maximum,
+                                step=steps_step,
+                                precision=0,
+                                label=initial_steps.label,
+                                info=initial_steps.info,
+                                visible=initial_backend.steps is not None,
+                            )
+                        with gr.Row():
+                            guidance = gr.Slider(
+                                guidance_minimum, guidance_maximum,
+                                value=initial_guidance.default,
+                                step=guidance_step,
+                                label=initial_guidance.label,
+                                info=initial_guidance.info,
+                                visible=initial_backend.guidance is not None,
+                            )
+                            seed = gr.Number(value=42, precision=0, label="Seed")
+                        use_seed = gr.Checkbox(
+                            value=False, label="Lock seed",
+                            info="Off = new random seed each time. On = reproduce an exact track.",
+                        )
+                        go = gr.Button("Generate", variant="primary", elem_id="generate-button")
+                        status = gr.Markdown("Ready to queue a generation.")
 
-                # The only bar-accurate structural control this model family has.
-                # Before generation, structure is prose; afterwards, a span can be
-                # regenerated in place, and bars convert to seconds from the tempo.
-                with gr.Accordion("Rework a section", open=False):
-                    gr.Markdown(
-                        "Regenerate part of a finished track and keep the rest. "
-                        "Stable Audio only."
-                    )
-                    edit_track = gr.Dropdown(
-                        choices=_editable_track_choices(), label="Track", value=None,
-                    )
-                    with gr.Row():
-                        edit_bpm = gr.Number(
-                            value=120, label="Tempo (BPM)", precision=0,
-                            minimum=20, maximum=300,
+                        # The only bar-accurate structural control this model family has.
+                        # Before generation, structure is prose; afterwards, a span can be
+                        # regenerated in place, and bars convert to seconds from the tempo.
+                    with gr.Tab("Rework a section"):
+                        gr.Markdown(
+                            "Regenerate part of a finished track and keep the rest. "
+                            "Stable Audio only."
                         )
-                        edit_start_bar = gr.Number(
-                            value=33, label="From bar", precision=0, minimum=1,
+                        edit_track = gr.Dropdown(
+                            choices=_editable_track_choices(),
+                            label="Track from history", value=None,
                         )
-                        edit_bars = gr.Dropdown(
-                            choices=[str(count) for count in BAR_CHOICES],
-                            value="32", label="Length (bars)",
+                        edit_upload = gr.Audio(
+                            label="Or upload a track",
+                            type="filepath",
+                            sources=["upload"],
                         )
-                    edit_span = gr.Markdown("Pick a track to rework.")
-                    edit_prompt = gr.Textbox(
-                        label="This section becomes", lines=2,
-                        placeholder="a stripped breakdown, no drums, just pads and a "
-                                    "filtered vocal texture",
-                    )
-                    edit_go = gr.Button("Rework section", variant="secondary")
-                    edit_status = gr.Markdown("")
+                        with gr.Row():
+                            edit_bpm = gr.Number(
+                                value=120, label="Tempo (BPM)", precision=0,
+                                minimum=20, maximum=300,
+                            )
+                            edit_start_bar = gr.Number(
+                                value=33, label="From bar", precision=0, minimum=1,
+                            )
+                            edit_bars = gr.Dropdown(
+                                choices=[str(count) for count in BAR_CHOICES],
+                                value="32", label="Length (bars)",
+                            )
+                        edit_span = gr.Markdown("Pick a track to rework.")
+                        edit_prompt = gr.Textbox(
+                            label="This section becomes", lines=2,
+                            placeholder="a stripped breakdown, no drums, just pads and a "
+                                        "filtered vocal texture",
+                        )
+                        edit_go = gr.Button("Rework section", variant="secondary")
+                        edit_status = gr.Markdown("")
 
             with gr.Column(scale=1, elem_id="history-panel"):
                 gr.Markdown("## Render queue")
@@ -1134,12 +1197,14 @@ def build_ui() -> gr.Blocks:
             control.select(_span_update, span_inputs, edit_span)
         refresh.click(_editable_track_choices_update, outputs=edit_track)
         edit_go.click(
-            lambda model, path, prompt, bpm, start, bars, steps, guidance: _enqueue_edit(
-                model, path, prompt, float(bpm or 120), float(start or 1),
-                float(bars or 32), steps, guidance,
+            lambda model, path, upload, prompt, bpm, start, bars, steps, guidance: (
+                _enqueue_edit(
+                    model, path, upload, prompt, float(bpm or 120), float(start or 1),
+                    float(bars or 32), steps, guidance,
+                )
             ),
-            [model, edit_track, edit_prompt, edit_bpm, edit_start_bar, edit_bars,
-             steps, guidance],
+            [model, edit_track, edit_upload, edit_prompt, edit_bpm, edit_start_bar,
+             edit_bars, steps, guidance],
             [edit_status, queue_state],
         )
         request = go.click(

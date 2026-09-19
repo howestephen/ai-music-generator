@@ -1021,9 +1021,46 @@ class Registry(unittest.TestCase):
             self.assertIn("about 60", text)
             self.assertIn("Out of range", app._edit_span(str(source), 120, 33, 64))
 
+    def test_an_odd_sample_rate_is_converted_rather_than_refused(self):
+        """An Ableton bounce at 48 kHz or a 320 kbps MP3 is a reasonable thing to
+        hand this, so convert it. The source file is never modified."""
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        source = out / "bounce.wav"
+        sf.write(str(source), [[0.2, -0.2]] * 48000, 48000, subtype="PCM_24")
+        prepared, note = app._prepare_edit_source(str(source))
+        self.addCleanup(lambda: prepared.unlink(missing_ok=True))
+        self.assertNotEqual(prepared, source)
+        self.assertIn("48000", note)
+        with sf.SoundFile(str(prepared)) as handle:
+            self.assertEqual(handle.samplerate, 44100)
+            self.assertEqual(handle.subtype, "PCM_16")
+            self.assertEqual(handle.channels, 2)
+        with sf.SoundFile(str(source)) as original:
+            self.assertEqual(original.samplerate, 48000, "source must be untouched")
+
+    def test_a_conforming_file_is_used_as_is(self):
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        source = out / "already.wav"
+        sf.write(str(source), [[0.1, -0.1]] * 44100, 44100, subtype="PCM_16")
+        prepared, note = app._prepare_edit_source(str(source))
+        self.assertEqual(prepared, source)
+        self.assertIsNone(note)
+
+    def test_a_converted_input_never_lands_in_the_output_folder(self):
+        """Anything in output/ shows up in the track history as a sidecar-less file."""
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        source = out / "bounce.wav"
+        sf.write(str(source), [[0.2, -0.2]] * 48000, 48000, subtype="PCM_16")
+        prepared, _ = app._prepare_edit_source(str(source))
+        self.addCleanup(lambda: prepared.unlink(missing_ok=True))
+        self.assertNotEqual(prepared.parent, core.OUTPUT_DIR)
+
     def test_edit_refuses_a_backend_that_cannot_rework(self):
         with self.assertRaisesRegex(app.gr.Error, "cannot rework"):
-            app._enqueue_edit("minimax-mlx", "/tmp/x.wav", "p", 120, 1, 32, 8, 1)
+            app._enqueue_edit("minimax-mlx", "/tmp/x.wav", None, "p", 120, 1, 32, 8, 1)
 
     def test_edit_refuses_a_source_at_the_wrong_sample_rate(self):
         """ACE-Step writes 48 kHz; Stability's runtime reads 44.1 kHz 16-bit PCM."""
@@ -1035,7 +1072,7 @@ class Registry(unittest.TestCase):
             audit.return_value = (backends.AudioAudit(30.0, 1, 48000, 2, 1, 0.5), None)
             with self.assertRaisesRegex(app.gr.Error, "44100 Hz"):
                 app._enqueue_edit(
-                    "stable-audio-sm", str(source), "p", 120, 1, 8, 8, 1,
+                    "stable-audio-sm", str(source), None, "p", 120, 1, 8, 8, 1,
                 )
 
     def test_edit_refuses_a_span_that_runs_past_the_track(self):
@@ -1049,7 +1086,7 @@ class Registry(unittest.TestCase):
             audit.return_value = (backends.AudioAudit(30.0, 1, 44100, 2, 1, 0.5), None)
             with self.assertRaisesRegex(app.gr.Error, "only 30.0s"):
                 app._enqueue_edit(
-                    "stable-audio-sm", str(source), "p", 120, 5, 32, 8, 1,
+                    "stable-audio-sm", str(source), None, "p", 120, 5, 32, 8, 1,
                 )
 
     def test_edit_queues_an_inpaint_payload_with_the_right_span(self):
@@ -1066,10 +1103,12 @@ class Registry(unittest.TestCase):
         )
         with mock.patch.object(app, "_history_audio_audit") as audit, \
                 mock.patch.object(app, "_get_job_queue", return_value=queue), \
+                mock.patch.object(app, "_prepare_edit_source",
+                                  return_value=(source, None)), \
                 mock.patch.object(app, "_load_history", return_value=[]):
             audit.return_value = (backends.AudioAudit(120.0, 1, 44100, 2, 1, 0.5), None)
             app._enqueue_edit(
-                "stable-audio-sm", str(source), "a stripped breakdown",
+                "stable-audio-sm", str(source), None, "a stripped breakdown",
                 120, 33, 16, 8, 1,
             )
         payload = captured["payload"]

@@ -73,7 +73,7 @@ they are never buried in a chat.
 | 2.8 | Queue panel reflects reality (`gr.Timer` inert, `queue=False` blocks renders) | `done` | 2026-09-19 |
 | 2.10 | Prompts vary in shape and vocabulary, not just adjectives | `done` | 2026-09-19 |
 
-| 2.9 | Section editing through inpainting | `in_progress` | Stable Audio has no section tokens, so prose is the only pre-generation structure control; regenerating a span of a finished track is the real mechanism, and bars convert to seconds once BPM is known. Core, manifest and runner carry init audio and an inpaint range, refused loudly where unsupported; proven on a real render. A **Rework a section** panel picks a track, tempo, start bar and length. Still to do: one mode visible at a time, uploading an outside track, and exposing the noise level for whole-track remixing | none | 2.8 |
+| 2.9 | Section editing through inpainting | `in_progress` | Stable Audio has no section tokens, so prose is the only pre-generation structure control; regenerating a span of a finished track is the real mechanism, and bars convert to seconds once BPM is known. Core, manifest and runner carry init audio and an inpaint range, refused loudly where unsupported; proven on a real render. A **Rework a section** panel picks a track, tempo, start bar and length. New track and Rework are now separate tabs, and a rework accepts an uploaded file as well as a history pick, converting an odd sample rate or an MP3 rather than refusing it. Still to do: exposing the noise level for whole-track remixing, and a structure builder | none | 2.8 |
 
 ## Deferred ideas
 
