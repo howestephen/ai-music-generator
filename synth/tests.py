@@ -902,6 +902,44 @@ class Registry(unittest.TestCase):
         """Prompts and generated filenames carry long runs with no spaces."""
         self.assertIn("overflow-wrap: anywhere", app.UI_CSS)
 
+    def test_history_audio_is_served_from_output_not_copied_by_gradio(self):
+        """gr.Audio postprocesses its value by copying the file into Gradio's temp
+        cache. The whole history re-renders when a render finishes, so a dozen 67 MB
+        tracks copied about a gigabyte per update, stalling the server until the
+        queue timer stopped and the card froze at "0s elapsed"."""
+        track = {"path": str(core.OUTPUT_DIR / "probe.wav"), "modified_ns": 1}
+        markup = app._history_player(track)
+        self.assertIn("<audio", markup)
+        self.assertIn("/gradio_api/file=", markup)
+        self.assertIn(str(core.OUTPUT_DIR), markup)
+        self.assertIn('preload="none"', markup)
+        # The seek handler must find the plain element, not a Gradio shadow root.
+        self.assertIn("audio.history-audio", app.UI_JS)
+        self.assertNotIn("shadowRoot", app.UI_JS)
+
+    def test_handlers_that_feed_a_render_block_go_through_the_queue(self):
+        """`@gr.render` does not re-run for an event dispatched with queue=False.
+        The queue card therefore froze at "0s elapsed" while the server reported
+        the job running and then finishing: the state updated, the render never
+        fired, and the card was still on screen after the queue had emptied."""
+        config = app.build_ui().get_config_file()
+        # A @gr.render block registers a dependency that re-runs itself whenever
+        # its own single input changes, so it shows up as inputs == [X] with a
+        # "change" target on that same component X.
+        render_inputs = set()
+        for dep in config["dependencies"]:
+            inputs = dep.get("inputs", [])
+            changed = {t[0] for t in dep.get("targets", []) if t[1] == "change"}
+            if len(inputs) == 1 and inputs[0] in changed:
+                render_inputs.add(inputs[0])
+        self.assertTrue(render_inputs, "expected at least one render block")
+        for dep in config["dependencies"]:
+            if dep.get("queue") is False and render_inputs & set(dep.get("outputs", [])):
+                self.fail(
+                    f"handler {dep.get('targets')} writes to a render input with "
+                    "queue=False, so the panel will stop updating"
+                )
+
     def test_history_players_are_exclusive(self):
         """Every card owns its own audio element, so starting one must stop the rest."""
         self.assertIn("pauseEveryOtherPlayer", app.UI_JS)
@@ -1443,11 +1481,7 @@ class UiModelSelection(unittest.TestCase):
         self.assertIn("inset: 0;", app.UI_CSS)
         self.assertIn(".queue-job.queued .queue-job-fill", app.UI_CSS)
         self.assertIn("animation: queued-job-wipe 1.4s ease-in-out infinite;", app.UI_CSS)
-        self.assertIn(".history-audio .waveform-container", app.UI_CSS)
-        self.assertIn(
-            ".history-audio .subtitle-display {\n    display: none;\n}",
-            app.UI_CSS,
-        )
+        self.assertIn(".history-audio", app.UI_CSS)
         self.assertIn('document.addEventListener("click"', app.UI_JS)
         self.assertIn("audio.currentTime = Math.max", app.UI_JS)
 

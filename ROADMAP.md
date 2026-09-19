@@ -45,12 +45,13 @@ they are never buried in a chat.
 ## Phase 1: Output acceptance
 
 - Status: `done`
-- Goal: a request is complete only when the resulting file satisfies its declared contract
+- Goal: a request is complete only when the resulting file satisfies its declared
+  contract. Detail in git history and [docs/decisions.md](docs/decisions.md)
 
-| # | Title | Status | Why it matters | Spec | Deps |
-|---|---|---|---|---|---|
-| 1.1 | Duration and basic audio audit | `done` | MiniMax delivered 16.76 to 33.59 seconds against 240-second requests while the sidecars and UI showed the target as if measured. Every WAV is now audited, requested and delivered are separate facts, and a short asset stays visible but fails acceptance. Re-audited 2026-09-16 | none | 0.4 |
-| 1.2 | Enforce MiniMax target duration | `done` | The pinned runtime's duration flag only capped frames and accepted an end token at 16.7 seconds for a 300-second request. Its project-owned wrapper now suppresses that token until the target frame count, while the separate WAV audit still verifies the delivered file. A real render with the known early-stop seed delivered 20.016 seconds for a 20-second target. Completed and independently audited 2026-09-17; 104 unit tests and all 76 mutations pass | none | 1.1 |
+| # | Title | Status | Landed |
+|---|---|---|---|
+| 1.1 | Audit every delivered WAV; requested and delivered are separate facts | `done` | 2026-09-16 |
+| 1.2 | Enforce the MiniMax target during generation, not just after it | `done` | 2026-09-17 |
 
 ## Phase 2: Any model, any length
 
@@ -67,6 +68,7 @@ they are never buried in a chat.
 | 2.5 | Genre dropdown and model-aware prompts | `done` | 16 genres, each with its own vocabulary and tempo range, replacing five fixed presets. A genre writes a prompt in the selected backend's own style, and Regenerate draws a fresh variation. Stable Audio 3 medium becomes the default. Landed 2026-09-19 | none | 2.4 |
 | 2.6 | Honest render estimate and exclusive playback | `done` | Progress read as hung twice: a cold-start weight download was counted as render time, and cost was modelled as a multiple of track length when it is really a fixed overhead plus a small rate, so a 26s render crawled against a 95s estimate. The estimate is now fitted from recent renders of differing lengths, a running card shows elapsed seconds, and starting one history track stops any other. Reported by owner 2026-09-19 | none | 2.5 |
 | 2.7 | Mobile layout does not scroll sideways | `done` | Flex children default to `min-width: auto` and refuse to shrink below their content, so a queue card held 301px of header in a 285px box and pushed the page sideways on a phone. Panels and cards may now shrink, the header wraps, and long unbroken prompts and filenames break. Measured at 320, 360, 375 and 390 with a full history: zero overflow. Reported by owner 2026-09-19 | none | 2.6 |
+| 2.8 | Queue panel reflects reality again | `done` | The card froze at "0s elapsed" while the render finished normally, which read as a crash. Two causes: `gr.Timer` never fires in this Gradio build, and `@gr.render` does not re-run for an event dispatched with `queue=False`, so every handler feeding the queue and history panels was silently inert. Polling is now driven by the app's own JS through the queue, and history audio is served straight from `output/` instead of Gradio copying a gigabyte per update. Reported by owner 2026-09-19 | none | 2.7 |
 
 ## Deferred ideas
 

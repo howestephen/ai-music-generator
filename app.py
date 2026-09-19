@@ -108,10 +108,10 @@ UI_CSS = """
     width: 2px;
 }
 
-.history-audio .waveform-container,
-.history-audio .timestamps,
-.history-audio .subtitle-display {
-    display: none;
+.history-audio {
+    display: block;
+    margin-top: 0.4rem;
+    width: 100%;
 }
 
 .queue-job {
@@ -181,6 +181,18 @@ UI_CSS = """
     border-color: var(--error-background-fill);
 }
 
+/* Clicked by the polling loop in UI_JS; never shown, but must stay clickable. */
+#poll-button {
+    height: 0;
+    margin: 0;
+    min-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    padding: 0;
+    pointer-events: none;
+    position: absolute;
+}
+
 @keyframes queued-job-wipe {
     from { transform: translateX(-105%); }
     to { transform: translateX(190%); }
@@ -204,11 +216,10 @@ UI_JS = """
 (() => {
     const wiredPlayers = new WeakSet();
 
-    const playerFor = (waveform) => {
-        const host = waveform.closest(".history-card")
-            ?.querySelector(".history-audio #waveform > div");
-        return host?.shadowRoot?.querySelector("audio");
-    };
+    // A plain <audio> rendered by _history_player, no longer a Gradio component
+    // hiding one inside a shadow root.
+    const playerFor = (waveform) => waveform.closest(".history-card")
+        ?.querySelector("audio.history-audio");
 
     const showPosition = (waveform, audio) => {
         if (!Number.isFinite(audio.duration) || audio.duration === 0) return;
@@ -244,6 +255,16 @@ UI_JS = """
         });
     };
 
+    // Drives the queue and history refresh. gr.Timer is inert in this Gradio
+    // build, so the poll is a hidden button clicked from here.
+    let pollTimer = null;
+    const startPolling = () => {
+        if (pollTimer) return;
+        pollTimer = setInterval(() => {
+            document.querySelector("#poll-button")?.click();
+        }, 1000);
+    };
+
     const seek = (waveform, position) => {
         const audio = playerFor(waveform);
         if (!audio || !Number.isFinite(audio.duration)) return;
@@ -271,6 +292,7 @@ UI_JS = """
     new MutationObserver(() => requestAnimationFrame(wirePlayers))
         .observe(document.body, {childList: true, subtree: true});
     requestAnimationFrame(wirePlayers);
+    startPolling();
 })();
 """
 
@@ -501,6 +523,22 @@ def _waveform_peaks(path_string: str, modified_ns: int, bars: int = 120) -> tupl
     except (OSError, RuntimeError, ValueError):
         return ()
     return tuple(peaks)
+
+
+def _history_player(track: dict) -> str:
+    """A plain audio element served straight from `output/`.
+
+    `gr.Audio` postprocesses its value by copying the file into Gradio's temp
+    cache, and the whole history is re-rendered whenever a render finishes. With
+    a dozen 67 MB tracks that copied about a gigabyte per update, which blocked
+    the server long enough for the queue timer to stop and the card to freeze at
+    "0s elapsed". `launch(allowed_paths=...)` already lets the browser fetch the
+    real file, with range requests, so nothing needs copying.
+    """
+    src = html.escape(f"/gradio_api/file={Path(track['path']).resolve()}", quote=True)
+    return (
+        f'<audio class="history-audio" controls preload="none" src="{src}"></audio>'
+    )
 
 
 def _history_waveform(track: dict) -> str:
@@ -856,24 +894,20 @@ def build_ui() -> gr.Blocks:
                                 up.click(
                                     lambda job_id=job["id"]: _move_job(job_id, -1),
                                     outputs=queue_state,
-                                    queue=False,
                                 )
                                 down.click(
                                     lambda job_id=job["id"]: _move_job(job_id, 1),
                                     outputs=queue_state,
-                                    queue=False,
                                 )
                                 remove.click(
                                     lambda job_id=job["id"]: _remove_job(job_id),
                                     outputs=queue_state,
-                                    queue=False,
                                 )
                             elif job["status"] == "failed":
                                 remove = gr.Button("Dismiss", size="sm")
                                 remove.click(
                                     lambda job_id=job["id"]: _remove_job(job_id),
                                     outputs=queue_state,
-                                    queue=False,
                                 )
 
                 with gr.Row():
@@ -894,12 +928,8 @@ def build_ui() -> gr.Blocks:
                                 _history_waveform(track),
                                 key=f"waveform-{track['path']}",
                             )
-                            gr.Audio(
-                                value=track["path"],
-                                show_label=False,
-                                interactive=False,
-                                editable=False,
-                                elem_classes="history-audio",
+                            gr.HTML(
+                                _history_player(track),
                                 key=f"audio-{track['path']}",
                             )
                             gr.Markdown(
@@ -926,7 +956,6 @@ def build_ui() -> gr.Blocks:
         refresh.click(
             _refresh_history,
             outputs=[history, history_signature],
-            queue=False,
         )
         request = go.click(
             _generation_started,
@@ -952,12 +981,15 @@ def build_ui() -> gr.Blocks:
             queue=False,
             show_progress="hidden",
         )
-        timer = gr.Timer(0.5)
-        timer.tick(
+        # gr.Timer does not fire in Gradio 6.17.3 here: a Blocks app containing
+        # nothing but a Timer never ticks either, queued or not. The queue card
+        # therefore froze at "0s elapsed" while the render finished normally.
+        # This app's own JS does run, so it drives the poll instead.
+        poll = gr.Button("Refresh queue", elem_id="poll-button", visible=True)
+        poll.click(
             _poll_ui,
             inputs=history_signature,
             outputs=[queue_state, history, history_signature],
-            queue=False,
             show_progress="hidden",
         )
     return demo

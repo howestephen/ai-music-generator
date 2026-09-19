@@ -220,6 +220,12 @@ MUTATIONS = [
     ("UI disables the short-output retry", "app.py",
      '        "_duration_retries": backend.output_audit.random_seed_retries if not use_seed else 0,',
      '        "_duration_retries": 0,'),
+    ("queue poll bypasses the queue and stops the render block", "app.py",
+     "            outputs=[queue_state, history, history_signature],\n"
+     '            show_progress="hidden",',
+     "            outputs=[queue_state, history, history_signature],\n"
+     "            queue=False,\n"
+     '            show_progress="hidden",'),
     ("UI stops serving the output folder", "app.py",
      "        allowed_paths=[str(core.OUTPUT_DIR)],",
      "        "),
