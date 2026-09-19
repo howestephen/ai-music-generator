@@ -96,6 +96,108 @@
         "guidance": null
       }
     },
+    "stable-audio-sm": {
+      "model_id": "stabilityai/stable-audio-3-optimized",
+      "venv": ".venv-sa3",
+      "runner": "stable_audio_runner.py",
+      "licence": "Stability AI Community (commercial OK below the revenue threshold; bundled T5Gemma adds the Gemma Terms of Use)",
+      "notes": "Fixed-length latent diffusion, 44.1kHz stereo. 50M DiT, roughly 28x realtime on Apple Silicon. Music-specialised, licensed training data.",
+      "dtype": "fp16 DiT / fp32 codec (MLX)",
+      "prompt_style": "description",
+      "instrumental_tag": "",
+      "supports_lyrics": false,
+      "output_audit": {
+        "minimum_duration_ratio": 1,
+        "duration_tolerance_seconds": 0.05,
+        "random_seed_retries": 0,
+        "duration_contract": "exact"
+      },
+      "runtime": {
+        "probe_modules": ["mlx.core", "models.defs.sa3_pipeline", "weights"],
+        "timeout_seconds": 3600,
+        "runner_options": {"dit": "sm-music", "decoder": "same-s"}
+      },
+      "controls": {
+        "duration": {
+          "default": 60,
+          "minimum": 1,
+          "maximum": 120,
+          "step": 1,
+          "label": "Target duration (s)",
+          "info": "Fixed-length diffusion: the delivered WAV is exactly this long, up to 120 seconds.",
+          "integer": false
+        },
+        "steps": {
+          "default": 8,
+          "minimum": 1,
+          "maximum": 50,
+          "step": 1,
+          "label": "Steps",
+          "info": "Pingpong sampler steps. 1 is a single forward pass; 8 is the vendor's sweet spot.",
+          "integer": true
+        },
+        "guidance": {
+          "default": 1,
+          "minimum": 0,
+          "maximum": 10,
+          "step": 0.1,
+          "label": "Prompt adherence",
+          "info": "Classifier-free guidance. 1 is off; above 1 pushes toward the prompt.",
+          "integer": false
+        }
+      }
+    },
+    "stable-audio-medium": {
+      "model_id": "stabilityai/stable-audio-3-optimized",
+      "venv": ".venv-sa3",
+      "runner": "stable_audio_runner.py",
+      "licence": "Stability AI Community (commercial OK below the revenue threshold; bundled T5Gemma adds the Gemma Terms of Use)",
+      "notes": "Fixed-length latent diffusion, 44.1kHz stereo. 1.4B DiT, higher musicality and slower. Music-specialised, licensed training data.",
+      "dtype": "fp16 DiT / fp32 codec (MLX)",
+      "prompt_style": "description",
+      "instrumental_tag": "",
+      "supports_lyrics": false,
+      "output_audit": {
+        "minimum_duration_ratio": 1,
+        "duration_tolerance_seconds": 0.05,
+        "random_seed_retries": 0,
+        "duration_contract": "exact"
+      },
+      "runtime": {
+        "probe_modules": ["mlx.core", "models.defs.sa3_pipeline", "weights"],
+        "timeout_seconds": 7200,
+        "runner_options": {"dit": "medium", "decoder": "same-l"}
+      },
+      "controls": {
+        "duration": {
+          "default": 60,
+          "minimum": 1,
+          "maximum": 380,
+          "step": 1,
+          "label": "Target duration (s)",
+          "info": "Fixed-length diffusion: the delivered WAV is exactly this long, up to 380 seconds.",
+          "integer": false
+        },
+        "steps": {
+          "default": 8,
+          "minimum": 1,
+          "maximum": 50,
+          "step": 1,
+          "label": "Steps",
+          "info": "Pingpong sampler steps. 1 is a single forward pass; 8 is the vendor's sweet spot.",
+          "integer": true
+        },
+        "guidance": {
+          "default": 1,
+          "minimum": 0,
+          "maximum": 10,
+          "step": 0.1,
+          "label": "Prompt adherence",
+          "info": "Classifier-free guidance. 1 is off; above 1 pushes toward the prompt.",
+          "integer": false
+        }
+      }
+    },
     "musicgen": {
       "model_id": "facebook/musicgen-stereo-large",
       "venv": ".venv",

@@ -28,6 +28,11 @@ TERMINATE_GRACE_SECONDS = 5
 # models are fixed-length by construction, so any deviation is an integration
 # fault rather than a creative miss, and retrying would change nothing.
 DURATION_CONTRACTS = frozenset({"best_effort", "exact"})
+# How a backend wants to be asked. Using the wrong one degrades output badly, so
+# the UI and its presets are keyed off this rather than off the backend name.
+# "tags": comma-separated style tags. "caption": MiniMax's structured prose
+# caption. "description": a plain natural-language sentence.
+PROMPT_STYLES = frozenset({"tags", "caption", "description"})
 
 
 def _expect_keys(data: dict, required: set[str], location: str) -> None:
@@ -217,7 +222,7 @@ class Backend:
     steps: NumericControl | None
     guidance: NumericControl | None
     output_audit: OutputAuditPolicy
-    prompt_style: str = "tags"  # "tags" or "caption"
+    prompt_style: str = "tags"  # see PROMPT_STYLES
     instrumental_tag: str = "[inst]"
     supports_lyrics: bool = True
     probe_modules: tuple[str, ...] = ()
@@ -300,8 +305,11 @@ class Backend:
         )
         if duration is None or duration.maximum is None:
             raise ValueError(f"backends.{name}.controls.duration requires a maximum")
-        if data["prompt_style"] not in {"tags", "caption"}:
-            raise ValueError(f"backends.{name}.prompt_style must be 'tags' or 'caption'")
+        if data["prompt_style"] not in PROMPT_STYLES:
+            raise ValueError(
+                f"backends.{name}.prompt_style must be one of "
+                f"{', '.join(sorted(PROMPT_STYLES))}"
+            )
         return cls(
             name=name,
             model_id=data["model_id"],

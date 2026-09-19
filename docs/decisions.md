@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-17
+updated: 2026-09-19
 ---
 
 # Decisions
@@ -11,6 +11,36 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-09-19 - Stable Audio 3 runs on Stability's own MLX runtime
+
+**Decided:** the `stable-audio-sm` and `stable-audio-medium` backends drive Stability's
+pure-MLX CLI as a subprocess rather than importing its sampler. The runtime is pinned as a
+clone under `~/.cache` and added to `.venv-sa3` on the import path, because it ships as a
+source tree rather than a package.
+
+**Why:** the supported entry point is the CLI, and it owns the step that matters to this
+project: trimming the delivered WAV to exactly the requested seconds. Reimplementing the
+orchestration around its low-level pipeline would duplicate several hundred lines and break
+on every upstream change. Both model sizes share one runner and differ only by manifest
+`runner_options`.
+
+**Would revisit if:** Stability publishes the MLX runtime as a package, or the CLI stops
+exposing seed, steps and CFG as flags.
+
+---
+
+## 2026-09-19 - Prompt style is a third axis, not a binary
+
+**Decided:** `prompt_style` accepts `description` alongside `tags` and `caption`, and every
+UI preset carries text for all three.
+
+**Why:** Stable Audio wants a plain natural-language sentence. Feeding it comma-separated
+tags or MiniMax's structured caption degrades output, which is the same class of mistake
+this project already records for ACE-Step. A test now fails if any preset lacks text for a
+style some backend declares, because the UI would otherwise raise on model selection.
+
+**Would revisit if:** a backend appears whose prompting does not fit any of the three.
 
 ## 2026-09-17 - MiniMax duration is enforced during autoregressive generation
 

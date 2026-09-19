@@ -52,8 +52,9 @@ no progress. Process stays alive looking busy.
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 ```
 
-Already set in `synth/core.py`, `runners/minimax_mlx_runner.py` and
-`runners/musicgen_runner.py`. **Do not remove it.**
+Already set in `synth/core.py`, `runners/minimax_mlx_runner.py`,
+`runners/musicgen_runner.py` and `runners/stable_audio_runner.py`. Every new runner
+that downloads weights needs it too. **Do not remove it.**
 
 ### Model dependency conflicts are unresolvable - use separate venvs
 

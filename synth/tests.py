@@ -837,6 +837,54 @@ class Registry(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "needs a runner to receive them"):
             backends.load_manifest(path)
 
+    def test_every_preset_covers_every_prompt_style_a_backend_declares(self):
+        """_preset_prompt indexes the preset by the backend's style. A style with no
+        preset text raises KeyError in the UI the moment that model is selected."""
+        styles = {backend.prompt_style for backend in backends.BACKENDS.values()}
+        self.assertTrue(styles <= backends.PROMPT_STYLES)
+        for name, forms in app.PRESETS.items():
+            with self.subTest(preset=name):
+                self.assertTrue(
+                    styles <= forms.keys(),
+                    f"{name} is missing: {sorted(styles - forms.keys())}",
+                )
+
+    def test_every_preset_resolves_for_every_backend(self):
+        for model in backends.BACKENDS:
+            for preset in app.PRESETS:
+                with self.subTest(model=model, preset=preset):
+                    self.assertTrue(app._preset_prompt(preset, model).strip())
+
+    def test_stable_audio_backends_share_one_runner_and_differ_only_by_options(self):
+        """The point of runner_options: a second variant costs a manifest entry, not
+        a second runner script."""
+        small = backends.get("stable-audio-sm")
+        medium = backends.get("stable-audio-medium")
+        self.assertEqual(small.runner, medium.runner)
+        self.assertEqual(dict(small.runner_options)["dit"], "sm-music")
+        self.assertEqual(dict(medium.runner_options)["dit"], "medium")
+        for backend in (small, medium):
+            with self.subTest(backend=backend.name):
+                self.assertEqual(backend.output_audit.duration_contract, "exact")
+                self.assertEqual(backend.output_audit.random_seed_retries, 0)
+                self.assertFalse(backend.supports_lyrics)
+
+    def test_every_declared_runner_script_exists(self):
+        for backend in backends.BACKENDS.values():
+            if not backend.runner:
+                continue
+            with self.subTest(backend=backend.name):
+                self.assertTrue((backends.PROJECT_ROOT / "runners" / backend.runner).is_file())
+
+    def test_manifest_rejects_an_unknown_prompt_style(self):
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        document["backends"]["minimax-mlx"]["prompt_style"] = "freeform"
+        path = Path(tempfile.mkdtemp()) / "backends.json"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "prompt_style must be one of"):
+            backends.load_manifest(path)
+
     def test_manifest_rejects_an_unknown_duration_contract(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
         document["backends"]["minimax-mlx"]["output_audit"]["duration_contract"] = "whenever"
@@ -1426,7 +1474,7 @@ print(json.dumps({
         self.assertEqual(config["models"], list(backends.BACKENDS))
         self.assertEqual(config["default_model"], "minimax-mlx")
         self.assertFalse(config["default_guidance_visible"])
-        self.assertEqual(config["duration_api_maximum"], 300)
+        self.assertEqual(config["duration_api_maximum"], 380)
         self.assertIn("Generate", config["buttons"])
         self.assertIn("Refresh history", config["buttons"])
         self.assertTrue(config["model_change"])
@@ -1711,6 +1759,7 @@ class DocumentationContract(unittest.TestCase):
             "synth/core.py",
             "runners/minimax_mlx_runner.py",
             "runners/musicgen_runner.py",
+            "runners/stable_audio_runner.py",
         }
         self.assertEqual(actual, expected)
         gotchas = (core.PROJECT_ROOT / "docs" / "gotchas.md").read_text(encoding="utf-8")

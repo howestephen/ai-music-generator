@@ -25,22 +25,27 @@ PRESETS = {
     "Corporate / uplifting": {
         "tags": "uplifting corporate, bright piano, subtle strings, steady four-on-the-floor, optimistic, 110bpm, instrumental",
         "caption": "Global Metadata: Genre: corporate. BPM: 110. Mood: uplifting and optimistic. Arrangement: bright piano, subtle strings and a steady four-on-the-floor rhythm. Instrumental only, no vocals.",
+        "description": "An uplifting corporate instrumental at 110 BPM, bright piano and subtle strings over a steady four-on-the-floor beat, optimistic and building.",
     },
     "Lo-fi / relaxed": {
         "tags": "lo-fi hip hop, warm rhodes piano, soft vinyl crackle, mellow drums, relaxed, 85bpm, instrumental",
         "caption": "Global Metadata: Genre: lo-fi hip hop. BPM: 85. Mood: relaxed. Arrangement: warm Rhodes piano, soft vinyl crackle and mellow drums. Instrumental only, no vocals.",
+        "description": "A relaxed lo-fi hip hop instrumental at 85 BPM, warm Rhodes piano, soft vinyl crackle and mellow drums.",
     },
     "Ambient / underscore": {
         "tags": "ambient underscore, soft evolving pads, sparse piano notes, gentle, unobtrusive, no drums, instrumental",
         "caption": "Global Metadata: Genre: ambient underscore. Mood: gentle and unobtrusive. Arrangement: soft evolving pads and sparse piano notes, with no drums. Instrumental only, no vocals.",
+        "description": "A gentle ambient underscore, soft evolving pads and sparse piano notes, no drums, unobtrusive.",
     },
     "Tech / explainer": {
         "tags": "minimal electronic, clean plucky synth arpeggio, light percussion, curious and modern, 100bpm, instrumental",
         "caption": "Global Metadata: Genre: minimal electronic. BPM: 100. Mood: curious and modern. Arrangement: a clean, plucky synth arpeggio with light percussion. Instrumental only, no vocals.",
+        "description": "A curious, modern minimal electronic instrumental at 100 BPM, a clean plucky synth arpeggio with light percussion.",
     },
     "Tension / build": {
         "tags": "cinematic tension, low pulsing strings, rising drone, building anticipation, sparse percussion, instrumental",
         "caption": "Global Metadata: Genre: cinematic tension. Mood: building anticipation. Arrangement: low pulsing strings, a rising drone and sparse percussion. Instrumental only, no vocals.",
+        "description": "Cinematic tension building slowly, low pulsing strings, a rising drone and sparse percussion, instrumental.",
     },
 }
 
@@ -266,6 +271,8 @@ UI_JS = """
 def _prompt_hint(backend: backends.Backend) -> str:
     if backend.prompt_style == "tags":
         return "Style tags beat sentences: `warm rhodes, 85bpm, mellow`."
+    if backend.prompt_style == "description":
+        return "Describe the music in a sentence: `a slow cinematic build, low strings`."
     return "Use a structured caption in prose: genre, BPM, key, scale and arrangement."
 
 
