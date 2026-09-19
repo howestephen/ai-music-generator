@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "default_backend": "minimax-mlx",
+  "default_backend": "stable-audio-medium",
   "backends": {
     "acestep": {
       "model_id": "ACE-Step/ACE-Step-v1-3.5B",

@@ -29,7 +29,7 @@ from unittest import mock
 
 import app
 import soundfile as sf
-from synth import analyze, backends, cli, core, jobs
+from synth import analyze, backends, cli, core, jobs, prompting
 
 
 def _write_test_wav(path: Path, frames: int = 1) -> None:
@@ -746,7 +746,7 @@ class Registry(unittest.TestCase):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
         self.assertEqual(document["schema_version"], 5)
         self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
-        self.assertEqual(backends.DEFAULT_BACKEND, "minimax-mlx")
+        self.assertEqual(backends.DEFAULT_BACKEND, "stable-audio-medium")
         self.assertEqual(list(document["backends"]), list(backends.BACKENDS))
 
     def test_every_backend_declares_a_valid_output_audit_policy(self):
@@ -837,23 +837,52 @@ class Registry(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "needs a runner to receive them"):
             backends.load_manifest(path)
 
-    def test_every_preset_covers_every_prompt_style_a_backend_declares(self):
-        """_preset_prompt indexes the preset by the backend's style. A style with no
-        preset text raises KeyError in the UI the moment that model is selected."""
+    def test_every_genre_builds_a_prompt_for_every_style_a_backend_declares(self):
+        """The UI asks for the selected backend's style. A genre that cannot answer
+        one of them raises the moment that model is picked."""
         styles = {backend.prompt_style for backend in backends.BACKENDS.values()}
         self.assertTrue(styles <= backends.PROMPT_STYLES)
-        for name, forms in app.PRESETS.items():
-            with self.subTest(preset=name):
-                self.assertTrue(
-                    styles <= forms.keys(),
-                    f"{name} is missing: {sorted(styles - forms.keys())}",
-                )
+        for genre in prompting.genre_names():
+            for style in styles:
+                with self.subTest(genre=genre, style=style):
+                    built = prompting.build_prompt(genre, style=style, seed=1)
+                    self.assertTrue(built.strip())
 
-    def test_every_preset_resolves_for_every_backend(self):
+    def test_every_genre_prompt_resolves_through_the_ui_for_every_backend(self):
         for model in backends.BACKENDS:
-            for preset in app.PRESETS:
-                with self.subTest(model=model, preset=preset):
-                    self.assertTrue(app._preset_prompt(preset, model).strip())
+            for genre in prompting.genre_names():
+                with self.subTest(model=model, genre=genre):
+                    self.assertTrue(app._genre_prompt(genre, model).strip())
+
+    def test_regenerate_gives_a_different_variation(self):
+        """Regenerate is worthless if it returns the same text every press."""
+        seen = {
+            prompting.build_prompt("Drum & Bass", seed=seed) for seed in range(12)
+        }
+        self.assertGreater(len(seen), 1)
+
+    def test_a_requested_tempo_reaches_every_prompt_style(self):
+        for style in ("tags", "caption", "description"):
+            with self.subTest(style=style):
+                self.assertIn("174", prompting.build_prompt(
+                    "Drum & Bass", style=style, bpm=174, seed=3,
+                ))
+
+    def test_prompt_builder_refuses_an_unknown_style_or_genre(self):
+        with self.assertRaisesRegex(ValueError, "unknown prompt style"):
+            prompting.build_prompt("Drum & Bass", style="interpretive dance")
+        with self.assertRaisesRegex(ValueError, "unknown genre"):
+            prompting.build_prompt("Sea Shanty")
+
+    def test_genre_vocabulary_is_complete_enough_to_vary(self):
+        for name, genre in prompting.GENRES.items():
+            with self.subTest(genre=name):
+                self.assertTrue(genre.prose, "needs a prose name for sentences")
+                self.assertGreaterEqual(len(genre.keywords), 4, "tag style needs 4+")
+                self.assertLess(genre.bpm[0], genre.bpm[1])
+                for pool in (genre.drums, genre.bass, genre.lead, genre.texture,
+                             genre.mood, genre.production):
+                    self.assertTrue(pool)
 
     def test_stable_audio_backends_share_one_runner_and_differ_only_by_options(self):
         """The point of runner_options: a second variant costs a manifest entry, not
@@ -955,7 +984,7 @@ class Registry(unittest.TestCase):
 
         default, loaded = backends.load_manifest(path)
 
-        self.assertEqual(default, "minimax-mlx")
+        self.assertEqual(default, "stable-audio-medium")
         self.assertEqual(loaded["probe"].model_id, "example/probe-model")
         self.assertEqual(loaded["probe"].duration.maximum, 123)
         self.assertEqual(loaded["probe"].steps.default, 30)
@@ -1374,24 +1403,37 @@ class UiModelSelection(unittest.TestCase):
         self.assertIn("--job-progress: 45%", running)
 
     def test_switching_to_musicgen_clamps_duration_and_hides_steps(self):
-        updates = app._model_updates("musicgen", 60, None)
+        updates = app._model_updates("musicgen", 60, None, None)
         self.assertEqual(updates[1]["value"], 30)
         self.assertEqual(updates[1]["maximum"], 30)
         self.assertFalse(updates[2]["visible"])
         self.assertEqual(updates[3]["value"], 3.0)
 
     def test_switching_to_minimax_exposes_its_full_duration_and_only_its_controls(self):
-        updates = app._model_updates("minimax-mlx", 270, None)
+        updates = app._model_updates("minimax-mlx", 270, None, None)
         self.assertEqual((updates[1]["value"], updates[1]["maximum"]), (270, 300))
         self.assertEqual(updates[2]["value"], 30)
         self.assertIsNone(updates[2]["maximum"])
         self.assertFalse(updates[3]["visible"])
 
-    def test_minimax_presets_are_structured_captions(self):
-        prompt = app._preset_prompt("Lo-fi / relaxed", "minimax-mlx")
+    def test_minimax_gets_a_structured_caption_not_tags_or_prose(self):
+        prompt = app._genre_prompt("Lo-fi Hip Hop", "minimax-mlx", 85)
         self.assertIn("Genre: lo-fi hip hop", prompt)
         self.assertIn("BPM: 85", prompt)
         self.assertIn("Arrangement:", prompt)
+        self.assertIn("Instrumental only, no vocals.", prompt)
+
+    def test_stable_audio_gets_audiosparx_tags_not_a_minimax_caption(self):
+        prompt = app._genre_prompt("Lo-fi Hip Hop", "stable-audio-medium", 85)
+        self.assertTrue(prompt.startswith("TrackType: Music, VocalType: Instrumental"))
+        self.assertIn("Genre: Hip Hop", prompt)
+        self.assertNotIn("Global Metadata", prompt)
+
+    def test_acestep_gets_a_tag_list_not_prose(self):
+        prompt = app._genre_prompt("Lo-fi Hip Hop", "acestep", 85)
+        self.assertIn("85bpm", prompt)
+        self.assertNotIn("TrackType:", prompt)
+        self.assertLess(len(prompt.split(".")), 3, "tag style should not be sentences")
 
     def test_ui_build_wires_model_change_history_refresh_and_generation(self):
         probe = """
@@ -1472,8 +1514,12 @@ print(json.dumps({
         self.assertEqual(result.returncode, 0, result.stderr)
         config = json.loads(result.stdout)
         self.assertEqual(config["models"], list(backends.BACKENDS))
-        self.assertEqual(config["default_model"], "minimax-mlx")
-        self.assertFalse(config["default_guidance_visible"])
+        self.assertEqual(config["default_model"], "stable-audio-medium")
+        self.assertEqual(
+            config["default_guidance_visible"],
+            backends.get(backends.DEFAULT_BACKEND).guidance is not None,
+            "the guidance control must follow the default backend, not a fixed model",
+        )
         self.assertEqual(config["duration_api_maximum"], 380)
         self.assertIn("Generate", config["buttons"])
         self.assertIn("Refresh history", config["buttons"])

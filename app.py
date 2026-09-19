@@ -18,36 +18,7 @@ from pathlib import Path
 import gradio as gr
 import soundfile as sf
 
-from synth import backends, core, jobs
-
-# Starting points for work-video backing tracks in each backend's prompt language.
-PRESETS = {
-    "Corporate / uplifting": {
-        "tags": "uplifting corporate, bright piano, subtle strings, steady four-on-the-floor, optimistic, 110bpm, instrumental",
-        "caption": "Global Metadata: Genre: corporate. BPM: 110. Mood: uplifting and optimistic. Arrangement: bright piano, subtle strings and a steady four-on-the-floor rhythm. Instrumental only, no vocals.",
-        "description": "An uplifting corporate instrumental at 110 BPM, bright piano and subtle strings over a steady four-on-the-floor beat, optimistic and building.",
-    },
-    "Lo-fi / relaxed": {
-        "tags": "lo-fi hip hop, warm rhodes piano, soft vinyl crackle, mellow drums, relaxed, 85bpm, instrumental",
-        "caption": "Global Metadata: Genre: lo-fi hip hop. BPM: 85. Mood: relaxed. Arrangement: warm Rhodes piano, soft vinyl crackle and mellow drums. Instrumental only, no vocals.",
-        "description": "A relaxed lo-fi hip hop instrumental at 85 BPM, warm Rhodes piano, soft vinyl crackle and mellow drums.",
-    },
-    "Ambient / underscore": {
-        "tags": "ambient underscore, soft evolving pads, sparse piano notes, gentle, unobtrusive, no drums, instrumental",
-        "caption": "Global Metadata: Genre: ambient underscore. Mood: gentle and unobtrusive. Arrangement: soft evolving pads and sparse piano notes, with no drums. Instrumental only, no vocals.",
-        "description": "A gentle ambient underscore, soft evolving pads and sparse piano notes, no drums, unobtrusive.",
-    },
-    "Tech / explainer": {
-        "tags": "minimal electronic, clean plucky synth arpeggio, light percussion, curious and modern, 100bpm, instrumental",
-        "caption": "Global Metadata: Genre: minimal electronic. BPM: 100. Mood: curious and modern. Arrangement: a clean, plucky synth arpeggio with light percussion. Instrumental only, no vocals.",
-        "description": "A curious, modern minimal electronic instrumental at 100 BPM, a clean plucky synth arpeggio with light percussion.",
-    },
-    "Tension / build": {
-        "tags": "cinematic tension, low pulsing strings, rising drone, building anticipation, sparse percussion, instrumental",
-        "caption": "Global Metadata: Genre: cinematic tension. Mood: building anticipation. Arrangement: low pulsing strings, a rising drone and sparse percussion. Instrumental only, no vocals.",
-        "description": "Cinematic tension building slowly, low pulsing strings, a rising drone and sparse percussion, instrumental.",
-    },
-}
+from synth import backends, core, jobs, prompting
 
 UI_CSS = """
 #generate-button:disabled {
@@ -276,13 +247,25 @@ def _prompt_hint(backend: backends.Backend) -> str:
     return "Use a structured caption in prose: genre, BPM, key, scale and arrangement."
 
 
-def _preset_prompt(name: str | None, model: str) -> str:
-    if not name:
+def _genre_prompt(genre: str | None, model: str, bpm: float | None = None) -> str:
+    """Build a fresh prompt in the selected backend's own prompt style.
+
+    Called on every genre change and on every press of Regenerate, so each press
+    is a new variation rather than the same text.
+    """
+    if not genre:
         return ""
-    prompts = PRESETS.get(name)
-    if not prompts:
-        return ""
-    return prompts[backends.get(model).prompt_style]
+    tempo = int(bpm) if bpm else None
+    return prompting.build_prompt(
+        genre, style=backends.get(model).prompt_style, bpm=tempo,
+    )
+
+
+def _genre_bpm(genre: str | None) -> float | int:
+    """The genre's typical tempo, so the BPM control follows the dropdown."""
+    if not genre or genre not in prompting.GENRES:
+        return gr.update()
+    return prompting.GENRES[genre].default_bpm()
 
 
 def _backend_summary(model: str) -> str:
@@ -343,9 +326,9 @@ def _control_envelope(attribute: str) -> tuple[float, float | None, float]:
     return minimum, maximum, min(control.step for control in controls)
 
 
-def _model_updates(model, duration, preset):
+def _model_updates(model, duration, genre, bpm):
     backend = backends.get(model)
-    prompt = _preset_prompt(preset, model) if preset else gr.update()
+    prompt = _genre_prompt(genre, model, bpm) if genre else gr.update()
     return (
         _backend_summary(model),
         _control_update(backend.duration, duration, preserve_current=True),
@@ -721,9 +704,16 @@ def build_ui() -> gr.Blocks:
                     label="Model",
                 )
                 model_summary = gr.Markdown(_backend_summary(core.DEFAULT_MODEL))
-                preset = gr.Radio(
-                    choices=list(PRESETS), label="Presets", value=None,
-                    info="Loads a starting prompt below. Then edit it.",
+                with gr.Row():
+                    genre = gr.Dropdown(
+                        choices=prompting.genre_names(), label="Genre", value=None,
+                        scale=3,
+                        info="Writes a prompt in this model's own style. Then edit it.",
+                    )
+                    regenerate = gr.Button("Regenerate", scale=1)
+                bpm = gr.Slider(
+                    50, 200, value=120, step=1, label="Tempo (BPM)",
+                    info="Written into the prompt. No model takes a tempo directly.",
                 )
                 prompt = gr.Textbox(
                     label="Prompt", lines=3,
@@ -842,16 +832,19 @@ def build_ui() -> gr.Blocks:
 
         model.change(
             _model_updates,
-            [model, duration, preset],
+            [model, duration, genre, bpm],
             [model_summary, duration, steps, guidance, prompt_help, prompt],
         )
         demo.load(
             _model_updates,
-            [model, duration, preset],
+            [model, duration, genre, bpm],
             [model_summary, duration, steps, guidance, prompt_help, prompt],
             queue=False,
         )
-        preset.change(_preset_prompt, [preset, model], prompt)
+        genre.change(_genre_bpm, genre, bpm).then(
+            _genre_prompt, [genre, model, bpm], prompt
+        )
+        regenerate.click(_genre_prompt, [genre, model, bpm], prompt)
 
         refresh.click(
             _refresh_history,
