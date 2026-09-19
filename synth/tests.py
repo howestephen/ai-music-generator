@@ -756,6 +756,14 @@ class Registry(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     backends.load_manifest(path)
 
+    def test_launch_allows_gradio_to_serve_the_output_folder(self):
+        """Gradio serves only declared paths. Without output/ on that list every
+        history player receives 403 and plays silence, which is invisible server-side."""
+        with mock.patch.object(app, "build_ui") as build:
+            app.main(port=7999)
+        allowed = build.return_value.launch.call_args.kwargs["allowed_paths"]
+        self.assertIn(str(core.OUTPUT_DIR), allowed)
+
     def test_runner_options_reach_the_runner_job_unchanged(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
         document["backends"]["minimax-mlx"]["runtime"]["runner_options"] = {

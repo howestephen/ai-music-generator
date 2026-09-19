@@ -887,12 +887,15 @@ def build_ui() -> gr.Blocks:
 
 
 def main(share: bool = False, port: int = 7860) -> None:
+    # Gradio serves only from paths it has been told about. Tracks are read back from
+    # `output/` by absolute path, so without this every player 403s and renders silent.
     build_ui().launch(
         share=share,
         server_port=port,
         inbrowser=True,
         css=UI_CSS,
         js=UI_JS,
+        allowed_paths=[str(core.OUTPUT_DIR)],
     )
 
 
