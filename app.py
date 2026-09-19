@@ -565,6 +565,59 @@ def _history_waveform(track: dict) -> str:
     )
 
 
+# Stability's runtime reads init audio as 44.1 kHz 16-bit PCM. Everything this
+# project renders with Stable Audio already matches; ACE-Step writes 48 kHz, so a
+# track from there cannot be reworked without a conversion step.
+EDIT_SAMPLE_RATE = 44100
+BEATS_PER_BAR = 4
+BAR_CHOICES = (8, 16, 32, 64, 128)
+
+
+def _bars_to_seconds(bpm: float, bars: float) -> float:
+    """Bars are the musical unit; the model only takes seconds."""
+    return bars * BEATS_PER_BAR * 60.0 / float(bpm)
+
+
+def _editable_track_choices() -> list[tuple[str, str]]:
+    choices = []
+    for track in _load_history():
+        if track["duration"] is None:
+            continue
+        label = f"{track['backend']} · {track['duration']:.0f}s · {track['name'][:44]}"
+        choices.append((label, track["path"]))
+    return choices
+
+
+def _edit_span(track_path: str | None, bpm: float, start_bar: float, bars: float):
+    """Describe the span a bar selection covers, or why it cannot be used."""
+    if not track_path:
+        return "Pick a track to rework."
+    try:
+        audit, error = _history_audio_audit(
+            track_path, Path(track_path).stat().st_mtime_ns
+        )
+    except OSError:
+        return "That track is no longer on disk."
+    if audit is None:
+        return f"That file is not readable audio: {error}"
+    total = audit.duration_seconds
+    start = _bars_to_seconds(bpm, max(0.0, start_bar - 1))
+    end = start + _bars_to_seconds(bpm, bars)
+    bar_seconds = _bars_to_seconds(bpm, 1)
+    total_bars = total / bar_seconds if bar_seconds else 0
+    if end > total:
+        return (
+            f"**Out of range.** Bars {start_bar:g} to {start_bar + bars - 1:g} end at "
+            f"{end:.1f}s but the track is {total:.1f}s (about {total_bars:.0f} bars "
+            f"at {bpm:g} BPM)."
+        )
+    return (
+        f"Regenerating **{start:.1f}s to {end:.1f}s** "
+        f"(bars {start_bar:g} to {start_bar + bars - 1:g} of about {total_bars:.0f}, "
+        f"one bar = {bar_seconds:.2f}s). Everything outside is kept."
+    )
+
+
 _JOB_QUEUE: jobs.GenerationQueue | None = None
 _JOB_QUEUE_LOCK = threading.Lock()
 
@@ -662,6 +715,84 @@ def _estimate_runtime(model: str, duration: float) -> float:
         rate = max((taken - overhead) / length, 0.0) if taken > overhead else rate
 
     return max(5.0, overhead + rate * float(duration))
+
+
+def _editable_track_choices_update():
+    return gr.update(choices=_editable_track_choices())
+
+
+def _enqueue_edit(model, track_path, prompt, bpm, start_bar, bars, steps, guidance):
+    """Queue a rework of one span of an existing track."""
+    backend = backends.get(model)
+    if not backend.supports_editing:
+        raise gr.Error(f"{backend.name} cannot rework audio. Pick a Stable Audio model.")
+    if not track_path:
+        raise gr.Error("Pick a track to rework.")
+    if not prompt or not prompt.strip():
+        raise gr.Error("Describe what the section should become.")
+    source = Path(track_path)
+    try:
+        audit, error = _history_audio_audit(str(source), source.stat().st_mtime_ns)
+    except OSError as exc:
+        raise gr.Error(f"That track is no longer readable: {exc}") from exc
+    if audit is None:
+        raise gr.Error(f"That file is not readable audio: {error}")
+    if audit.sample_rate != EDIT_SAMPLE_RATE:
+        raise gr.Error(
+            f"Rework needs {EDIT_SAMPLE_RATE} Hz input; that track is "
+            f"{audit.sample_rate} Hz. Stable Audio tracks qualify, ACE-Step ones do not."
+        )
+    start = _bars_to_seconds(bpm, max(0.0, start_bar - 1))
+    end = start + _bars_to_seconds(bpm, bars)
+    duration = audit.duration_seconds
+    if end > duration:
+        # core.generate would refuse this too, but only on the worker thread, where
+        # it becomes a failed card instead of an answer to the button you pressed.
+        raise gr.Error(
+            f"Bars {start_bar:g}-{start_bar + bars - 1:g} end at {end:.1f}s but the "
+            f"track is only {duration:.1f}s. Pick fewer bars or a later tempo."
+        )
+    try:
+        duration = backend.duration.validate(duration, f"{backend.name} duration")
+        steps = (
+            backend.steps.validate(steps, f"{backend.name} steps")
+            if backend.steps is not None else None
+        )
+        guidance = (
+            backend.guidance.validate(guidance, f"{backend.name} guidance")
+            if backend.guidance is not None else None
+        )
+    except ValueError as exc:
+        raise gr.Error(str(exc)) from exc
+
+    chosen_seed = random.randint(0, 2**31 - 1)
+    payload = {
+        "prompt": prompt.strip(),
+        "duration": duration,
+        "seed": chosen_seed,
+        "infer_step": steps,
+        "guidance_scale": guidance,
+        "model": backend.name,
+        "init_audio": str(source),
+        "inpaint_range": (start, end),
+        # An exact contract already forbids retries, and a rework is deliberate.
+        "_duration_retries": 0,
+        "_retry_seed": False,
+    }
+    summary = {
+        "model": backend.name,
+        "model_id": backend.model_id,
+        "prompt": f"rework {start:.1f}-{end:.1f}s · {prompt.strip()}",
+        "duration": duration,
+        "seed": chosen_seed,
+    }
+    queue = _get_job_queue()
+    queue.enqueue(payload, summary, _estimate_runtime(model, duration))
+    return (
+        f"**Queued a rework of {source.name[:40]}** · bars {start_bar:g}-"
+        f"{start_bar + bars - 1:g} ({start:.1f}s to {end:.1f}s) · seed `{chosen_seed}`",
+        queue.snapshot(),
+    )
 
 
 def _enqueue_generation(model, prompt, duration, steps, guidance, seed, use_seed):
@@ -874,6 +1005,38 @@ def build_ui() -> gr.Blocks:
                 go = gr.Button("Generate", variant="primary", elem_id="generate-button")
                 status = gr.Markdown("Ready to queue a generation.")
 
+                # The only bar-accurate structural control this model family has.
+                # Before generation, structure is prose; afterwards, a span can be
+                # regenerated in place, and bars convert to seconds from the tempo.
+                with gr.Accordion("Rework a section", open=False):
+                    gr.Markdown(
+                        "Regenerate part of a finished track and keep the rest. "
+                        "Stable Audio only."
+                    )
+                    edit_track = gr.Dropdown(
+                        choices=_editable_track_choices(), label="Track", value=None,
+                    )
+                    with gr.Row():
+                        edit_bpm = gr.Number(
+                            value=120, label="Tempo (BPM)", precision=0,
+                            minimum=20, maximum=300,
+                        )
+                        edit_start_bar = gr.Number(
+                            value=33, label="From bar", precision=0, minimum=1,
+                        )
+                        edit_bars = gr.Dropdown(
+                            choices=[str(count) for count in BAR_CHOICES],
+                            value="32", label="Length (bars)",
+                        )
+                    edit_span = gr.Markdown("Pick a track to rework.")
+                    edit_prompt = gr.Textbox(
+                        label="This section becomes", lines=2,
+                        placeholder="a stripped breakdown, no drums, just pads and a "
+                                    "filtered vocal texture",
+                    )
+                    edit_go = gr.Button("Rework section", variant="secondary")
+                    edit_status = gr.Markdown("")
+
             with gr.Column(scale=1, elem_id="history-panel"):
                 gr.Markdown("## Render queue")
                 queue_state = gr.State([])
@@ -956,6 +1119,28 @@ def build_ui() -> gr.Blocks:
         refresh.click(
             _refresh_history,
             outputs=[history, history_signature],
+        )
+        def _span_update(path, bpm, start, bars):
+            return _edit_span(
+                path, float(bpm or 120), float(start or 1), float(bars or 32)
+            )
+
+        span_inputs = [edit_track, edit_bpm, edit_start_bar, edit_bars]
+        for control in span_inputs:
+            control.change(_span_update, span_inputs, edit_span)
+        # A dropdown reports a user's pick as `select`, not `change`, so without this
+        # the span never updates when you choose a track.
+        for control in (edit_track, edit_bars):
+            control.select(_span_update, span_inputs, edit_span)
+        refresh.click(_editable_track_choices_update, outputs=edit_track)
+        edit_go.click(
+            lambda model, path, prompt, bpm, start, bars, steps, guidance: _enqueue_edit(
+                model, path, prompt, float(bpm or 120), float(start or 1),
+                float(bars or 32), steps, guidance,
+            ),
+            [model, edit_track, edit_prompt, edit_bpm, edit_start_bar, edit_bars,
+             steps, guidance],
+            [edit_status, queue_state],
         )
         request = go.click(
             _generation_started,

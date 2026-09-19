@@ -1002,6 +1002,83 @@ class Registry(unittest.TestCase):
                     "queue=False, so the panel will stop updating"
                 )
 
+    def test_bars_convert_to_seconds_from_the_tempo(self):
+        """Bars are the musical unit; the model only takes seconds."""
+        self.assertAlmostEqual(app._bars_to_seconds(120, 32), 64.0)
+        self.assertAlmostEqual(app._bars_to_seconds(174, 32), 44.1379, places=3)
+        self.assertAlmostEqual(app._bars_to_seconds(120, 1), 2.0)
+
+    def test_edit_span_reports_the_seconds_a_bar_selection_covers(self):
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        source = out / "probe.wav"
+        _write_test_wav(source, frames=120 * 8000)
+        with mock.patch.object(app, "_history_audio_audit") as audit:
+            audit.return_value = (backends.AudioAudit(120.0, 1, 44100, 2, 1, 0.5), None)
+            # 120s at 120 BPM is 60 bars, so bars 33-48 is 64.0s to 96.0s.
+            text = app._edit_span(str(source), 120, 33, 16)
+            self.assertIn("64.0s to 96.0s", text)
+            self.assertIn("about 60", text)
+            self.assertIn("Out of range", app._edit_span(str(source), 120, 33, 64))
+
+    def test_edit_refuses_a_backend_that_cannot_rework(self):
+        with self.assertRaisesRegex(app.gr.Error, "cannot rework"):
+            app._enqueue_edit("minimax-mlx", "/tmp/x.wav", "p", 120, 1, 32, 8, 1)
+
+    def test_edit_refuses_a_source_at_the_wrong_sample_rate(self):
+        """ACE-Step writes 48 kHz; Stability's runtime reads 44.1 kHz 16-bit PCM."""
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        source = out / "probe.wav"
+        _write_test_wav(source, frames=8000)
+        with mock.patch.object(app, "_history_audio_audit") as audit:
+            audit.return_value = (backends.AudioAudit(30.0, 1, 48000, 2, 1, 0.5), None)
+            with self.assertRaisesRegex(app.gr.Error, "44100 Hz"):
+                app._enqueue_edit(
+                    "stable-audio-sm", str(source), "p", 120, 1, 8, 8, 1,
+                )
+
+    def test_edit_refuses_a_span_that_runs_past_the_track(self):
+        """core.generate refuses it too, but on the worker thread, where it becomes
+        a failed card rather than an answer to the button you pressed."""
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        source = out / "probe.wav"
+        _write_test_wav(source, frames=8000)
+        with mock.patch.object(app, "_history_audio_audit") as audit:
+            audit.return_value = (backends.AudioAudit(30.0, 1, 44100, 2, 1, 0.5), None)
+            with self.assertRaisesRegex(app.gr.Error, "only 30.0s"):
+                app._enqueue_edit(
+                    "stable-audio-sm", str(source), "p", 120, 5, 32, 8, 1,
+                )
+
+    def test_edit_queues_an_inpaint_payload_with_the_right_span(self):
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        source = out / "probe.wav"
+        _write_test_wav(source, frames=8000)
+        captured = {}
+        queue = SimpleNamespace(
+            enqueue=lambda payload, summary, estimate: captured.update(
+                payload=payload, summary=summary
+            ),
+            snapshot=lambda: [],
+        )
+        with mock.patch.object(app, "_history_audio_audit") as audit, \
+                mock.patch.object(app, "_get_job_queue", return_value=queue), \
+                mock.patch.object(app, "_load_history", return_value=[]):
+            audit.return_value = (backends.AudioAudit(120.0, 1, 44100, 2, 1, 0.5), None)
+            app._enqueue_edit(
+                "stable-audio-sm", str(source), "a stripped breakdown",
+                120, 33, 16, 8, 1,
+            )
+        payload = captured["payload"]
+        self.assertEqual(payload["init_audio"], str(source))
+        self.assertEqual(payload["inpaint_range"], (64.0, 96.0))
+        self.assertEqual(payload["duration"], 120.0)
+        self.assertEqual(payload["_duration_retries"], 0)
+        self.assertIn("rework 64.0-96.0s", captured["summary"]["prompt"])
+
     def test_history_players_are_exclusive(self):
         """Every card owns its own audio element, so starting one must stop the rest."""
         self.assertIn("pauseEveryOtherPlayer", app.UI_JS)
@@ -1025,11 +1102,27 @@ class Registry(unittest.TestCase):
                     self.assertTrue(app._genre_prompt(genre, model).strip())
 
     def test_regenerate_gives_a_different_variation(self):
-        """Regenerate is worthless if it returns the same text every press."""
-        seen = {
-            prompting.build_prompt("Drum & Bass", seed=seed) for seed in range(12)
-        }
-        self.assertGreater(len(seen), 1)
+        """Regenerate is worthless if it returns the same text every press, and
+        near-worthless if every variation reads the same. Diversity has to come from
+        shape and vocabulary, not just a reshuffled adjective."""
+        seen = [prompting.build_prompt("Drum & Bass", seed=seed) for seed in range(40)]
+        self.assertGreaterEqual(len(set(seen)), 38)
+        vocabulary = set()
+        for prompt in seen:
+            vocabulary.update(prompt.lower().split())
+        self.assertGreater(len(vocabulary), 180, "prompts reuse too few words")
+        # Stability's own examples are tags plus fragments, not always sentences.
+        shapes = {prompt.count(". ") for prompt in seen}
+        self.assertGreater(len(shapes), 1, "every prompt has the same shape")
+
+    def test_proper_nouns_survive_prompt_assembly(self):
+        """str.capitalize lowercases the rest, turning an Amen break into an amen
+        break and a Rhodes into a rhodes."""
+        joined = " ".join(
+            prompting.build_prompt("Drum & Bass", seed=seed) for seed in range(30)
+        )
+        self.assertNotIn("amen break", joined)
+        self.assertNotIn("rhodes chords", joined)
 
     def test_a_requested_tempo_reaches_every_prompt_style(self):
         for style in ("tags", "caption", "description"):

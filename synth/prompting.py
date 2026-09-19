@@ -20,6 +20,39 @@ from dataclasses import dataclass, field
 # Tags Stability names explicitly as raising quality and coherence for music.
 MUSIC_PREAMBLE = "TrackType: Music, VocalType: Instrumental"
 
+# Stability names technique, recording environment and effects as descriptors that
+# are in the training data, so these apply across genres and multiply the number of
+# distinct prompts far faster than adding genre-specific lines would.
+SPACE = (
+    "recorded in a dead, close-mic'd room",
+    "with a wide, cavernous reverb",
+    "in a tight, dry studio space",
+    "with the natural ambience of a large hall",
+    "close-mic'd with almost no room sound",
+    "drenched in a long plate reverb",
+    "with a short, boxy room character",
+)
+EFFECTS = (
+    "tape saturation warming the highs",
+    "a slow filter sweep opening across the track",
+    "heavy sidechain pumping against the kick",
+    "subtle chorus widening the stereo image",
+    "bitcrushed detail in the background",
+    "analogue distortion on the low end",
+    "long delay throws trailing the main line",
+    "a gentle high-pass on the intro",
+)
+ERA = (
+    "with a nineties analogue character",
+    "with a modern, polished finish",
+    "with an early-2000s digital sheen",
+    "with a dusty, sampled-from-vinyl feel",
+    "with a raw, unmastered edge",
+    "",
+    "",
+)
+
+
 
 @dataclass(frozen=True)
 class Genre:
@@ -47,6 +80,12 @@ class Genre:
 
 # Spelling alone gets these wrong: "UK" reads "you-kay", so it takes "a".
 _CONSONANT_SOUNDING = ("uk", "uni", "euro", "eu", "one", "use")
+
+
+def _upper_first(text: str) -> str:
+    """Capitalise the first letter only. `str.capitalize` lowercases the rest,
+    which turns an Amen break into an amen break and a Rhodes into a rhodes."""
+    return text[:1].upper() + text[1:]
 
 
 def _article(word: str) -> str:
@@ -424,7 +463,7 @@ def build_prompt(
         arrangement = f"{drums}, {bass}, and {lead}"
         caption = (
             f"Global Metadata: Genre: {prose}. BPM: {tempo}. Mood: {mood}. "
-            f"Arrangement: {arrangement}. {rng.choice(genre.texture).capitalize()}."
+            f"Arrangement: {arrangement}. {_upper_first(rng.choice(genre.texture))}."
         )
         if genre.structure:
             caption += f" Structure: {rng.choice(genre.structure)}."
@@ -435,17 +474,47 @@ def build_prompt(
     if style != "description":
         raise ValueError(f"unknown prompt style {style!r}")
 
+    # Stability's own examples are tags plus comma-separated fragments, not
+    # grammatical sentences ("TrackType: Instrument, a sombre solo acoustic guitar
+    # track with cavernous reverb"). Varying the shape, which elements appear and
+    # their order is what stops every prompt reading the same.
     tags = [MUSIC_PREAMBLE, *genre.tags, *genre.instruments]
-    sentences = [
-        f"{_article(prose).capitalize()} {prose} instrumental at {tempo} BPM, "
-        f"{mood}.",
-        f"It is built on {drums} and {bass}, with {lead}.",
-        f"{rng.choice(genre.texture).capitalize()}.",
-    ]
-    if genre.structure:
+    core_phrases = [drums, bass, lead]
+    rng.shuffle(core_phrases)
+
+    colour = [rng.choice(genre.texture)]
+    for pool in (SPACE, EFFECTS, ERA):
+        pick = rng.choice(pool)
+        if pick and rng.random() < 0.6:
+            colour.append(pick)
+    rng.shuffle(colour)
+    colour = colour[: rng.randint(1, min(3, len(colour)))]
+
+    opening = f"{_upper_first(_article(prose))} {mood} {prose} instrumental at {tempo} BPM"
+
+    if rng.random() < 0.5:
+        # Fragment form, closest to Stability's own examples.
+        parts = [opening, *core_phrases, *colour]
+        if genre.structure and rng.random() < 0.7:
+            parts.append(rng.choice(genre.structure))
+        if rng.random() < 0.6:
+            parts.append(rng.choice(genre.production))
+        if extra.strip():
+            parts.append(extra.strip().rstrip("."))
+        return ", ".join(tags) + ". " + ", ".join(parts) + "."
+
+    sentences = [f"{opening}."]
+    sentences.append(
+        f"{_upper_first(core_phrases[0])} sits under {core_phrases[1]}"
+        f", with {core_phrases[2]}."
+    )
+    sentences.append(_upper_first(colour[0]) + (
+        f", {', '.join(colour[1:])}." if len(colour) > 1 else "."
+    ))
+    if genre.structure and rng.random() < 0.7:
         sentences.append(f"Structurally, {rng.choice(genre.structure)}.")
-    sentences.append(f"{rng.choice(genre.production).capitalize()}.")
+    if rng.random() < 0.6:
+        sentences.append(_upper_first(rng.choice(genre.production)) + ".")
     if extra.strip():
         sentences.append(extra.strip().rstrip(".") + ".")
-
     return ", ".join(tags) + ". " + " ".join(sentences)

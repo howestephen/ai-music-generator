@@ -56,20 +56,24 @@ they are never buried in a chat.
 ## Phase 2: Any model, any length
 
 - Status: `in_progress`
-- Goal: adding or upgrading a model is a manifest entry plus a runner, and a model that
-  delivers an exact length is not policed as though it might stop early
+- Goal: adding or upgrading a model is a manifest entry plus a runner, a model that
+  delivers an exact length is not policed as though it might stop early, and the UI
+  tells the truth about what is happening. Detail in git and
+  [docs/decisions.md](docs/decisions.md), traps in [docs/gotchas.md](docs/gotchas.md)
 
-| # | Title | Status | Why it matters | Spec | Deps |
-|---|---|---|---|---|---|
-| 2.1 | Per-backend duration contract | `done` | Acceptance assumed every model may stop early, so a fixed-length model was judged by a ratio it cannot miss and an overshoot passed silently. A backend now declares `best_effort` or `exact`; the sample-stream audit still runs everywhere. An exact contract gains an upper bound and cannot also declare a tolerance or a retry | none | 1.2 |
-| 2.2 | Per-backend runner options | `done` | A second variant of one runtime (Stable Audio's small and medium DiTs) differs only in which checkpoint loads, so without this each variant would need its own runner script. `runtime.runner_options` is a string map passed straight to the runner job, refused on a backend that has no runner. Landed 2026-09-19 | none | 2.1 |
-| 2.3 | Serve generated audio to the browser | `done` | Gradio serves only declared paths, so every history player received 403 and rendered silence while the server logged nothing and the files on disk were valid. `launch` now allows `output/`. Reported by owner 2026-09-19, fixed the same day | none | - |
-| 2.4 | Stable Audio 3 backend (small and medium) | `done` | First model with an exact duration contract, and the first where a second variant costs only a manifest entry. Stability's own pure-MLX runtime, 44.1kHz stereo, licensed training data, commercial use below the revenue threshold. Adds a third prompt style, `description`, because tag and caption prompting both degrade it. Landed 2026-09-19 | none | 2.2 |
-| 2.5 | Genre dropdown and model-aware prompts | `done` | 16 genres, each with its own vocabulary and tempo range, replacing five fixed presets. A genre writes a prompt in the selected backend's own style, and Regenerate draws a fresh variation. Stable Audio 3 medium becomes the default. Landed 2026-09-19 | none | 2.4 |
-| 2.6 | Honest render estimate and exclusive playback | `done` | Progress read as hung twice: a cold-start weight download counted as render time, and cost was modelled as a multiple of track length when it is overhead plus a small rate, so a 26s render crawled against a 95s estimate. The estimate is now fitted from recent renders, cards show elapsed seconds, and one track plays at a time | none | 2.5 |
-| 2.7 | Mobile layout does not scroll sideways | `done` | Flex children default to `min-width: auto` and refuse to shrink below their content, so a queue card held 301px of header in a 285px box and pushed the page sideways on a phone. Panels and cards may now shrink, the header wraps, and long unbroken prompts and filenames break. Measured at 320, 360, 375 and 390 with a full history: zero overflow. Reported by owner 2026-09-19 | none | 2.6 |
-| 2.8 | Queue panel reflects reality again | `done` | The card froze at "0s elapsed" while renders finished normally. Two causes: `gr.Timer` never fires in this Gradio build, and `@gr.render` does not re-run for a `queue=False` event, so every handler feeding the panels was inert. Polling now runs from the app's own JS through the queue, and history audio is served from `output/` rather than copied | none | 2.7 |
-| 2.9 | Section editing through inpainting | `in_progress` | Stable Audio has no section tokens, so prose is the only pre-generation structure control; regenerating a span of a finished track is the real mechanism, and bars convert to seconds once BPM is known. Core, manifest and runner carry init audio and an inpaint range, refused loudly where unsupported. Proven on a real render. UI still to come | none | 2.8 |
+| # | Title | Status | Landed |
+|---|---|---|---|
+| 2.1 | Per-backend duration contract: `best_effort` or `exact` | `done` | 2026-09-19 |
+| 2.2 | Per-backend runner options, so a variant costs only a manifest entry | `done` | 2026-09-19 |
+| 2.3 | Serve generated audio to the browser (`allowed_paths`) | `done` | 2026-09-19 |
+| 2.4 | Stable Audio 3 small and medium, the first exact-length backends | `done` | 2026-09-19 |
+| 2.5 | Genre dropdown writing prompts in each backend's own style | `done` | 2026-09-19 |
+| 2.6 | Render estimate fitted from measurements; one track plays at a time | `done` | 2026-09-19 |
+| 2.7 | Mobile layout no longer scrolls sideways | `done` | 2026-09-19 |
+| 2.8 | Queue panel reflects reality (`gr.Timer` inert, `queue=False` blocks renders) | `done` | 2026-09-19 |
+| 2.10 | Prompts vary in shape and vocabulary, not just adjectives | `done` | 2026-09-19 |
+
+| 2.9 | Section editing through inpainting | `in_progress` | Stable Audio has no section tokens, so prose is the only pre-generation structure control; regenerating a span of a finished track is the real mechanism, and bars convert to seconds once BPM is known. Core, manifest and runner carry init audio and an inpaint range, refused loudly where unsupported; proven on a real render. A **Rework a section** panel picks a track, tempo, start bar and length. Still to do: one mode visible at a time, uploading an outside track, and exposing the noise level for whole-track remixing | none | 2.8 |
 
 ## Deferred ideas
 
