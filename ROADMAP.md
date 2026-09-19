@@ -26,22 +26,21 @@ they are never buried in a chat.
 
 ## Phase 0: Retrofit and remediation
 
-- Status: `done`
-- Goals: the house standard in place and enforced; the 2026-09-09 audit findings
-  closed (19 verified: 4 high, 8 medium, 7 low)
-- Risks: fixing the parameter seam changes the sidecar format. Kept additive: a
-  `backend` key is added and `model` (the weights id) is kept, so old sidecars parse
+- Status: `done`, all 19 verified audit findings of 2026-09-09 closed (4 high, 8
+  medium, 7 low). Detail is in git history and [docs/decisions.md](docs/decisions.md)
+- The sidecar change was kept additive: `backend` was added and `model` kept, so
+  sidecars written before it still parse
 
-| # | Title | Status | Why it matters | Spec | Deps |
-|---|---|---|---|---|---|
-| 0.1 | Retrofit to `ai-product-base` | `done` | Rules, commit gates, frontmatter and the structure lock. Nothing else is enforced until this lands | none | - |
-| 0.2 | Per-backend parameter plumbing | `done` | `--steps` and `--guidance` never reached `minimax-mlx`, MusicGen always got guidance 15 instead of its own 3, `--lyrics` was a silent no-op there, and the sidecar's `dtype` and `model` were wrong for MLX, so the README reproduction command failed. Landed 2026-09-10 | none | 0.1 |
-| 0.3 | Model selector and persistent UI history | `done` | The UI was locked to ACE-Step and replaced the visible result after every generation. It now selects any registered backend, adapts controls and presets to that backend, and rebuilds a newest-first playable history from the existing WAV files and sidecars. Landed 2026-09-15. Button-level generation progress followed, then the balanced history and fitted waveforms. UI helpers are covered in `synth/tests.py` | none | 0.2 |
-| 0.3.1 | Serial UI render queue | `done` | Submissions become reorderable, removable pending cards at once while one worker renders at a time. The active card shows a labelled estimate because runners expose only start and finish. Queue and history are server-owned across browsers, and a process-wide lock keeps concurrent first access to one worker. Re-audited 2026-09-16 | none | 0.3 |
-| 0.3.2 | Manifest-driven UI controls | `done` | `synth/backends.json` became the versioned source of truth for runtime, controls, licence and prompting metadata. Gradio's static schema accepts the union of the contracts; selecting a model narrows the visible controls, and core enforces that backend. A new subprocess model is one manifest entry plus a JSON runner adapter. Completed 2026-09-16; covers the original 270-second failure | none | 0.3.1 |
-| 0.4 | Harden the runner seam | `done` | Probes import the modules each backend really invokes. Subprocesses use explicit UTF-8, finite nested timeouts and process-group cleanup, so no orphaned GPU child survives. Malformed JSON, an unexpected or existing path, invalid timing and unreadable audio all fail loudly. Completed 2026-09-16 | none | 0.2 |
-| 0.5 | Make `analyze.py` honest | `done` | Optional pitch-class coverage replaces the hardcoded D Mixolydian score and cannot separate modes sharing notes. Strongest chroma is a peak, not a tonic. Quiet edges no longer claim a fade. Silent or non-finite measurements stay unscored, warnings stay visible, and one bad file fails the run without aborting it. Completed 2026-09-16 | none | 0.1 |
-| 0.6 | Docs match the code | `done` | README now recreates the locked main environment and pins the isolated MiniMax package to the tested source commit. Environment checks and model probes are documented. Gotchas now describe the actual MLX package conversion boundary and name each XET setting. Completed and independently re-audited 2026-09-16 | none | 0.2 |
+| # | Title | Status | Landed |
+|---|---|---|---|
+| 0.1 | Retrofit to `ai-product-base`: rules, commit gates, frontmatter, structure lock | `done` | 2026-09-10 |
+| 0.2 | Per-backend parameter plumbing, so a control that cannot apply is refused not dropped | `done` | 2026-09-10 |
+| 0.3 | Model selector and persistent UI history rebuilt from the files on disk | `done` | 2026-09-15 |
+| 0.3.1 | Serial render queue, server-owned across browsers | `done` | 2026-09-16 |
+| 0.3.2 | Manifest-driven UI controls: `synth/backends.json` is the source of truth | `done` | 2026-09-16 |
+| 0.4 | Harden the runner seam: UTF-8, nested timeouts, process-group cleanup, loud failures | `done` | 2026-09-16 |
+| 0.5 | Make `analyze.py` honest: no invented key score, no claimed fades | `done` | 2026-09-16 |
+| 0.6 | Docs match the code: locked environments and pinned MiniMax source commit | `done` | 2026-09-16 |
 
 ## Phase 1: Output acceptance
 
