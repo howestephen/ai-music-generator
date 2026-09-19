@@ -887,6 +887,21 @@ class Registry(unittest.TestCase):
         })
         self.assertIn("12s elapsed", running)
 
+    def test_narrow_layout_lets_every_panel_and_card_shrink(self):
+        """A flex child defaults to min-width:auto and refuses to shrink below its
+        content, which pushed the queue header 16px past its own box on a phone and
+        scrolled the whole page sideways."""
+        for selector in ("#controls-panel", "#history-panel", ".queue-job",
+                         ".history-card", ".queue-job-title"):
+            with self.subTest(selector=selector):
+                self.assertIn(selector, app.UI_CSS)
+        self.assertIn("min-width: 0", app.UI_CSS)
+        self.assertIn("flex-wrap: wrap", app.UI_CSS)
+
+    def test_long_unbroken_text_cannot_widen_a_card(self):
+        """Prompts and generated filenames carry long runs with no spaces."""
+        self.assertIn("overflow-wrap: anywhere", app.UI_CSS)
+
     def test_history_players_are_exclusive(self):
         """Every card owns its own audio element, so starting one must stop the rest."""
         self.assertIn("pauseEveryOtherPlayer", app.UI_JS)

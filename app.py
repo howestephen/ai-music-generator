@@ -55,9 +55,24 @@ UI_CSS = """
     z-index: 1;
 }
 
+/* Every column and card must be allowed to shrink, or one long string inside
+   makes the whole page scroll sideways on a phone. */
 #history-panel,
-.history-audio {
+#controls-panel,
+.history-audio,
+.history-card,
+.queue-job {
     min-width: 0;
+}
+
+.history-card,
+.queue-job {
+    overflow-wrap: anywhere;
+}
+
+/* Gradio's own toast is wider than a small phone and would scroll the page. */
+.toast-wrap {
+    max-width: calc(100vw - 1rem);
 }
 
 .history-waveform {
@@ -109,12 +124,18 @@ UI_CSS = """
 .queue-job-header {
     align-items: baseline;
     display: flex;
-    gap: 0.75rem;
+    /* A flex child defaults to min-width:auto and refuses to shrink below its
+       content, which is what pushed this header 16px past its own box on a
+       phone. Wrapping plus min-width:0 below is the fix, not a narrower font. */
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
     justify-content: space-between;
 }
 
 .queue-job-title {
     font-weight: 600;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .queue-job-status {
@@ -127,6 +148,8 @@ UI_CSS = """
     color: var(--body-text-color-subdued);
     font-size: 0.9em;
     margin-top: 0.35rem;
+    /* Prompts and generated filenames carry long unbroken runs. */
+    overflow-wrap: anywhere;
 }
 
 .queue-job-track {
