@@ -87,6 +87,19 @@ they are never buried in a chat.
 - Research current local music models and alternative generation architectures. Compare
   Apple Silicon support, licence, duration, controllability, genre evidence, runtime and
   integration cost before proposing additions. Trigger: after Phase 0 owner review
+- Deliver vocals and instruments as separate audio files. Compare the routes before
+  building, rather than assuming one: ACE-Step 1.5 lists Track Separation and Vocal2BGM
+  natively (MIT); Demucs runs locally and works on any audio including tracks already in
+  `output/`; LALAL.AI is installed on Stephen's Mac with paid credit, so a file handed to
+  it is a third route with no install cost. Whatever wins, a stem is a generated asset and
+  needs its own sidecar and audit. Why deferred: nothing needs an isolated stem yet.
+  Trigger: the first track that does
+- Vocal-specific synthesis, so a written topline can be sung. SoulX-Singer (Feb 2026,
+  zero-shot, 42k hours, English/Mandarin/Cantonese) takes a melody as F0 or MIDI plus
+  lyrics, not a text prompt, so it needs a different input surface from every backend
+  here. Why deferred: no Apple Silicon or MLX build was found, and the training-data
+  provenance is less clearly stated than Stability's, which matters commercially.
+  Trigger: wanting to sing a melody written in Ableton
 
 ## Owner decisions open
 
