@@ -213,6 +213,7 @@ def generate(
                 "steps": steps,
                 "guidance": guidance,
                 "output_path": str(path),
+                "options": dict(backend.runner_options),
             })
             elapsed = result.get("elapsed_seconds", time.time() - started)
             audio_audit = result.get("_audio_audit")

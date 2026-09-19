@@ -221,6 +221,8 @@ class Backend:
     instrumental_tag: str = "[inst]"
     supports_lyrics: bool = True
     probe_modules: tuple[str, ...] = ()
+    # Pairs, not a dict: a dict field would make this frozen value unhashable.
+    runner_options: tuple[tuple[str, str], ...] = ()
     timeout_seconds: int | None = None
 
     @classmethod
@@ -241,7 +243,7 @@ class Backend:
             raise ValueError(f"backends.{name}.runtime must be an object")
         _expect_keys(
             runtime,
-            {"probe_modules", "timeout_seconds"},
+            {"probe_modules", "timeout_seconds", "runner_options"},
             f"backends.{name}.runtime",
         )
         probe_modules = runtime["probe_modules"]
@@ -252,6 +254,25 @@ class Backend:
         ):
             raise ValueError(
                 f"backends.{name}.runtime.probe_modules must be a non-empty string list"
+            )
+        # Per-backend switches the runner needs but core has no opinion about, such as
+        # which checkpoint of a multi-model runtime to load. Keeping them here is what
+        # lets a second variant of an existing model be a manifest entry alone.
+        runner_options = runtime["runner_options"]
+        if not isinstance(runner_options, dict) or any(
+            not isinstance(key, str)
+            or not key
+            or not isinstance(value, str)
+            or not value
+            for key, value in runner_options.items()
+        ):
+            raise ValueError(
+                f"backends.{name}.runtime.runner_options must map non-empty strings "
+                "to non-empty strings"
+            )
+        if data["runner"] is None and runner_options:
+            raise ValueError(
+                f"backends.{name}.runtime.runner_options needs a runner to receive them"
             )
         timeout_seconds = runtime["timeout_seconds"]
         if timeout_seconds is not None and (
@@ -303,6 +324,7 @@ class Backend:
             instrumental_tag=data["instrumental_tag"],
             supports_lyrics=data["supports_lyrics"],
             probe_modules=tuple(probe_modules),
+            runner_options=tuple(sorted(runner_options.items())),
             timeout_seconds=timeout_seconds,
         )
 
@@ -360,7 +382,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
     if not isinstance(document, dict):
         raise ValueError("backend manifest must contain one JSON object")
     _expect_keys(document, {"schema_version", "default_backend", "backends"}, "manifest")
-    if document["schema_version"] != 4:
+    if document["schema_version"] != 5:
         raise ValueError(f"unsupported backend manifest schema {document['schema_version']!r}")
     raw_backends = document["backends"]
     if not isinstance(raw_backends, dict) or not raw_backends:

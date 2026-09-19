@@ -724,7 +724,7 @@ class Registry(unittest.TestCase):
 
     def test_manifest_declares_the_default_and_every_registered_backend(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 4)
+        self.assertEqual(document["schema_version"], 5)
         self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
         self.assertEqual(backends.DEFAULT_BACKEND, "minimax-mlx")
         self.assertEqual(list(document["backends"]), list(backends.BACKENDS))
@@ -755,6 +755,59 @@ class Registry(unittest.TestCase):
                 path.write_text(json.dumps(document), encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, message):
                     backends.load_manifest(path)
+
+    def test_runner_options_reach_the_runner_job_unchanged(self):
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        document["backends"]["minimax-mlx"]["runtime"]["runner_options"] = {
+            "dit": "sm-music",
+            "decoder": "same-s",
+        }
+        path = Path(tempfile.mkdtemp()) / "backends.json"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        _default, loaded = backends.load_manifest(path)
+        self.assertEqual(
+            dict(loaded["minimax-mlx"].runner_options),
+            {"dit": "sm-music", "decoder": "same-s"},
+        )
+
+    def test_a_backend_stays_hashable_with_runner_options(self):
+        """Backend is a frozen value object; a dict field would silently break that."""
+        options = {"dit": "medium"}
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        document["backends"]["minimax-mlx"]["runtime"]["runner_options"] = options
+        path = Path(tempfile.mkdtemp()) / "backends.json"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        _default, loaded = backends.load_manifest(path)
+        self.assertIsInstance(hash(loaded["minimax-mlx"]), int)
+
+    def test_manifest_rejects_unusable_runner_options(self):
+        cases = (
+            ({"dit": 3}, "non-empty strings"),
+            ({"dit": ""}, "non-empty strings"),
+            ({"": "sm-music"}, "non-empty strings"),
+            ("sm-music", "non-empty strings"),
+        )
+        for value, message in cases:
+            with self.subTest(value=value):
+                document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+                document["backends"]["minimax-mlx"]["runtime"]["runner_options"] = value
+                path = Path(tempfile.mkdtemp()) / "backends.json"
+                self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+                path.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, message):
+                    backends.load_manifest(path)
+
+    def test_runner_options_are_refused_without_a_runner(self):
+        """An in-process backend never sees a job dict, so options there are a lie."""
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        document["backends"]["acestep"]["runtime"]["runner_options"] = {"dit": "medium"}
+        path = Path(tempfile.mkdtemp()) / "backends.json"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "needs a runner to receive them"):
+            backends.load_manifest(path)
 
     def test_manifest_rejects_an_unknown_duration_contract(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))

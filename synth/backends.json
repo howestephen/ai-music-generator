@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "default_backend": "minimax-mlx",
   "backends": {
     "acestep": {
@@ -20,7 +20,8 @@
       },
       "runtime": {
         "probe_modules": ["acestep.pipeline_ace_step"],
-        "timeout_seconds": null
+        "timeout_seconds": null,
+        "runner_options": {}
       },
       "controls": {
         "duration": {
@@ -70,7 +71,8 @@
       },
       "runtime": {
         "probe_modules": ["mlx_minimax_music3.cli"],
-        "timeout_seconds": 7200
+        "timeout_seconds": 7200,
+        "runner_options": {}
       },
       "controls": {
         "duration": {
@@ -112,7 +114,8 @@
       },
       "runtime": {
         "probe_modules": ["soundfile", "torch", "transformers"],
-        "timeout_seconds": 7200
+        "timeout_seconds": 7200,
+        "runner_options": {}
       },
       "controls": {
         "duration": {
