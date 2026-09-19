@@ -1058,6 +1058,62 @@ class Registry(unittest.TestCase):
         self.addCleanup(lambda: prepared.unlink(missing_ok=True))
         self.assertNotEqual(prepared.parent, core.OUTPUT_DIR)
 
+    def test_menu_selections_reach_every_prompt_style(self):
+        """The menus are the interface now, so a selection that quietly fails to
+        appear in the prompt is the same class of fault as a dead control."""
+        for style in ("tags", "caption", "description"):
+            with self.subTest(style=style):
+                built = prompting.build_prompt(
+                    "Drum & Bass", style=style, bpm=174, seed=1,
+                    mood="dark and driving",
+                    instruments=("Bass", "Drums"),
+                    character=("with a wide, cavernous reverb",),
+                    extra="ragga chops",
+                )
+                self.assertIn("174", built)
+                self.assertIn("dark and driving", built)
+                self.assertIn("cavernous reverb", built)
+                self.assertIn("ragga chops", built)
+                # Tag style lowercases its list; the others keep the tag casing.
+                self.assertIn("bass", built.lower())
+                self.assertIn("drums", built.lower())
+
+    def test_vocals_selection_changes_the_prompt_not_just_a_flag(self):
+        instrumental = prompting.build_prompt("Drum & Bass", seed=1, vocals=False)
+        voiced = prompting.build_prompt("Drum & Bass", seed=1, vocals=True)
+        self.assertIn("VocalType: Instrumental", instrumental)
+        self.assertNotIn("VocalType: Instrumental", voiced)
+        self.assertIn("vocal", voiced.lower())
+
+    def test_menu_options_are_offered_for_every_genre(self):
+        self.assertGreater(len(prompting.instrument_options()), 10)
+        self.assertGreater(len(prompting.character_options()), 10)
+        for genre in prompting.genre_names():
+            with self.subTest(genre=genre):
+                self.assertTrue(prompting.mood_options(genre))
+                self.assertTrue(prompting.instrument_options(genre))
+
+    def test_lyrics_are_refused_by_a_backend_that_cannot_sing(self):
+        """Stable Audio has no lyrics channel; Stability say it never produces
+        intelligible vocals. Accepting words there would be a dead control."""
+        with self.assertRaisesRegex(app.gr.Error, "no lyrics channel"):
+            app._enqueue_generation(
+                "stable-audio-sm", "a track", 30, 8, 1, 42, True, "[verse] hello",
+            )
+
+    def test_lyrics_reach_the_payload_for_a_backend_that_can_sing(self):
+        captured = {}
+        queue = SimpleNamespace(
+            enqueue=lambda payload, summary, estimate: captured.update(payload=payload),
+            snapshot=lambda: [],
+        )
+        with mock.patch.object(app, "_get_job_queue", return_value=queue), \
+                mock.patch.object(app, "_load_history", return_value=[]):
+            app._enqueue_generation(
+                "minimax-mlx", "a song", 30, 30, None, 42, True, "[verse] hello",
+            )
+        self.assertEqual(captured["payload"]["lyrics"], "[verse] hello")
+
     def test_edit_refuses_a_backend_that_cannot_rework(self):
         with self.assertRaisesRegex(app.gr.Error, "cannot rework"):
             app._enqueue_edit("minimax-mlx", "/tmp/x.wav", None, "p", 120, 1, 32, 8, 1)

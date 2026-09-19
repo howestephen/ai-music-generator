@@ -425,6 +425,40 @@ def genre_names() -> list[str]:
     return list(GENRES)
 
 
+# Offered in the UI as menus. Empty means "let the genre decide", so a selection
+# pins one axis while Regenerate keeps varying the rest.
+RANDOM_CHOICE = "(let the genre decide)"
+
+
+def character_options() -> list[str]:
+    """Everything selectable on the character axis, for a UI multiselect."""
+    return [option for option in (*SPACE, *EFFECTS, *ERA) if option]
+
+
+def mood_options(genre_name: str | None = None) -> list[str]:
+    if genre_name and genre_name in GENRES:
+        return list(GENRES[genre_name].mood)
+    moods: list[str] = []
+    for genre in GENRES.values():
+        moods.extend(genre.mood)
+    return sorted(set(moods))
+
+
+def instrument_options(genre_name: str | None = None) -> list[str]:
+    """Instrument names, split out of the AudioSparx `Instruments:` tag."""
+    names: set[str] = set()
+    pool = (
+        [GENRES[genre_name]] if genre_name and genre_name in GENRES
+        else list(GENRES.values())
+    )
+    for genre in pool:
+        for tag in genre.instruments:
+            names.update(
+                part.strip() for part in tag.removeprefix("Instruments:").split(",")
+            )
+    return sorted(name for name in names if name)
+
+
 def build_prompt(
     genre_name: str,
     *,
@@ -432,6 +466,10 @@ def build_prompt(
     bpm: int | None = None,
     seed: int | None = None,
     extra: str = "",
+    mood: str | None = None,
+    instruments: tuple[str, ...] = (),
+    character: tuple[str, ...] = (),
+    vocals: bool = False,
 ) -> str:
     """Compose one prompt variation for `genre_name` in the backend's own style.
 
@@ -449,12 +487,21 @@ def build_prompt(
     rng = random.Random(seed)
     tempo = bpm if bpm is not None else rng.randint(*genre.bpm)
     prose = genre.prose or genre_name.lower()
-    mood = rng.choice(genre.mood)
+    if not mood or mood == RANDOM_CHOICE:
+        mood = rng.choice(genre.mood)
+    chosen_instruments = (
+        f"Instruments: {', '.join(instruments)}" if instruments else None
+    )
+    voice_tag = "VocalType: Instrumental" if not vocals else None
+    voice_words = "" if not vocals else "with a wordless vocal texture over the top"
     drums, bass, lead = (rng.choice(p) for p in (genre.drums, genre.bass, genre.lead))
 
     if style == "tags":
         picked = rng.sample(genre.keywords, min(4, len(genre.keywords)))
-        parts = [prose, *picked, f"{tempo}bpm", mood, "instrumental"]
+        parts = [prose, *picked, f"{tempo}bpm", mood]
+        parts.extend(instrument.lower() for instrument in instruments)
+        parts.extend(character)
+        parts.append("with vocals" if vocals else "instrumental")
         if extra.strip():
             parts.append(extra.strip().rstrip("."))
         return ", ".join(parts)
@@ -465,11 +512,18 @@ def build_prompt(
             f"Global Metadata: Genre: {prose}. BPM: {tempo}. Mood: {mood}. "
             f"Arrangement: {arrangement}. {_upper_first(rng.choice(genre.texture))}."
         )
+        if instruments:
+            caption += f" Instruments: {', '.join(instruments)}."
+        if character:
+            caption += f" Production: {', '.join(character)}."
         if genre.structure:
             caption += f" Structure: {rng.choice(genre.structure)}."
         if extra.strip():
             caption += f" {extra.strip().rstrip('.')}."
-        return caption + " Instrumental only, no vocals."
+        return caption + (
+            " Vocals: wordless vocal texture." if vocals
+            else " Instrumental only, no vocals."
+        )
 
     if style != "description":
         raise ValueError(f"unknown prompt style {style!r}")
@@ -478,19 +532,30 @@ def build_prompt(
     # grammatical sentences ("TrackType: Instrument, a sombre solo acoustic guitar
     # track with cavernous reverb"). Varying the shape, which elements appear and
     # their order is what stops every prompt reading the same.
-    tags = [MUSIC_PREAMBLE, *genre.tags, *genre.instruments]
+    tags = ["TrackType: Music"]
+    if voice_tag:
+        tags.append(voice_tag)
+    tags.extend(genre.tags)
+    tags.append(chosen_instruments or (genre.instruments[0] if genre.instruments else ""))
+    tags = [tag for tag in tags if tag]
     core_phrases = [drums, bass, lead]
     rng.shuffle(core_phrases)
 
-    colour = [rng.choice(genre.texture)]
-    for pool in (SPACE, EFFECTS, ERA):
-        pick = rng.choice(pool)
-        if pick and rng.random() < 0.6:
-            colour.append(pick)
-    rng.shuffle(colour)
-    colour = colour[: rng.randint(1, min(3, len(colour)))]
+    if character:
+        colour = [rng.choice(genre.texture), *character]
+    else:
+        colour = [rng.choice(genre.texture)]
+        for pool in (SPACE, EFFECTS, ERA):
+            pick = rng.choice(pool)
+            if pick and rng.random() < 0.6:
+                colour.append(pick)
+        rng.shuffle(colour)
+        colour = colour[: rng.randint(1, min(3, len(colour)))]
+    if voice_words:
+        colour.append(voice_words)
 
-    opening = f"{_upper_first(_article(prose))} {mood} {prose} instrumental at {tempo} BPM"
+    kind = "track" if vocals else "instrumental"
+    opening = f"{_upper_first(_article(prose))} {mood} {prose} {kind} at {tempo} BPM"
 
     if rng.random() < 0.5:
         # Fragment form, closest to Stability's own examples.

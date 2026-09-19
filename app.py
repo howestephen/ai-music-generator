@@ -306,6 +306,36 @@ def _prompt_hint(backend: backends.Backend) -> str:
     return "Use a structured caption in prose: genre, BPM, key, scale and arrangement."
 
 
+def _compose_prompt(genre, model, bpm, mood, vocals, instruments, character, keywords):
+    """Build the prompt from the menu selections, in the backend's own style."""
+    if not genre:
+        return gr.skip()
+    backend = backends.get(model)
+    wants_vocals = vocals == "With vocals"
+    return prompting.build_prompt(
+        genre,
+        style=backend.prompt_style,
+        bpm=int(bpm) if bpm else None,
+        mood=None if not mood or mood == prompting.RANDOM_CHOICE else mood,
+        instruments=tuple(instruments or ()),
+        character=tuple(character or ()),
+        vocals=wants_vocals,
+        extra=keywords or "",
+    )
+
+
+def _voice_updates(model: str, vocals: str):
+    """Lyrics only exist where the model has a channel for them."""
+    backend = backends.get(model)
+    wants_vocals = vocals == "With vocals"
+    return gr.update(visible=backend.supports_lyrics and wants_vocals)
+
+
+def _mood_choices(genre: str | None):
+    options = [prompting.RANDOM_CHOICE, *prompting.mood_options(genre)]
+    return gr.update(choices=options, value=prompting.RANDOM_CHOICE)
+
+
 def _genre_prompt(genre: str | None, model: str, bpm: float | None = None) -> str:
     """Build a fresh prompt in the selected backend's own prompt style.
 
@@ -850,7 +880,8 @@ def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps
     )
 
 
-def _enqueue_generation(model, prompt, duration, steps, guidance, seed, use_seed):
+def _enqueue_generation(model, prompt, duration, steps, guidance, seed,
+                        use_seed, lyrics=None):
     if not prompt or not prompt.strip():
         raise gr.Error("Enter a prompt first.")
     backend = backends.get(model)
@@ -866,9 +897,16 @@ def _enqueue_generation(model, prompt, duration, steps, guidance, seed, use_seed
         )
     except ValueError as exc:
         raise gr.Error(str(exc)) from exc
+    words = (lyrics or "").strip()
+    if words and not backend.supports_lyrics:
+        raise gr.Error(
+            f"{backend.name} has no lyrics channel, so it cannot sing words. "
+            "MiniMax and ACE-Step can."
+        )
     chosen_seed = int(seed) if use_seed else random.randint(0, 2**31 - 1)
     payload = {
         "prompt": prompt.strip(),
+        "lyrics": words or None,
         "duration": duration,
         "seed": chosen_seed,
         "infer_step": steps,
@@ -1018,9 +1056,38 @@ def build_ui() -> gr.Blocks:
                             50, 200, value=120, step=1, label="Tempo (BPM)",
                             info="Written into the prompt. No model takes a tempo directly.",
                         )
+                        with gr.Row():
+                            mood = gr.Dropdown(
+                                choices=[prompting.RANDOM_CHOICE],
+                                value=prompting.RANDOM_CHOICE, label="Mood",
+                            )
+                            vocals = gr.Radio(
+                                choices=["Instrumental", "With vocals"],
+                                value="Instrumental", label="Voice",
+                            )
+                        instruments = gr.Dropdown(
+                            choices=prompting.instrument_options(), multiselect=True,
+                            label="Instruments", value=[],
+                            info="Empty uses the genre's own instrumentation.",
+                        )
+                        character = gr.Dropdown(
+                            choices=prompting.character_options(), multiselect=True,
+                            label="Character", value=[],
+                            info="Recording space, effects and era. Empty varies it.",
+                        )
+                        keywords = gr.Textbox(
+                            label="Extra keywords", lines=1,
+                            placeholder="amen break, jungle, ragga chops",
+                            info="Folded into the prompt below.",
+                        )
+                        lyrics = gr.Textbox(
+                            label="Lyrics", lines=3, visible=False,
+                            placeholder="[verse]\nfirst line here",
+                            info="Only models with a lyrics channel can sing words.",
+                        )
                         prompt = gr.Textbox(
-                            label="Prompt", lines=3,
-                            placeholder="lo-fi hip hop, warm rhodes piano, soft vinyl crackle, 85bpm, instrumental",
+                            label="Prompt (composed from the menus above)", lines=4,
+                            placeholder="Pick a genre, or type your own prompt here.",
                         )
                         prompt_help = gr.Markdown(_prompt_hint(initial_backend))
                         with gr.Row():
@@ -1174,10 +1241,23 @@ def build_ui() -> gr.Blocks:
             [model_summary, duration, steps, guidance, prompt_help, prompt],
             queue=False,
         )
-        genre.change(_genre_bpm, genre, bpm).then(
-            _genre_prompt, [genre, model, bpm], prompt
-        )
-        regenerate.click(_genre_prompt, [genre, model, bpm], prompt)
+        compose_inputs = [genre, model, bpm, mood, vocals, instruments, character,
+                          keywords]
+        # Any menu change recomposes the prompt, so the text always reflects the
+        # selections rather than drifting away from them.
+        genre.change(_mood_choices, genre, mood).then(
+            _genre_bpm, genre, bpm
+        ).then(_compose_prompt, compose_inputs, prompt)
+        genre.select(_mood_choices, genre, mood).then(
+            _genre_bpm, genre, bpm
+        ).then(_compose_prompt, compose_inputs, prompt)
+        for control in (bpm, mood, vocals, instruments, character, keywords):
+            control.change(_compose_prompt, compose_inputs, prompt)
+        for control in (mood, instruments, character):
+            control.select(_compose_prompt, compose_inputs, prompt)
+        regenerate.click(_compose_prompt, compose_inputs, prompt)
+        for control in (model, vocals):
+            control.change(_voice_updates, [model, vocals], lyrics)
 
         refresh.click(
             _refresh_history,
@@ -1215,7 +1295,7 @@ def build_ui() -> gr.Blocks:
         )
         submission = request.then(
             _enqueue_generation,
-            [model, prompt, duration, steps, guidance, seed, use_seed],
+            [model, prompt, duration, steps, guidance, seed, use_seed, lyrics],
             [status, seed, queue_state],
             show_progress="hidden",
         )
