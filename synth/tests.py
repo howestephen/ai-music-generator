@@ -837,6 +837,47 @@ class Registry(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "needs a runner to receive them"):
             backends.load_manifest(path)
 
+    def test_runtime_estimate_ignores_a_cold_start_weight_download(self):
+        """The first render of a backend also pays for a multi-gigabyte download.
+        Averaging that in as render time made a 40s job report an hour at 0%."""
+        history = [
+            {"backend": "stable-audio-medium", "requested_duration": 180,
+             "elapsed_seconds": 45.0},
+            {"backend": "stable-audio-medium", "requested_duration": 180,
+             "elapsed_seconds": 44.0},
+            {"backend": "stable-audio-medium", "requested_duration": 180,
+             "elapsed_seconds": 46.0},
+            # the cold start, newest-first order puts it last and out of the sample
+            {"backend": "stable-audio-medium", "requested_duration": 30,
+             "elapsed_seconds": 541.5},
+        ]
+        with mock.patch.object(app, "_load_history", return_value=history):
+            estimate = app._estimate_runtime("stable-audio-medium", 380)
+        self.assertLess(estimate, 300, "a cold start must not dominate the estimate")
+
+    def test_unseen_backend_falls_back_to_its_own_measured_ratio(self):
+        with mock.patch.object(app, "_load_history", return_value=[]):
+            fast = app._estimate_runtime("stable-audio-sm", 120)
+            slow = app._estimate_runtime("musicgen", 30)
+        self.assertLess(fast, slow)
+        for model in backends.BACKENDS:
+            with self.subTest(model=model):
+                self.assertIn(model, app.FALLBACK_RATIOS)
+
+    def test_a_running_card_shows_elapsed_time_not_only_a_percentage(self):
+        """A wrong estimate reads as hung. Elapsed seconds always move."""
+        running = app._queue_job_html({
+            "id": "j1", "model": "stable-audio-medium", "duration": 380, "seed": 1,
+            "prompt": "x", "error": None, "status": "running", "progress": 0.4,
+            "elapsed_seconds": 12.0,
+        })
+        self.assertIn("12s elapsed", running)
+
+    def test_history_players_are_exclusive(self):
+        """Every card owns its own audio element, so starting one must stop the rest."""
+        self.assertIn("pauseEveryOtherPlayer", app.UI_JS)
+        self.assertIn('audio.addEventListener("play"', app.UI_JS)
+
     def test_every_genre_builds_a_prompt_for_every_style_a_backend_declares(self):
         """The UI asks for the selected backend's style. A genre that cannot answer
         one of them raises the moment that model is picked."""
@@ -1399,7 +1440,7 @@ class UiModelSelection(unittest.TestCase):
         self.assertIn('class="queue-job queued"', queued)
         self.assertIn("Queued #2", queued)
         self.assertIn("quiet &amp; focused", queued)
-        self.assertIn("Rendering · estimated 45%", running)
+        self.assertIn("estimated 45%", running)
         self.assertIn("--job-progress: 45%", running)
 
     def test_switching_to_musicgen_clamps_duration_and_hides_steps(self):

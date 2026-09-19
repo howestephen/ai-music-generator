@@ -194,6 +194,18 @@ UI_JS = """
         waveform.setAttribute("aria-valuenow", `${Math.round(percent)}`);
     };
 
+    // Each history card owns its own <audio>, so without this every track you start
+    // layers on top of whatever is already playing.
+    const everyPlayer = () => [...document.querySelectorAll(".history-waveform")]
+        .map(playerFor)
+        .filter(Boolean);
+
+    const pauseEveryOtherPlayer = (playing) => {
+        everyPlayer().forEach((other) => {
+            if (other !== playing && !other.paused) other.pause();
+        });
+    };
+
     const wirePlayers = () => {
         document.querySelectorAll(".history-waveform").forEach((waveform) => {
             const audio = playerFor(waveform);
@@ -204,6 +216,7 @@ UI_JS = """
                     eventName,
                     () => showPosition(waveform, audio),
                 ));
+            audio.addEventListener("play", () => pauseEveryOtherPlayer(audio));
             showPosition(waveform, audio);
         });
     };
@@ -530,6 +543,21 @@ def _queue_snapshot() -> list[dict]:
     return _get_job_queue().snapshot()
 
 
+# How long a render takes per second of audio, before this backend has any history.
+# Measured on this machine, 2026-09-19.
+FALLBACK_RATIOS = {
+    "acestep": 2.5,
+    "minimax-mlx": 3.3,
+    "musicgen": 15.0,
+    "stable-audio-sm": 0.12,
+    "stable-audio-medium": 0.3,
+}
+# Only the most recent renders count. The first render of any backend also pays for
+# a multi-gigabyte weight download, and averaging that in as though it were render
+# time made a 40-second job report an hour and look hung.
+RATIO_SAMPLE = 5
+
+
 def _estimate_runtime(model: str, duration: float) -> float:
     ratios = []
     for track in _load_history():
@@ -547,8 +575,9 @@ def _estimate_runtime(model: str, duration: float) -> float:
             and elapsed > 0
         ):
             ratios.append(elapsed / track_duration)
-    fallback_ratios = {"acestep": 2.5, "minimax-mlx": 3.3, "musicgen": 15.0}
-    ratio = statistics.median(ratios) if ratios else fallback_ratios.get(model, 3.0)
+    # _load_history is newest first, so this is the most recent few renders.
+    recent = ratios[:RATIO_SAMPLE]
+    ratio = statistics.median(recent) if recent else FALLBACK_RATIOS.get(model, 3.0)
     return max(5.0, float(duration) * ratio)
 
 
@@ -641,7 +670,10 @@ def _remove_job(job_id: str):
 def _queue_job_html(job: dict) -> str:
     status_labels = {
         "queued": f"Queued #{job.get('queue_position', 1)}",
-        "running": f"Rendering · estimated {job['progress']:g}%",
+        "running": (
+            f"Rendering · {job.get('elapsed_seconds') or 0:.0f}s elapsed · "
+            f"estimated {job['progress']:g}%"
+        ),
         "complete": "Finishing",
         "failed": "Failed",
     }
