@@ -545,21 +545,26 @@ def _queue_snapshot() -> list[dict]:
 
 # How long a render takes per second of audio, before this backend has any history.
 # Measured on this machine, 2026-09-19.
-FALLBACK_RATIOS = {
-    "acestep": 2.5,
-    "minimax-mlx": 3.3,
-    "musicgen": 15.0,
-    "stable-audio-sm": 0.12,
-    "stable-audio-medium": 0.3,
+# Render cost is a fixed overhead plus a per-second rate, NOT a multiple of track
+# length: a 380s Stable Audio render takes less wall time than a 180s one did,
+# because model load and decode dominate. Treating it as a ratio made a 26-second
+# job crawl against a 95-second estimate and read as hung. Measured on this
+# machine, 2026-09-19, as (overhead seconds, seconds per second of audio).
+FALLBACK_COST = {
+    "acestep": (20.0, 2.4),
+    "minimax-mlx": (30.0, 3.2),
+    "musicgen": (25.0, 14.0),
+    "stable-audio-sm": (3.0, 0.03),
+    "stable-audio-medium": (12.0, 0.05),
 }
-# Only the most recent renders count. The first render of any backend also pays for
-# a multi-gigabyte weight download, and averaging that in as though it were render
-# time made a 40-second job report an hour and look hung.
-RATIO_SAMPLE = 5
+# Only the most recent renders count: the first render of any backend also pays for
+# a multi-gigabyte weight download, which is not render time.
+COST_SAMPLE = 6
 
 
 def _estimate_runtime(model: str, duration: float) -> float:
-    ratios = []
+    """Expected wall time for one render, fitted from this backend's own history."""
+    samples = []
     for track in _load_history():
         if track["backend"] != model:
             continue
@@ -574,11 +579,28 @@ def _estimate_runtime(model: str, duration: float) -> float:
             and track_duration > 0
             and elapsed > 0
         ):
-            ratios.append(elapsed / track_duration)
-    # _load_history is newest first, so this is the most recent few renders.
-    recent = ratios[:RATIO_SAMPLE]
-    ratio = statistics.median(recent) if recent else FALLBACK_RATIOS.get(model, 3.0)
-    return max(5.0, float(duration) * ratio)
+            samples.append((track_duration, elapsed))
+        if len(samples) >= COST_SAMPLE:  # _load_history is newest first
+            break
+
+    overhead, rate = FALLBACK_COST.get(model, (20.0, 3.0))
+    lengths = {length for length, _ in samples}
+    if len(samples) >= 3 and len(lengths) >= 2:
+        # Enough spread to fit the line rather than trust the measured constants.
+        try:
+            fit = statistics.linear_regression(
+                [length for length, _ in samples], [taken for _, taken in samples]
+            )
+            if fit.slope > 0 and fit.intercept + fit.slope * duration > 0:
+                overhead, rate = fit.intercept, fit.slope
+        except (statistics.StatisticsError, ValueError):
+            pass
+    elif samples:
+        # One length only: scale that measurement, keeping the known overhead shape.
+        length, taken = samples[0]
+        rate = max((taken - overhead) / length, 0.0) if taken > overhead else rate
+
+    return max(5.0, overhead + rate * float(duration))
 
 
 def _enqueue_generation(model, prompt, duration, steps, guidance, seed, use_seed):

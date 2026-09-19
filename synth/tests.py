@@ -853,16 +853,30 @@ class Registry(unittest.TestCase):
         ]
         with mock.patch.object(app, "_load_history", return_value=history):
             estimate = app._estimate_runtime("stable-audio-medium", 380)
-        self.assertLess(estimate, 300, "a cold start must not dominate the estimate")
+        self.assertLess(estimate, 200, "a cold start must not dominate the estimate")
 
-    def test_unseen_backend_falls_back_to_its_own_measured_ratio(self):
+    def test_unseen_backend_falls_back_to_its_own_measured_cost(self):
         with mock.patch.object(app, "_load_history", return_value=[]):
             fast = app._estimate_runtime("stable-audio-sm", 120)
             slow = app._estimate_runtime("musicgen", 30)
         self.assertLess(fast, slow)
         for model in backends.BACKENDS:
             with self.subTest(model=model):
-                self.assertIn(model, app.FALLBACK_RATIOS)
+                self.assertIn(model, app.FALLBACK_COST)
+
+    def test_estimate_does_not_scale_with_track_length(self):
+        """Render cost is overhead plus a small rate. Treating it as a multiple of
+        track length made a 26s render crawl against a 95s estimate."""
+        history = [
+            {"backend": "stable-audio-medium", "requested_duration": d,
+             "elapsed_seconds": e}
+            for d, e in ((380, 26.1), (380, 28.9), (180, 20.0), (30, 14.0))
+        ]
+        with mock.patch.object(app, "_load_history", return_value=history):
+            short = app._estimate_runtime("stable-audio-medium", 30)
+            long = app._estimate_runtime("stable-audio-medium", 380)
+        self.assertLess(long, short * 4, "a 12x longer track is not 12x the work")
+        self.assertLess(abs(long - 27.5), 15, "should land near the measured 26-29s")
 
     def test_a_running_card_shows_elapsed_time_not_only_a_percentage(self):
         """A wrong estimate reads as hung. Elapsed seconds always move."""
@@ -1771,8 +1785,11 @@ print(json.dumps({
             "duration": 60,
             "elapsed_seconds": float("inf"),
         }]
+        overhead, rate = app.FALLBACK_COST["minimax-mlx"]
         with mock.patch.object(app, "_load_history", return_value=corrupt):
-            self.assertEqual(app._estimate_runtime("minimax-mlx", 10), 33)
+            self.assertEqual(
+                app._estimate_runtime("minimax-mlx", 10), overhead + rate * 10
+            )
 
 class DocumentationContract(unittest.TestCase):
     MINIMAX_PACKAGE_COMMIT = "b42e07bd2c0ffd14cc6b75ca19d9a96e5397eaf9"
