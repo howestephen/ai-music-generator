@@ -4,6 +4,9 @@ author: stephen+claude
 created: 2026-08-19
 updated: 2026-09-09
 note: "Canonical self-contained import and retrofit guidance for one authorised project."
+generated_by: claude
+generated_at: 2026-09-20T14:06Z
+generated_from: conversation
 ---
 
 # Import and retrofit guidance
@@ -112,7 +115,28 @@ installation; it does not retrofit a project's files.
    a runtime reload after a disk edit; it cannot prevent that edit and the PC host
    tested so far hides its reason. Restore any probe changes. A parseable agent
    file is not proof that its specialist works.
-9. **Audit and report.** Re-run the explicit-target checker and record justified
+9. **Audit and report. The retrofit is not done until the checker says so.**
+   Run, from `_projects-admin`:
+
+   ```bash
+   python3 scripts/retrofit-check.py --project <project> --rules
+   ```
+
+   Every gap it names is either fixed or recorded as a justified exception in
+   the report. A retrofit that ends without this having been run and read is
+   not finished, whatever else was done.
+
+   **Preserving a mature project's rules does not mean skipping the house
+   defaults.** Both happen. `howe-creative` is the recorded failure: it was
+   retrofitted, its own incident-derived rules were rightly preserved, it took
+   the template's ONBOARDING, ARCHITECTURE and RETROFIT files, and the
+   autonomy block, the read list and the `scripts/`+`.editorconfig`
+   scaffolding were never merged alongside. Nothing noticed until 2026-09-20,
+   because nothing checked the outcome. A project keeps every rule it wrote
+   AND gains an `## Autonomy` section; where the two conflict the project's
+   own rule wins, and that is stated in the file rather than left implied.
+
+   Re-run the explicit-target checker and record justified
    exceptions. An independent agent applies `STANDARDS-AUDIT.md`; fix findings and
    have the fixes re-audited. Commit and push the target's feature branch after
    sign-off. Report the diff, test evidence, untested host events and remaining
