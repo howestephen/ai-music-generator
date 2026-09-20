@@ -24,7 +24,7 @@ PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
     ("default backend reverts to ACE-Step", "synth/backends.json",
-     '  "default_backend": "minimax-mlx",',
+     '  "default_backend": "stable-audio-medium",',
      '  "default_backend": "acestep",'),
     ("drop steps from job dict", "synth/core.py", '            "steps": steps,', "            "),
     ("musicgen guidance back to 15", "synth/backends.json",
@@ -45,7 +45,16 @@ MUTATIONS = [
     ("silently drop unsupported knob", "synth/core.py",
      '            raise ValueError(f"{backend.name} has no {knob} control (got {value!r})")', "            pass"),
     ("musicgen accepts lyrics", "synth/backends.json",
-     '      "supports_lyrics": false,', '      "supports_lyrics": true,'),
+     '      "notes": "Strong instrumental model, but 30s per generation.",\n'
+     '      "dtype": "float32",\n'
+     '      "prompt_style": "tags",\n'
+     '      "instrumental_tag": "",\n'
+     '      "supports_lyrics": false,',
+     '      "notes": "Strong instrumental model, but 30s per generation.",\n'
+     '      "dtype": "float32",\n'
+     '      "prompt_style": "tags",\n'
+     '      "instrumental_tag": "",\n'
+     '      "supports_lyrics": true,'),
     ("minimax default steps = 60", "synth/backends.json",
      '          "default": 30,\n'
      '          "minimum": 1,\n'
@@ -95,9 +104,9 @@ MUTATIONS = [
      '          "step": 1,\n'
      '          "label": "Target duration (s)",\n'
      '          "info": "MiniMax supports up to 240 seconds. Its stop token is suppressed until the target, then the delivered WAV is measured independently.",'),
-    ("MiniMax preset stays as tags", "app.py",
-     '    return prompts[backends.get(model).prompt_style]',
-     '    return prompts["tags"]'),
+    ("genre prompt ignores the backend's own style", "app.py",
+     "        style=backend.prompt_style,",
+     '        style="tags",'),
     ("Generate button stays clickable", "app.py",
      'return gr.update(value="Generating...", interactive=False, variant="secondary")',
      'return gr.update(value="Generating...", interactive=True, variant="secondary")'),
@@ -107,11 +116,9 @@ MUTATIONS = [
     ("History column is wider than controls", "app.py",
      'with gr.Column(scale=1, elem_id="history-panel"):',
      'with gr.Column(scale=2, elem_id="history-panel"):'),
-    ("Scrollable built-in waveform is shown", "app.py",
-     ".history-audio .waveform-container,\n.history-audio .timestamps,\n"
-     ".history-audio .subtitle-display {\n    display: none;\n}",
-     ".history-audio .waveform-container,\n.history-audio .timestamps,\n"
-     ".history-audio .subtitle-display {\n    display: block;\n}"),
+    ("history audio goes back through Gradio's file copy", "app.py",
+     '    src = html.escape(f"/gradio_api/file={Path(track[\'path\']).resolve()}", quote=True)',
+     '    src = html.escape(str(track["path"]), quote=True)'),
     ("Full waveform cannot seek", "app.py",
      "audio.currentTime = Math.max(0, Math.min(1, position)) * audio.duration;",
      "audio.currentTime = 0;"),

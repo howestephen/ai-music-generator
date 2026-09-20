@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-19
+updated: 2026-09-20
 ---
 
 # ROADMAP
@@ -56,7 +56,8 @@ they are never buried in a chat.
 ## Phase 3: Track library and generate panel
 
 - Status: `planned`. Spec: [specs/2026-09-20-track-library.md](specs/2026-09-20-track-library.md)
-- Owner instruction 2026-09-20: Codex executes this, not Fable or Opus
+- Owner instruction 2026-09-20: Codex executes this, not Fable or Opus. Handoff:
+  [handoffs/2026-09-20-track-library.md](handoffs/2026-09-20-track-library.md)
 - Goal: a generation can be named, kept, found and removed. `output/` is flat and
   unbounded, the card buries the genre in a block of text, and Regenerate has drifted
   too far from the prompt to use
@@ -65,7 +66,7 @@ they are never buried in a chat.
 |---|---|---|---|
 | 3.1 | Sidecar gains title, rating and genre | `planned` | Nothing identifies a track but its filename. Old sidecars must keep parsing |
 | 3.2 | History card leads with title and genre | `planned` | The detail goes behind a disclosure; waveform, seek and playback stay as they are |
-| 3.3 | Delete and keep/discard per track | `planned` | **Blocked on an owner decision:** `CLAUDE.md` says generated audio is never deleted, but a generation is treated as disposable in practice |
+| 3.3 | Delete and keep/discard per track | `planned` | Delete hides the track immediately, offers Undo for one hour, then permanently removes the WAV and sidecar. No archive copy |
 | 3.4 | Filter by genre, rating and text | `planned` | 31 tracks was already unmanageable. A view concern that must not touch files |
 | 3.5 | Regenerate sits next to the prompt | `planned` | You cannot see what you are regenerating. The only visual design question here |
 | 3.6 | Dropdowns are clickable across their whole area | `planned` | Only the small arrow responds, so every menu takes several attempts. Gradio's own hit area, so it needs CSS over the component |
@@ -113,24 +114,22 @@ they are never buried in a chat.
 
 ## Owner decisions open
 
-1. **Delete or archive a generation.** `CLAUDE.md` says generated audio is a creative
-   asset to be archived and never deleted, but on 2026-09-20 all 31 tracks were
-   deleted on instruction because a generation is disposable in practice. Phase 3.3 is
-   blocked until the rule or the behaviour changes
-2. **Whether renders may leave this Mac.** Routing heavy work to Seneca's 4090 departs
+1. **Whether renders may leave this Mac.** Routing heavy work to Seneca's 4090 departs
    from the project's local-only premise
 
 Resolved: `stable-audio-medium` is the default backend (2026-09-19, superseding
 `minimax-mlx` of 2026-09-17); `briefs/` stays declared for future prompt sets though
 its contents were deleted (2026-09-10); the pinned `.venv-mlx` install command lives
-in the README rather than a new top-level file (2026-09-10).
+in the README rather than a new top-level file (2026-09-10); UI deletion removes a
+track immediately, retains it for one hour for Undo, then permanently removes it with
+no archive copy (2026-09-20).
 
 ## Current next step
 
 - Current milestone: Phase 2 complete and signed off 2026-09-20. Five backends, 34
   genres, prompts composed from menus, arrangements laid out in bars, and any span of
   any track regeneratable
-- Then: Phase 3, the track library, executed by Codex against its spec
+- Then: Phase 3, the track library, executed by Codex against its spec and handoff
 - The honest gap: nobody has listened to any output yet, so no claim in this file is a
   judgement of how anything sounds
 - Exit gates for any milestone: unit tests, mutations and validators pass; installed

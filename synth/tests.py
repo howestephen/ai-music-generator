@@ -80,6 +80,19 @@ class GenerateSeam(unittest.TestCase):
         return core.generate(prompt="probe", duration=duration, seed=1, output_dir=self.out, **kw)
 
     # --- steps -----------------------------------------------------------
+    def test_omitting_duration_uses_the_backend_default_not_a_hardcoded_60(self):
+        """The duration default was fixed in the manifest but core and the CLI both
+        hardcoded 60.0, so every CLI render still produced a one-minute clip from a
+        model that makes six-minute tracks."""
+        track = core.generate(
+            prompt="probe", seed=1, output_dir=self.out, model="minimax-mlx",
+        )
+        self.assertEqual(
+            track.requested_duration,
+            backends.get("minimax-mlx").duration.default,
+        )
+        self.assertEqual(self.stub.last_job["duration"], 60.0)
+
     def test_explicit_steps_reach_minimax(self):
         self.gen(model="minimax-mlx", infer_step=12)
         self.assertEqual(self.stub.last_job["steps"], 12)
@@ -1461,6 +1474,17 @@ class Registry(unittest.TestCase):
                 self.assertEqual(backend.output_audit.random_seed_retries, 0)
                 self.assertFalse(backend.supports_lyrics)
 
+    def test_the_cli_does_not_carry_its_own_duration_default(self):
+        parser = cli.build_parser()
+        for command in ("gen", "batch"):
+            with self.subTest(command=command):
+                args = parser.parse_args([command, "probe"] if command == "gen"
+                                         else [command])
+                self.assertIsNone(
+                    args.duration,
+                    "the CLI must defer to the backend rather than pick a length",
+                )
+
     def test_default_duration_is_a_usable_track_not_the_shortest_clip(self):
         """Every backend defaulted to 60s whatever it could do, so a fresh page gave
         a one-minute clip from a model that makes six-minute tracks, and you only
@@ -2322,6 +2346,29 @@ print(json.dumps({
             self.assertEqual(
                 app._estimate_runtime("minimax-mlx", 10), overhead + rate * 10
             )
+
+class MutationSuite(unittest.TestCase):
+    """The mutation suite is only evidence while its anchors still match the code."""
+
+    def test_every_mutation_anchor_still_matches_the_source(self):
+        """A mutation whose anchor has drifted silently stops running, and the
+        script counts it as not caught. Four had rotted this way unnoticed, because
+        only the tail of the output was ever read."""
+        spec = importlib.util.spec_from_file_location(
+            "mutate", core.PROJECT_ROOT / "scripts" / "mutate.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertTrue(module.MUTATIONS)
+        for label, relative, old, _new in module.MUTATIONS:
+            with self.subTest(mutation=label):
+                text = (core.PROJECT_ROOT / relative).read_text(encoding="utf-8")
+                self.assertEqual(
+                    text.count(old), 1,
+                    f"{label}: anchor appears {text.count(old)} times in {relative}, "
+                    "so this mutation cannot run",
+                )
+
 
 class DocumentationContract(unittest.TestCase):
     MINIMAX_PACKAGE_COMMIT = "b42e07bd2c0ffd14cc6b75ca19d9a96e5397eaf9"

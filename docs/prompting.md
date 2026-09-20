@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-20
 generated_by: claude-opus-5
 generated_at: 2026-09-19T14:34Z
 generated_from: conversation
@@ -53,9 +53,13 @@ appear. Choose a duration that suits the material rather than always maximising 
 
 **Editing an existing track** is where real structural control lives: the runtime
 accepts an init audio file with a mask range in seconds, regenerating only that span
-and keeping the rest, or extending past the end. Stability's guidance: mask a large
-region first and reduce it, and keep the prompt plausible against the surrounding
-audio. Not yet wired into this project's UI.
+and keeping the rest. Stability's guidance: mask a large region first and reduce it,
+and keep the prompt plausible against the surrounding audio.
+
+This is the UI's **Rework a section** tab. It takes a track from the history or a file
+you upload, converting an odd sample rate or an MP3 on the way in, and offers two
+modes: rework one span selected in bars, or remix the whole track with an
+amount-of-change control. Continuation past the end of a track is not wired up.
 
 ## `caption`: MiniMax Music 3
 

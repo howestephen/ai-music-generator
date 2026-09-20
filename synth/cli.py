@@ -118,8 +118,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--duration", "-d", type=float, default=60.0,
-                       help="target length in seconds (default: 60)")
+        p.add_argument("--duration", "-d", type=float, default=None,
+                       help="target length in seconds (default: the backend's own)")
         p.add_argument("--steps", type=int, default=None,
                        help="inference steps; lower is faster, rougher "
                             "(default: the backend's own, see `models`)")

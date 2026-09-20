@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-19
-updated: 2026-09-09
+updated: 2026-09-20
 note: "Canonical self-contained import and retrofit guidance for one authorised project."
 generated_by: claude
 generated_at: 2026-09-20T14:06Z

@@ -12,11 +12,26 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-20 - Track deletion has a one-hour undo window, not an archive
+
+**Decided:** Delete removes a track from the library immediately and moves its WAV and
+sidecar together into pending deletion. Undo restores that same pair for one hour. Once
+the hour expires, both files are permanently removed. No archive or duplicate is kept.
+
+**Why:** generated trials are disposable in this workbench. An accidental click needs a
+short recovery path, but a deliberate deletion should clear the track from the UI and
+then from the computer rather than quietly growing another library elsewhere.
+
+**Would revisit if:** the project gains shared storage or an external backup policy that
+changes what deletion can honestly promise.
+
 ## 2026-09-20 - A duration default is a track, not the shortest clip
 
 **Decided:** each backend defaults to a usable track length rather than a flat 60 seconds.
 Stable Audio medium starts at 180s, small and ACE-Step at 120s. MiniMax stays at 60s
-because it renders near realtime, so 180s there is roughly 25 minutes of GPU.
+because it renders near realtime, so 180s there is roughly 25 minutes of GPU. The
+manifest holds the only default: `core.generate` and the CLI both take `None` and ask
+the backend, so every caller gets the same answer.
 
 **Why:** every backend defaulted to 60s whatever it could deliver, so a fresh page gave a
 one-minute clip from a model that makes six-minute tracks, and it was only visible after

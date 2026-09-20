@@ -72,11 +72,11 @@ Keep the existing waveform, seek behaviour and exclusive playback untouched.
 
 Per card: **Delete**, and a keep/discard toggle.
 
-- Delete removes the WAV and its sidecar. It is irreversible, so it confirms first.
-  Note the conflict to resolve before building: `CLAUDE.md` says generated audio is
-  a creative asset to be archived and never deleted, while in practice a generation
-  is treated as disposable. Either the rule changes or Delete archives to
-  `_archive/`. **Do not build Delete until Stephen has settled which.**
+- Delete removes the track from the library immediately and moves its WAV and sidecar
+  together into an app-owned pending-deletion area. Do not copy or archive either file.
+- Show **Undo delete** for one hour. Undo restores the same pair to the library. Once
+  the hour expires, permanently remove both files. Expired pending deletions are also
+  purged when the app next starts, so closing the app does not preserve them forever.
 - Keep/discard is a label only. It never deletes anything on its own.
 
 ### 3.4 Find a track
@@ -94,6 +94,35 @@ prompt and the things that write it are together, and the render settings
 
 This is the only part of this milestone with a visual design question in it. The
 rest is mechanical.
+
+### 3.6 Dropdowns are clickable across their whole area
+
+Every dropdown currently only responds when the small arrow itself is hit, so choosing
+a model, genre or mood takes several attempts. This is Gradio's own hit area, so the
+fix is CSS over its component, in `UI_CSS` in `app.py`, not a change to the component.
+
+Verify by clicking the label text and the middle of the control, not just the arrow.
+
+### 3.7 Advanced controls collapse by default
+
+**Instruments**, **Character** and **Extra keywords** are open by default and dominate
+the generate panel. Move them inside a closed `gr.Accordion` labelled Advanced. Genre,
+tempo, mood and voice stay visible.
+
+The **Structure (bars)** accordion already behaves this way; match it.
+
+### 3.8 Decide whether Stable Audio keeps a vocals control
+
+The owner reports that selecting **With vocals** appears to do nothing on Stable Audio.
+Stability's own guide states their models never produce intelligible vocals, only
+unintelligible vocal textures, so this may be a control that cannot be honoured.
+
+Do not rephrase the prompt and hope. Test first: render the same seed and prompt with
+the control on and off and compare. Then either relabel it so it promises only what the
+model does, or remove it for backends with no lyrics channel. A control that cannot
+change the output is the fault milestone 0.2 already had to fix once.
+
+MiniMax and ACE-Step do have a lyrics channel and are unaffected.
 
 ## Traps that will bite
 
@@ -114,7 +143,12 @@ Read [docs/gotchas.md](../docs/gotchas.md) first. The three that specifically ap
 - Keep/discard persists across a restart
 - Filtering by genre, rating and text works and touches no files
 - Regenerate is adjacent to the prompt
-- Delete is either built against a settled rule or explicitly deferred
+- Delete disappears immediately, Undo restores it for one hour, and expiry permanently
+  removes the WAV and sidecar without leaving an archive copy
+- Dropdowns respond anywhere on the control, not only on the arrow
+- Instruments, character and keywords sit behind a closed Advanced disclosure
+- The Stable Audio vocals control is tested, then relabelled, removed or kept on the
+  evidence
 - Unit tests cover the sidecar fallback, the title generator and the filters, and
   `scripts/mutate.py` gains a mutation for each new rule
 

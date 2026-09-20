@@ -146,7 +146,7 @@ def _resolve(backend: backends.Backend, knob: str, value, default):
 
 def generate(
     prompt: str,
-    duration: float = 60.0,
+    duration: float | None = None,
     seed: int | None = None,
     infer_step: int | None = None,
     guidance_scale: float | None = None,
@@ -181,6 +181,11 @@ def generate(
         raise ValueError("prompt is empty")
 
     backend = backends.get(model)
+    # None means "whatever this backend considers a track". Hardcoding a number here
+    # gave a 60-second clip from a model that makes six-minute ones, on every caller
+    # that did not pass one, which was the whole CLI.
+    if duration is None:
+        duration = backend.duration.default
     if not backend.available:
         raise RuntimeError(
             f"Backend {backend.name!r} is not set up: {backend.availability_error}. "

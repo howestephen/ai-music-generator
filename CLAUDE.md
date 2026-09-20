@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-10
+updated: 2026-09-20
 ---
 
 # CLAUDE.md - working rules for this repo
@@ -42,8 +42,10 @@ House defaults, with this project's tightening:
   main (owner instruction, 2026-09-18); branch once a change stops being small
 - Create new top-level folders: no. The structure is declared below and locked by
   `scripts/validate.config.json`
-- Delete files: never without listing what changes and what references it.
-  Generated audio is a creative asset: archive it, never delete it
+- Delete files: never without listing what changes and what references it. The one
+  exception is the track library's explicit Delete action: remove the WAV and sidecar
+  from the library immediately, retain that same pair for one hour for Undo, then
+  permanently delete both. Do not make or archive another copy
 - One subagent at a time, never at your own tier or above; for the independent
   audit, or when Stephen asks for delegation
 
@@ -64,7 +66,7 @@ Every top-level directory is declared here and in `top_dirs` of
 
 | Path | Holds |
 |---|---|
-| `synth/` | the package: `core.py` (generate), `backends.py` (registry), `cli.py`, `analyze.py` |
+| `synth/` | the package: `core.py`, `backends.py` + `backends.json`, `prompting.py`, `jobs.py`, `cli.py`, `analyze.py`, `tests.py` |
 | `runners/` | per-backend subprocess entry points, one per isolated venv |
 | `briefs/` | prompt sets per project |
 | `prompts/` | default batch prompts |

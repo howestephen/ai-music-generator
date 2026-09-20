@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-19
+updated: 2026-09-20
 ---
 
 # AI Music Generator
@@ -58,12 +58,13 @@ printf '%s\n%s\n' "$SA3/optimized/mlx" "$SA3/optimized/mlx/scripts" \
 ```
 
 Weights download on first use to `~/.cache/`: MiniMax MLX about 13 GB, MusicGen 19 GB,
-ACE-Step 7.7 GB, Stable Audio small about 1.9 GB and medium about 6.5 GB.
+ACE-Step 7.7 GB, and both Stable Audio sizes together about 6.1 GB, since they share
+one repository.
 
 ## Models
 
-Three backends behind one CLI, each in whatever environment it needs.
-`./.venv/bin/python -m synth.cli models` probes all three.
+Five backends behind one CLI, each in whatever environment it needs.
+`./.venv/bin/python -m synth.cli models` probes all five.
 
 | Backend | Model | Max | Prompt style | Licence |
 |---|---|---|---|---|
@@ -165,7 +166,7 @@ controls are `null`. Sidecars written before milestone 1.1 stored the target und
 ```
 synth/core.py       generate() - the single entry point, dispatches to a backend
 synth/backends.json versioned model manifest: runtime, controls, licence, prompt style
-runners/            per-backend subprocess entry points, one per isolated environment
+runners/            subprocess entry points for backends in their own venv
 app.py              Gradio web UI
 output/             generated audio + sidecars (gitignored)
 ```
