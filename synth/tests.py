@@ -1177,6 +1177,79 @@ class Registry(unittest.TestCase):
                     "stable-audio-sm", str(source), None, "p", 120, 1, 8, 8, 1,
                 )
 
+    def test_whole_track_remix_sends_a_noise_level_and_no_mask(self):
+        """Audio-to-audio starts from the track instead of noise. A mask would make
+        it a section edit, so the two must not both be set."""
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        source = out / "probe.wav"
+        _write_test_wav(source, frames=8000)
+        captured = {}
+        queue = SimpleNamespace(
+            enqueue=lambda payload, summary, estimate: captured.update(
+                payload=payload, summary=summary
+            ),
+            snapshot=lambda: [],
+        )
+        with mock.patch.object(app, "_history_audio_audit") as audit, \
+                mock.patch.object(app, "_get_job_queue", return_value=queue), \
+                mock.patch.object(app, "_prepare_edit_source",
+                                  return_value=(source, None)), \
+                mock.patch.object(app, "_load_history", return_value=[]):
+            audit.return_value = (backends.AudioAudit(120.0, 1, 44100, 2, 1, 0.5), None)
+            headline, _ = app._enqueue_edit(
+                "stable-audio-sm", str(source), None, "a country instrumental",
+                120, 1, 8, 8, 1, app.REMIX_MODE, 0.7,
+            )
+        payload = captured["payload"]
+        self.assertIsNone(payload["inpaint_range"])
+        self.assertEqual(payload["init_noise_level"], 0.7)
+        self.assertEqual(payload["init_audio"], str(source))
+        self.assertIn("remix", headline.lower())
+
+    def test_a_section_rework_sends_no_noise_level(self):
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        source = out / "probe.wav"
+        _write_test_wav(source, frames=8000)
+        captured = {}
+        queue = SimpleNamespace(
+            enqueue=lambda payload, summary, estimate: captured.update(payload=payload),
+            snapshot=lambda: [],
+        )
+        with mock.patch.object(app, "_history_audio_audit") as audit, \
+                mock.patch.object(app, "_get_job_queue", return_value=queue), \
+                mock.patch.object(app, "_prepare_edit_source",
+                                  return_value=(source, None)), \
+                mock.patch.object(app, "_load_history", return_value=[]):
+            audit.return_value = (backends.AudioAudit(120.0, 1, 44100, 2, 1, 0.5), None)
+            app._enqueue_edit(
+                "stable-audio-sm", str(source), None, "a breakdown",
+                120, 33, 16, 8, 1, app.SECTION_MODE, 0.7,
+            )
+        payload = captured["payload"]
+        self.assertEqual(payload["inpaint_range"], (64.0, 96.0))
+        self.assertIsNone(payload["init_noise_level"])
+
+    def test_a_whole_track_remix_ignores_a_span_past_the_track(self):
+        """The bar boxes stay on screen values; a remix covers the whole track, so
+        they must not be able to block it."""
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        source = out / "probe.wav"
+        _write_test_wav(source, frames=8000)
+        queue = SimpleNamespace(enqueue=lambda *a: None, snapshot=lambda: [])
+        with mock.patch.object(app, "_history_audio_audit") as audit, \
+                mock.patch.object(app, "_get_job_queue", return_value=queue), \
+                mock.patch.object(app, "_prepare_edit_source",
+                                  return_value=(source, None)), \
+                mock.patch.object(app, "_load_history", return_value=[]):
+            audit.return_value = (backends.AudioAudit(30.0, 1, 44100, 2, 1, 0.5), None)
+            app._enqueue_edit(
+                "stable-audio-sm", str(source), None, "a remix",
+                120, 5, 128, 8, 1, app.REMIX_MODE, 0.6,
+            )
+
     def test_edit_refuses_a_span_that_runs_past_the_track(self):
         """core.generate refuses it too, but on the worker thread, where it becomes
         a failed card rather than an answer to the button you pressed."""

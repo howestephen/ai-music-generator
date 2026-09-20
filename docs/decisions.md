@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-19
+updated: 2026-09-20
 ---
 
 # Decisions
@@ -11,6 +11,22 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-09-20 - Structure is described before, enforced only after
+
+**Decided:** an arrangement is laid out in bars per section, converted to seconds from the
+tempo, and written into the prompt with its timings. The track length follows the total.
+Forcing a section to be what you want is a separate act: reworking that span by inpainting
+it afterwards.
+
+**Why:** Stable Audio 3 conditions on text and duration alone. It has no section tokens and
+no bar grid, so a described arrangement is a request, not an instruction. Inpainting a
+range is exact, and bars convert to a range once the tempo is known. Building only the
+first half would have offered structure control that quietly does nothing, which is the
+fault milestone 0.2 already had to fix. The UI says which is which on screen.
+
+**Would revisit if:** a backend appears that takes real structural conditioning, or Stable
+Audio gains one.
 
 ## 2026-09-19 - The UI polls from its own JS, through the queue
 

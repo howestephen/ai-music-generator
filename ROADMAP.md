@@ -54,7 +54,7 @@ they are never buried in a chat.
 
 ## Phase 2: Any model, any length
 
-- Status: `in_progress`
+- Status: `done`
 - Goal: adding a model is a manifest entry plus a runner, an exact-length model is not
   policed as though it might stop early, and the UI tells the truth. Detail in
   [docs/decisions.md](docs/decisions.md), traps in [docs/gotchas.md](docs/gotchas.md)
@@ -72,8 +72,8 @@ they are never buried in a chat.
 | 2.10 | Prompts vary in shape and vocabulary, not just adjectives | `done` | 2026-09-19 |
 | 2.11 | Menus compose the prompt; lyrics only where a backend can sing | `done` | 2026-09-19 |
 | 2.12 | Structure builder: bars per section, described to the model | `done` | 2026-09-20 |
+| 2.9 | Section editing and whole-track remixing through inpainting | `done` | 2026-09-20 |
 
-| 2.9 | Section editing through inpainting | `in_progress` | Stable Audio has no section tokens, so prose is the only pre-generation structure control; regenerating a span of a finished track is the real mechanism, and bars convert to seconds once BPM is known. Core, manifest and runner carry init audio and an inpaint range, refused loudly where unsupported, proven on a real render. New track and Rework are separate tabs, and a rework takes an uploaded file as well as a history pick, converting an odd sample rate or an MP3 rather than refusing it. Still to do: the noise level for whole-track remixing | none | 2.8 |
 
 ## Phase 3: Design pass
 
@@ -116,9 +116,11 @@ they are never buried in a chat.
 
 ## Current next step
 
-- Current milestone: Phase 2, expanding the model set on owner instruction (2026-09-19):
-  update models that have newer versions and add good ones the project lacks
-- Then: Stable Audio 3 and ACE-Step 1.5 as backends
+- Current milestone: Phase 2 complete and signed off 2026-09-20. Five backends, prompts
+  composed from menus, arrangements laid out in bars, and any span of any track
+  regeneratable
+- Then: Phase 3, the design pass, with Fable
+- Not started, and the honest gap: nobody has listened to any output yet
 - Phase 1.2 exit gates: the runner passes one target as both minimum and maximum; a real
   render reaches its requested duration; unit tests, mutations and validators pass;
   installed model probes pass; independent audit is clean

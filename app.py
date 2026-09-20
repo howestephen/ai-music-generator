@@ -642,6 +642,8 @@ def _history_waveform(track: dict) -> str:
 EDIT_SAMPLE_RATE = 44100
 BEATS_PER_BAR = prompting.BEATS_PER_BAR
 BAR_CHOICES = (8, 16, 32, 64, 128)
+SECTION_MODE = "Rework one section"
+REMIX_MODE = "Remix the whole track"
 
 
 def _bars_to_seconds(bpm: float, bars: float) -> float:
@@ -831,8 +833,13 @@ def _editable_track_choices_update():
 
 
 def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps,
-                  guidance):
-    """Queue a rework of one span of an existing track, or of an uploaded file."""
+                  guidance, mode=SECTION_MODE, noise=0.6):
+    """Rework one span of a track, or remix the whole thing.
+
+    A section rework masks a range and keeps everything outside it. A whole-track
+    remix starts from the audio instead of noise and lets `noise` decide how far it
+    travels: low keeps melody and rhythm, high keeps only timbre and tonality.
+    """
     backend = backends.get(model)
     if not backend.supports_editing:
         raise gr.Error(f"{backend.name} cannot rework audio. Pick a Stable Audio model.")
@@ -865,10 +872,13 @@ def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps
                 f"That track is {audit.duration_seconds:.0f}s; {backend.name} caps at "
                 f"{duration_cap:g}s. Rework a shorter track."
             )
+    whole_track = mode == REMIX_MODE
     start = _bars_to_seconds(bpm, max(0.0, start_bar - 1))
     end = start + _bars_to_seconds(bpm, bars)
     duration = audit.duration_seconds
-    if end > duration:
+    if whole_track:
+        start, end = 0.0, duration
+    elif end > duration:
         # core.generate would refuse this too, but only on the worker thread, where
         # it becomes a failed card instead of an answer to the button you pressed.
         raise gr.Error(
@@ -897,27 +907,38 @@ def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps
         "guidance_scale": guidance,
         "model": backend.name,
         "init_audio": str(source),
-        "inpaint_range": (start, end),
+        "inpaint_range": None if whole_track else (start, end),
+        "init_noise_level": float(noise) if whole_track else None,
         # An exact contract already forbids retries, and a rework is deliberate.
         "_duration_retries": 0,
         "_retry_seed": False,
     }
+    label = (
+        f"remix whole track at {float(noise):g}" if whole_track
+        else f"rework {start:.1f}-{end:.1f}s"
+    )
     summary = {
         "model": backend.name,
         "model_id": backend.model_id,
-        "prompt": f"rework {start:.1f}-{end:.1f}s · {prompt.strip()}",
+        "prompt": f"{label} · {prompt.strip()}",
         "duration": duration,
         "seed": chosen_seed,
     }
     queue = _get_job_queue()
     queue.enqueue(payload, summary, _estimate_runtime(model, duration))
     detail = f" · {note}" if note else ""
-    return (
-        f"**Queued a rework of {source.name[:40]}** · bars {start_bar:g}-"
-        f"{start_bar + bars - 1:g} ({start:.1f}s to {end:.1f}s) · "
-        f"seed `{chosen_seed}`{detail}",
-        queue.snapshot(),
-    )
+    if whole_track:
+        headline = (
+            f"**Queued a whole-track remix of {source.name[:40]}** · "
+            f"change {float(noise):g} · seed `{chosen_seed}`{detail}"
+        )
+    else:
+        headline = (
+            f"**Queued a rework of {source.name[:40]}** · bars {start_bar:g}-"
+            f"{start_bar + bars - 1:g} ({start:.1f}s to {end:.1f}s) · "
+            f"seed `{chosen_seed}`{detail}"
+        )
+    return headline, queue.snapshot()
 
 
 def _enqueue_generation(model, prompt, duration, steps, guidance, seed,
@@ -1203,7 +1224,17 @@ def build_ui() -> gr.Blocks:
                             type="filepath",
                             sources=["upload"],
                         )
-                        with gr.Row():
+                        edit_mode = gr.Radio(
+                            choices=[SECTION_MODE, REMIX_MODE], value=SECTION_MODE,
+                            label="What to change",
+                        )
+                        edit_noise = gr.Slider(
+                            0.1, 1.2, value=0.6, step=0.05, visible=False,
+                            label="Amount of change",
+                            info="Low keeps the melody and rhythm and swaps the sounds; "
+                                 "high keeps only the timbre and tonality.",
+                        )
+                        with gr.Row() as edit_bars_row:
                             edit_bpm = gr.Number(
                                 value=120, label="Tempo (BPM)", precision=0,
                                 minimum=20, maximum=300,
@@ -1341,15 +1372,26 @@ def build_ui() -> gr.Blocks:
         for control in (edit_track, edit_bars):
             control.select(_span_update, span_inputs, edit_span)
         refresh.click(_editable_track_choices_update, outputs=edit_track)
+        # Bars belong to a section rework; the change amount belongs to a whole-track
+        # remix. Showing both at once invites setting one that is ignored.
+        edit_mode.change(
+            lambda mode: (
+                gr.update(visible=mode == SECTION_MODE),
+                gr.update(visible=mode == SECTION_MODE),
+                gr.update(visible=mode == REMIX_MODE),
+            ),
+            edit_mode,
+            [edit_bars_row, edit_span, edit_noise],
+        )
         edit_go.click(
-            lambda model, path, upload, prompt, bpm, start, bars, steps, guidance: (
+            lambda model, path, upload, prompt, bpm, start, bars, steps, guidance, mode, noise: (
                 _enqueue_edit(
                     model, path, upload, prompt, float(bpm or 120), float(start or 1),
-                    float(bars or 32), steps, guidance,
+                    float(bars or 32), steps, guidance, mode, noise,
                 )
             ),
             [model, edit_track, edit_upload, edit_prompt, edit_bpm, edit_start_bar,
-             edit_bars, steps, guidance],
+             edit_bars, steps, guidance, edit_mode, edit_noise],
             [edit_status, queue_state],
         )
         request = go.click(
