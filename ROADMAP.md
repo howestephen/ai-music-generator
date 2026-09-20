@@ -117,7 +117,9 @@ they are never buried in a chat.
 1. **Whether renders may leave this Mac.** Routing heavy work to Seneca's 4090 departs
    from the project's local-only premise
 
-Resolved: `stable-audio-medium` is the default backend (2026-09-19, superseding
+Resolved: a library Delete removes at once, is restorable for an hour, then is
+permanent, with no archived copy (2026-09-20); `stable-audio-medium` is the default
+backend (2026-09-19, superseding
 `minimax-mlx` of 2026-09-17); `briefs/` stays declared for future prompt sets though
 its contents were deleted (2026-09-10); the pinned `.venv-mlx` install command lives
 in the README rather than a new top-level file (2026-09-10); UI deletion removes a
