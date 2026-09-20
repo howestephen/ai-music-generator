@@ -96,108 +96,319 @@ def _article(word: str) -> str:
 
 
 GENRES: dict[str, Genre] = {
-    "Drum & Bass": Genre(
+    "Drum & Bass - Liquid": Genre(
         tags=("Genre: Drum and Bass",),
         bpm=(172, 176),
         drums=(
-            "a chopped Amen break with a snappy, tightly tuned snare",
-            "crisp two-step drums with ghost notes between the kick and snare",
-            "a rolling breakbeat with shuffled hats and a cracking rimshot",
+            "a smooth, tightly swung break with brushed ghost notes",
+            "a rolling breakbeat with soft-edged snares",
+            "crisp two-step drums with a warm, round kick",
         ),
         bass=(
-            "a snarling Reese bass detuned into a wide, moving growl",
             "a deep rolling sub bass that slides between notes",
-            "a neurofunk bass full of metallic formant sweeps",
+            "a warm, filtered bassline that breathes with the pads",
+            "a round sub that sits under everything without crowding it",
         ),
         lead=(
             "lush Rhodes chords floating over the break",
-            "a soaring detuned pad lead that opens across the drop",
-            "clipped vocal-textured stabs answering the drums",
+            "a soulful piano motif answering the drums",
+            "a wordless vocal texture drifting above the groove",
+            "a soft saxophone line weaving through the mix",
         ),
         texture=(
-            "reversed cymbal risers and vinyl noise stitch the sections together",
             "filtered atmospherics and distant rain sit under the groove",
-            "granular pad smears drift across the stereo field",
+            "warm pad swells fill the space between phrases",
+            "reversed cymbals and soft vinyl noise stitch the sections",
         ),
-        mood=("rolling and hypnotic", "dark and driving", "warm, liquid and euphoric"),
+        mood=("warm, liquid and euphoric", "reflective and spacious", "late-night and smooth"),
         production=(
-            "the mix is punchy and club-ready with a tight low end",
-            "the production is clean and modern with heavy sub weight",
+            "the mix is clean and deep with a wide, warm low end",
+            "the production is polished and unhurried",
         ),
         structure=(
-            "a filtered intro rolls for thirty-two bars before the first drop, a "
-            "stripped breakdown lands halfway, and the second drop is the heaviest",
-            "a DJ-friendly beatless intro leads into a sixteen-bar build, a long "
-            "rolling drop, then a breakdown and a final drop",
+            "a beatless intro opens into a rolling first drop, a softer breakdown "
+            "lands halfway, and the last drop is the fullest",
         ),
-        instruments=("Instruments: Bass, Drums, Synthesizer, Electric Piano",),
-        prose="drum and bass",
-        keywords=("amen break", "reese bass", "rolling sub bass", "breakbeat", "jungle drums", "rhodes chords"),
+        instruments=("Instruments: Bass, Drums, Electric Piano, Synthesizer",),
+        prose="liquid drum and bass",
+        keywords=("liquid dnb", "rolling sub bass", "rhodes chords", "soulful",
+                  "atmospheric pads", "smooth breakbeat"),
     ),
-    "Techno": Genre(
-        tags=("Genre: Techno",),
-        bpm=(128, 138),
+    "Drum & Bass - Neurofunk": Genre(
+        tags=("Genre: Drum and Bass",),
+        bpm=(172, 176),
         drums=(
-            "a relentless four-to-the-floor kick with tight closed hats",
-            "a driving kick under syncopated rides and a clapping offbeat",
+            "surgical, heavily processed drums with a cracking snare",
+            "tight technical breaks with metallic percussion fills",
+            "a clipped, machine-precise beat with rattling ghost hits",
         ),
         bass=(
-            "a hypnotic rolling bassline locked to the kick",
-            "a distorted acid bass that squelches through a resonant filter",
+            "a neurofunk bass full of metallic formant sweeps",
+            "a snarling Reese detuned into a wide, moving growl",
+            "a modulating bass that morphs between notes like machinery",
+            "a distorted, talking bass that bends through a resonant filter",
         ),
         lead=(
-            "a hypnotic arpeggio slowly opening its filter",
-            "stabbing detuned chords repeating with small variations",
+            "sparse, dissonant stabs cutting between the bass",
+            "a cold synth motif buried under the low end",
+            "sci-fi sweeps and alarms punctuating the drop",
         ),
         texture=(
-            "industrial metallic noise and long reverb tails fill the space",
-            "dubby delay throws and tape hiss add depth",
+            "industrial metallic noise and mechanical clanks",
+            "granular glitches scattered across the stereo field",
+            "dark ambient drones underneath the drums",
         ),
-        mood=("dark and relentless", "hypnotic and mechanical", "raw and physical"),
+        mood=("dark and technical", "aggressive and precise", "menacing and clinical"),
         production=(
-            "the mix is loud, compressed and built for a big room",
-            "the production is raw and analogue with saturated drums",
+            "the mix is surgical, loud and heavily compressed",
+            "the production is cold, sharp and sub-heavy",
         ),
         structure=(
-            "a long tool-like intro, a gradual sixteen-bar build, a stripped "
-            "breakdown and a driving final section",
+            "a tense sound-design intro, a sharp first drop, a brief mechanical "
+            "breakdown, then a heavier second drop",
         ),
+        instruments=("Instruments: Bass, Drums, Synthesizer",),
+        prose="neurofunk drum and bass",
+        keywords=("neurofunk", "reese bass", "formant sweeps", "technical drums",
+                  "dark sci-fi", "distorted bass"),
+    ),
+    "Drum & Bass - Dancefloor": Genre(
+        tags=("Genre: Drum and Bass",),
+        bpm=(172, 176),
+        drums=(
+            "a punchy, wide-open beat built for a festival system",
+            "a driving break with a huge, bright snare",
+            "simple, powerful drums with big crash accents",
+        ),
+        bass=(
+            "a clean, enormous sub that hits like a wall",
+            "a bright, bouncing bass hook you can hum",
+            "a punchy mid-range bass riff carrying the drop",
+        ),
+        lead=(
+            "a soaring supersaw hook that opens the drop",
+            "an anthemic synth melody built for a crowd",
+            "a big euphoric chord progression rising into the drop",
+            "a bright plucked topline with a memorable hook",
+        ),
+        texture=(
+            "huge white-noise risers and impacts at every transition",
+            "stadium reverb and crowd-sized delays",
+            "shimmering high pads lifting the chorus",
+        ),
+        mood=("euphoric and enormous", "bright and anthemic", "uplifting and driving"),
+        production=(
+            "the mix is glossy, loud and festival-ready",
+            "the production is polished and radio-bright",
+        ),
+        structure=(
+            "an intro hook, a long build with a filter sweep, an anthemic first "
+            "drop, a melodic breakdown, then the biggest drop last",
+        ),
+        instruments=("Instruments: Bass, Drums, Synthesizer, Piano",),
+        prose="dancefloor drum and bass",
+        keywords=("dancefloor dnb", "supersaw hook", "anthemic", "festival",
+                  "big sub bass", "euphoric drop"),
+    ),
+    "Drum & Bass - Jungle": Genre(
+        tags=("Genre: Drum and Bass", "Genre: Jungle"),
+        bpm=(160, 174),
+        drums=(
+            "a chopped Amen break, edited hard and fast",
+            "layered breakbeats cut into stuttering fills",
+            "a raw, time-stretched break with vinyl grit",
+        ),
+        bass=(
+            "a deep dub sub bass rolling underneath",
+            "a heavy, warm sub with a long decay",
+            "an 808-style bass sliding between low notes",
+        ),
+        lead=(
+            "ragga vocal chops stabbing through the break",
+            "a dub siren wailing over the drums",
+            "a minor key stab pattern echoing off the beat",
+        ),
+        texture=(
+            "tape hiss, vinyl crackle and dub delay throws",
+            "distant rave sirens and reversed noise",
+        ),
+        mood=("raw and rolling", "dark and hypnotic", "energetic and rugged"),
+        production=(
+            "the production is raw, sampled and unpolished, straight off vinyl",
+        ),
+        structure=(
+            "a dub intro, an extended break-driven roll, a stripped bass-only "
+            "section, then the full break returns",
+        ),
+        instruments=("Instruments: Bass, Drums, Synthesizer",),
+        prose="jungle",
+        keywords=("jungle", "amen break", "ragga chops", "dub sub bass",
+                  "time-stretched breaks", "vinyl grit"),
+    ),
+    "Drum & Bass - Halftime": Genre(
+        tags=("Genre: Drum and Bass",),
+        bpm=(168, 174),
+        drums=(
+            "sparse halftime drums with a heavy, delayed snare",
+            "a slow, weighty beat under fast hi-hat detail",
+            "a broken, off-grid pattern with lots of space",
+        ),
+        bass=(
+            "a slow, enormous sub that swells and decays",
+            "a textured bass drone shifting under the beat",
+            "a granular bass that rumbles rather than plays notes",
+        ),
+        lead=(
+            "a distant, detuned melodic fragment",
+            "cold bell tones scattered over the beat",
+            "a processed vocal shard repeating in the space",
+        ),
+        texture=(
+            "wide ambient pads and field recordings",
+            "granular clouds and reversed reverb tails",
+        ),
+        mood=("dark and cavernous", "brooding and spacious", "cinematic and heavy"),
+        production=(
+            "the mix is deep and wide with enormous low-end weight",
+        ),
+        structure=(
+            "an ambient opening, the halftime beat entering low, a long textural "
+            "middle, then a heavier final section",
+        ),
+        instruments=("Instruments: Bass, Drums, Synthesizer",),
+        prose="halftime drum and bass",
+        keywords=("halftime dnb", "sparse drums", "sub weight", "granular textures",
+                  "cinematic", "broken beat"),
+    ),
+    "Techno - Hypnotic": Genre(
+        tags=("Genre: Techno", "Genre: Minimal"),
+        bpm=(128, 134),
+        drums=("a relentless four-to-the-floor kick with tight closed hats",
+               "a locked groove with a dry rimshot and shaker",
+               "a stripped beat with an offbeat open hat"),
+        bass=("a hypnotic rolling bassline locked to the kick",
+              "a single low pulse repeating without variation",
+              "a filtered sub that opens across several minutes"),
+        lead=("a hypnotic arpeggio slowly opening its filter",
+              "one stabbing chord repeating with tiny variations",
+              "a modulating drone that shifts almost imperceptibly"),
+        texture=("dubby delay throws and tape hiss add depth",
+                 "long reverb tails and distant metallic noise",
+                 "a slowly evolving background drone"),
+        mood=("hypnotic and mechanical", "dark and relentless", "meditative and locked"),
+        production=("the mix is dry, tight and built for a dark room",
+                    "the production is raw and analogue with saturated drums"),
+        structure=("a long tool-like intro, a gradual build, a stripped breakdown "
+                   "and a driving final section",),
         instruments=("Instruments: Drums, Bass, Synthesizer",),
-        prose="techno",
-        keywords=("four to the floor", "acid bass", "hypnotic arpeggio", "industrial noise", "warehouse reverb"),
+        prose="hypnotic techno",
+        keywords=("hypnotic techno", "rolling bassline", "locked groove",
+                  "dub delay", "minimal", "warehouse"),
     ),
-    "House": Genre(
-        tags=("Genre: House",),
+    "Techno - Industrial": Genre(
+        tags=("Genre: Techno", "Genre: Industrial"),
+        bpm=(130, 145),
+        drums=("a distorted, overdriven kick hitting hard",
+               "harsh metallic percussion and crashing noise hits",
+               "a pounding beat with clanging factory rhythms"),
+        bass=("a distorted acid bass squelching through a resonant filter",
+              "a saturated low rumble under the kick"),
+        lead=("a screaming, detuned synth line",
+              "harsh atonal stabs cutting through the noise",
+              "a siren-like lead rising over the beat"),
+        texture=("industrial metallic noise and mechanical clanks",
+                 "white noise sweeps and distorted room reverb"),
+        mood=("brutal and relentless", "raw and physical", "bleak and pounding"),
+        production=("the mix is loud, distorted and deliberately harsh",),
+        structure=("a noise intro, a punishing main section, a brief drop to "
+                   "percussion, then heavier again",),
+        instruments=("Instruments: Drums, Synthesizer, Bass",),
+        prose="industrial techno",
+        keywords=("industrial techno", "distorted kick", "acid bass",
+                  "metallic percussion", "harsh", "warehouse"),
+    ),
+    "Techno - Melodic": Genre(
+        tags=("Genre: Techno", "Genre: Electronic"),
         bpm=(120, 126),
-        drums=(
-            "a warm four-to-the-floor kick with shuffled hats and a crisp clap",
-            "a swinging drum groove with live-feeling percussion",
-        ),
-        bass=(
-            "a bouncing filtered bassline",
-            "a round, syncopated 808-style bass",
-        ),
-        lead=(
-            "a gospel-flavoured piano riff",
-            "warm Rhodes chords with a soulful lift",
-            "a plucked synth motif answering the groove",
-        ),
-        texture=(
-            "vinyl crackle and soft room reverb warm the whole track",
-            "airy pads and shaker layers widen the groove",
-        ),
-        mood=("uplifting and euphoric", "warm and soulful", "late-night and groovy"),
-        production=(
-            "the production is warm and analogue with gentle tape saturation",
-            "the mix is bright, punchy and club-ready",
-        ),
-        structure=(
-            "a DJ-friendly drum intro, a building sixteen bars, a euphoric drop "
-            "and a stripped outro",
-        ),
-        instruments=("Instruments: Piano, Bass, Drums, Synthesizer",),
-        prose="house",
-        keywords=("four on the floor", "gospel piano", "filtered bassline", "shuffled hats", "soulful chords"),
+        drums=("a clean four-to-the-floor kick with crisp hats",
+               "a driving beat with a soft clap on the offbeat"),
+        bass=("a warm rolling bassline with a gentle glide",
+              "a deep, melodic sub following the chord changes"),
+        lead=("a wistful arpeggio climbing over the groove",
+              "a wide, emotive pad chord progression",
+              "a plucked melodic hook with long delay"),
+        texture=("shimmering high pads and airy noise sweeps",
+                 "warm analogue drift and soft tape saturation"),
+        mood=("emotive and widescreen", "hopeful and driving", "bittersweet and warm"),
+        production=("the mix is wide, clean and lush",),
+        structure=("an atmospheric intro, a melodic build, a full emotional peak, "
+                   "then a long outro",),
+        instruments=("Instruments: Synthesizer, Drums, Bass",),
+        prose="melodic techno",
+        keywords=("melodic techno", "emotive pads", "arpeggio", "wide reverb",
+                  "driving groove", "bittersweet"),
+    ),
+    "House - Deep": Genre(
+        tags=("Genre: House", "Genre: Deep House"),
+        bpm=(118, 124),
+        drums=("a soft four-to-the-floor kick with brushed hats",
+               "a warm, swung groove with light percussion"),
+        bass=("a deep, round bassline with a soft attack",
+              "a warm sub that rolls gently under the chords"),
+        lead=("warm Rhodes chords with a soulful lift",
+              "a muted jazz guitar figure",
+              "a soft pad chord progression drifting over the groove"),
+        texture=("vinyl crackle and soft room reverb warm the whole track",
+                 "airy pads and shaker layers widen the groove"),
+        mood=("warm and soulful", "late-night and groovy", "deep and unhurried"),
+        production=("the production is warm and analogue with gentle tape saturation",),
+        structure=("a drum intro, a long deep groove, a stripped break, then the "
+                   "full arrangement returns",),
+        instruments=("Instruments: Electric Piano, Bass, Drums, Synthesizer",),
+        prose="deep house",
+        keywords=("deep house", "rhodes chords", "warm sub bass", "shuffled hats",
+                  "soulful", "late night"),
+    ),
+    "House - Classic": Genre(
+        tags=("Genre: House",),
+        bpm=(122, 128),
+        drums=("a punchy four-to-the-floor kick with a crisp clap",
+               "a swinging drum groove with live-feeling percussion"),
+        bass=("a bouncing filtered bassline",
+              "a round, syncopated 808-style bass"),
+        lead=("a gospel-flavoured piano riff",
+              "a plucked organ stab pattern",
+              "a bright disco string line"),
+        texture=("vinyl crackle and warm room reverb",
+                 "tambourine and shaker lifting the chorus"),
+        mood=("uplifting and euphoric", "joyful and warm", "classic and bouncy"),
+        production=("the mix is bright, punchy and club-ready",),
+        structure=("a DJ-friendly drum intro, a building sixteen bars, a euphoric "
+                   "drop and a stripped outro",),
+        instruments=("Instruments: Piano, Bass, Drums, Organ",),
+        prose="classic house",
+        keywords=("classic house", "gospel piano", "disco strings",
+                  "four on the floor", "handclaps", "euphoric"),
+    ),
+    "House - Tech": Genre(
+        tags=("Genre: House", "Genre: Techno"),
+        bpm=(124, 130),
+        drums=("a tight, dry kick with clipped closed hats",
+               "a stripped groove with a sharp rimshot"),
+        bass=("a syncopated, punchy bass hook",
+              "a rubbery filtered bassline driving the groove"),
+        lead=("a chopped vocal stab repeating on the offbeat",
+              "a minimal plucked riff with heavy sidechain"),
+        texture=("dry percussion loops and short delay throws",
+                 "subtle white noise rises into each section"),
+        mood=("driving and stripped", "hypnotic and funky", "dark and rolling"),
+        production=("the mix is tight, dry and built for a big room",),
+        structure=("a long percussive intro, a rolling main groove, a filtered "
+                   "break, then back to the groove",),
+        instruments=("Instruments: Drums, Bass, Synthesizer",),
+        prose="tech house",
+        keywords=("tech house", "vocal stabs", "rubbery bass", "dry percussion",
+                  "sidechain", "rolling groove"),
     ),
     "Dubstep": Genre(
         tags=("Genre: Dubstep",),
@@ -333,6 +544,250 @@ GENRES: dict[str, Genre] = {
         instruments=("Instruments: Bass, Drums, Organ, Synthesizer",),
         prose="UK garage",
         keywords=("two-step beat", "skippy hats", "organ bass", "chopped vocal stabs", "swing"),
+    ),
+    "Future Garage": Genre(
+        tags=("Genre: Garage", "Genre: Electronic", "Genre: Chillout"),
+        bpm=(128, 138),
+        drums=(
+            "a soft two-step shuffle with brushed, distant snares",
+            "a muted skippy beat mixed low under the pads",
+            "gentle clicks and shakers with a light, padded kick",
+        ),
+        bass=(
+            "a warm, restrained sub that never dominates",
+            "a soft filtered bassline sitting deep in the mix",
+            "a muted sub pulse felt more than heard",
+        ),
+        lead=(
+            "a pitched, wordless vocal fragment drifting in and out",
+            "a muted piano figure buried in reverb",
+            "a soft bell melody half-hidden behind the pads",
+        ),
+        texture=(
+            "rain, room noise and tape hiss under everything",
+            "wide reverb tails and gentle vinyl crackle",
+            "distant city ambience and soft granular haze",
+        ),
+        mood=("wistful and hazy", "calm and introspective", "melancholic and warm"),
+        production=(
+            "the mix is soft-edged, low-passed and unhurried",
+            "the production is muted and diffuse, nothing sharp",
+        ),
+        structure=(
+            "it drifts in on atmosphere, settles into a gentle shuffle, thins out "
+            "in the middle and fades rather than ending",
+        ),
+        instruments=("Instruments: Synthesizer, Piano, Drums, Bass",),
+        prose="future garage",
+        keywords=("future garage", "two-step shuffle", "muted sub", "vocal chops",
+                  "rainy atmosphere", "reverb-soaked", "study beats"),
+    ),
+    "Psydub": Genre(
+        tags=("Genre: Dub", "Genre: Chillout", "Genre: Electronic"),
+        bpm=(85, 110),
+        drums=(
+            "a slow dub beat with a heavy, delayed rimshot",
+            "loose organic percussion with hand drums and shakers",
+            "a laid-back halftime groove with tape-delayed snares",
+        ),
+        bass=(
+            "a deep, round dub bassline walking slowly",
+            "a warm analogue sub with a long, soft decay",
+            "a rolling bass figure that repeats hypnotically",
+        ),
+        lead=(
+            "a psychedelic synth line bending through a filter",
+            "a sitar-like melody echoing into the distance",
+            "sparse marimba and kalimba figures drifting over the beat",
+            "a melodica line soaked in spring reverb",
+        ),
+        texture=(
+            "long dub delay throws trailing off into space",
+            "field recordings of forest and water under the groove",
+            "swirling phased pads and backwards textures",
+        ),
+        mood=("hypnotic and warm", "psychedelic and unhurried", "earthy and spacious"),
+        production=(
+            "the production is warm and analogue with heavy tape delay",
+            "the mix is deep, dubby and wide, everything drenched in space",
+        ),
+        structure=(
+            "it builds slowly from percussion and bass, layers textures through "
+            "the middle, and strips back to the dub groove at the end",
+        ),
+        instruments=("Instruments: Bass, Drums, Synthesizer, Percussion",),
+        prose="psydub",
+        keywords=("psydub", "dub delay", "hand percussion", "analogue bass",
+                  "psychedelic", "forest field recordings", "downtempo"),
+    ),
+    "Trip Hop": Genre(
+        tags=("Genre: Trip Hop", "Genre: Downtempo"),
+        bpm=(75, 95),
+        drums=(
+            "a heavy, sluggish break dragging behind the beat",
+            "dusty sampled drums with a thick, compressed snare",
+            "a slow boom-bap groove with tambourine on the offbeat",
+        ),
+        bass=(
+            "a thick upright bass line walking under the beat",
+            "a fuzzy analogue sub with a slow attack",
+        ),
+        lead=(
+            "a minor key string sample looping mournfully",
+            "a detuned Rhodes chord progression",
+            "a muted trumpet line drifting over the groove",
+            "a haunting theremin-like lead",
+        ),
+        texture=(
+            "vinyl crackle, tape wow and distant record noise",
+            "cinematic string swells and low choir pads",
+        ),
+        mood=("brooding and cinematic", "smoky and melancholic", "paranoid and cool"),
+        production=(
+            "the production is dark, sampled and heavily filtered",
+            "the mix is thick and mid-heavy, like an old record",
+        ),
+        structure=(
+            "a looped intro, a long central groove with layers added and removed, "
+            "and a stripped outro",
+        ),
+        instruments=("Instruments: Drums, Bass, Electric Piano, Strings",),
+        prose="trip hop",
+        keywords=("trip hop", "dusty drums", "vinyl crackle", "minor strings",
+                  "rhodes", "downtempo", "cinematic"),
+    ),
+    "Dub Techno": Genre(
+        tags=("Genre: Techno", "Genre: Dub", "Genre: Minimal"),
+        bpm=(118, 128),
+        drums=(
+            "a soft, muffled four-to-the-floor kick with brushed hats",
+            "a restrained beat with a clicking rimshot and little else",
+        ),
+        bass=(
+            "a deep, warm sub pulse locked to the kick",
+            "a slow analogue bass that breathes with the chords",
+        ),
+        lead=(
+            "a filtered chord stab drenched in delay, repeating for minutes",
+            "a soft, detuned pad chord decaying into the reverb",
+        ),
+        texture=(
+            "cavernous dub delay and endless reverb tails",
+            "tape hiss, static and faint crackle throughout",
+            "slowly evolving background drones",
+        ),
+        mood=("hypnotic and submerged", "cold and meditative", "warm and endless"),
+        production=(
+            "the production is deep, murky and heavily processed",
+            "the mix is soft-edged with everything far back in the room",
+        ),
+        structure=(
+            "it evolves almost imperceptibly, adding and removing a single "
+            "element at a time across the whole track",
+        ),
+        instruments=("Instruments: Synthesizer, Drums, Bass",),
+        prose="dub techno",
+        keywords=("dub techno", "chord stabs", "tape delay", "hypnotic",
+                  "muffled kick", "deep reverb", "minimal"),
+    ),
+    "Downtempo": Genre(
+        tags=("Genre: Downtempo", "Genre: Chillout"),
+        bpm=(85, 105),
+        drums=(
+            "a relaxed, padded beat with soft brushed percussion",
+            "an easy mid-tempo groove with shakers and light congas",
+            "a loose, unhurried drum pattern low in the mix",
+        ),
+        bass=(
+            "a warm, simple bassline with plenty of room",
+            "a soft analogue sub holding the harmony",
+        ),
+        lead=(
+            "a nylon guitar figure picked gently",
+            "a warm electric piano progression",
+            "a soft flute or whistle melody drifting over the top",
+        ),
+        texture=(
+            "ocean and evening ambience under the groove",
+            "warm analogue pads and gentle tape saturation",
+        ),
+        mood=("sunlit and unhurried", "calm and golden", "relaxed and open"),
+        production=(
+            "the production is warm and analogue, soft at every edge",
+        ),
+        structure=(
+            "it opens on atmosphere, settles into an easy groove, and drifts out",
+        ),
+        instruments=("Instruments: Guitar, Electric Piano, Bass, Percussion",),
+        prose="downtempo",
+        keywords=("downtempo", "balearic", "nylon guitar", "warm pads",
+                  "soft percussion", "sunset", "chillout"),
+    ),
+    "Chillwave": Genre(
+        tags=("Genre: Chillwave", "Genre: Electronic", "Genre: Chillout"),
+        bpm=(95, 115),
+        drums=(
+            "a soft gated drum machine pattern, slightly washed out",
+            "a hazy beat with a padded kick and lo-fi snare",
+        ),
+        bass=(
+            "a warm analogue bass pulse, gently detuned",
+            "a soft synth bass sitting under the wash",
+        ),
+        lead=(
+            "a nostalgic, detuned synth melody",
+            "a chorus-drenched guitar figure repeating",
+            "a pitched vocal sample stretched into a pad",
+        ),
+        texture=(
+            "heavy tape wobble and sun-bleached saturation",
+            "wide chorus and long, hazy reverb on everything",
+        ),
+        mood=("nostalgic and dreamlike", "hazy and warm", "wistful and faded"),
+        production=(
+            "the production is washed out and lo-fi, like a faded tape",
+        ),
+        structure=(
+            "a slow synth fade-in, a steady dreamlike middle, a long fade out",
+        ),
+        instruments=("Instruments: Synthesizer, Drums, Guitar, Bass",),
+        prose="chillwave",
+        keywords=("chillwave", "tape wobble", "detuned synths", "dreamy",
+                  "sun-bleached", "lo-fi", "nostalgic"),
+    ),
+    "IDM": Genre(
+        tags=("Genre: Electronic", "Genre: IDM"),
+        bpm=(90, 140),
+        drums=(
+            "intricate glitched percussion, cut and stuttered",
+            "a broken, constantly shifting beat that never quite repeats",
+            "crisp programmed drums with micro-edits and rolls",
+        ),
+        bass=(
+            "a warm analogue bass wandering under the glitches",
+            "a low sine pulse anchoring the chaos",
+        ),
+        lead=(
+            "a fragile, detuned melody played on a soft synth",
+            "bell tones arranged in shifting, generative patterns",
+            "a melancholy pad progression underneath the edits",
+        ),
+        texture=(
+            "granular artefacts, clicks and digital debris",
+            "soft, wide pads offsetting the sharp percussion",
+        ),
+        mood=("melancholy and intricate", "playful and strange", "cold and beautiful"),
+        production=(
+            "the production is precise and detailed, clinical but warm underneath",
+        ),
+        structure=(
+            "a quiet melodic opening, increasingly complex rhythmic edits through "
+            "the middle, resolving back to the melody",
+        ),
+        instruments=("Instruments: Synthesizer, Drums",),
+        prose="IDM",
+        keywords=("idm", "glitch percussion", "braindance", "detuned melody",
+                  "generative", "microedits"),
     ),
     "Funk": Genre(
         tags=("Genre: Funk",),
@@ -609,7 +1064,9 @@ def build_prompt(
         colour.append(voice_words)
 
     kind = "track" if vocals else "instrumental"
-    opening = f"{_upper_first(_article(prose))} {mood} {prose} {kind} at {tempo} BPM"
+    # The article must agree with whatever word actually follows it, which is the
+    # mood, not the genre.
+    opening = f"{_upper_first(_article(mood))} {mood} {prose} {kind} at {tempo} BPM"
 
     if rng.random() < 0.5:
         # Fragment form, closest to Stability's own examples.

@@ -13,6 +13,7 @@ import io
 import json
 import math
 import os
+import re
 import signal
 import shutil
 import subprocess
@@ -1085,7 +1086,7 @@ class Registry(unittest.TestCase):
         for style in ("tags", "caption", "description"):
             with self.subTest(style=style):
                 built = prompting.build_prompt(
-                    "Drum & Bass", style=style, seed=1, structure=described,
+                    "Drum & Bass - Liquid", style=style, seed=1, structure=described,
                 )
                 if style == "tags":
                     continue  # tag style carries no structure sentence
@@ -1110,7 +1111,7 @@ class Registry(unittest.TestCase):
         for style in ("tags", "caption", "description"):
             with self.subTest(style=style):
                 built = prompting.build_prompt(
-                    "Drum & Bass", style=style, bpm=174, seed=1,
+                    "Drum & Bass - Liquid", style=style, bpm=174, seed=1,
                     mood="dark and driving",
                     instruments=("Bass", "Drums"),
                     character=("with a wide, cavernous reverb",),
@@ -1125,8 +1126,8 @@ class Registry(unittest.TestCase):
                 self.assertIn("drums", built.lower())
 
     def test_vocals_selection_changes_the_prompt_not_just_a_flag(self):
-        instrumental = prompting.build_prompt("Drum & Bass", seed=1, vocals=False)
-        voiced = prompting.build_prompt("Drum & Bass", seed=1, vocals=True)
+        instrumental = prompting.build_prompt("Drum & Bass - Liquid", seed=1, vocals=False)
+        voiced = prompting.build_prompt("Drum & Bass - Liquid", seed=1, vocals=True)
         self.assertIn("VocalType: Instrumental", instrumental)
         self.assertNotIn("VocalType: Instrumental", voiced)
         self.assertIn("vocal", voiced.lower())
@@ -1319,7 +1320,7 @@ class Registry(unittest.TestCase):
         """Regenerate is worthless if it returns the same text every press, and
         near-worthless if every variation reads the same. Diversity has to come from
         shape and vocabulary, not just a reshuffled adjective."""
-        seen = [prompting.build_prompt("Drum & Bass", seed=seed) for seed in range(40)]
+        seen = [prompting.build_prompt("Drum & Bass - Liquid", seed=seed) for seed in range(40)]
         self.assertGreaterEqual(len(set(seen)), 38)
         vocabulary = set()
         for prompt in seen:
@@ -1329,11 +1330,52 @@ class Registry(unittest.TestCase):
         shapes = {prompt.count(". ") for prompt in seen}
         self.assertGreater(len(shapes), 1, "every prompt has the same shape")
 
+    def test_the_article_agrees_with_the_word_that_follows_it(self):
+        """The article was taken from the genre while the mood came first, giving
+        "A uplifting drum and bass" and "A earthy psydub"."""
+        mistakes = set()
+        for genre in prompting.genre_names():
+            for seed in range(20):
+                built = prompting.build_prompt(genre, seed=seed)
+                for match in re.finditer(r"\b(A|An) ([a-z]+)", built):
+                    article, word = match.group(1), match.group(2)
+                    vowel = word[0] in "aeiou" and not word.startswith(
+                        ("uk", "uni", "euro", "eu", "one", "use")
+                    )
+                    expected = "An" if vowel else "A"
+                    if article != expected:
+                        mistakes.add(f"{article} {word}")
+        self.assertEqual(mistakes, set())
+
+    def test_sub_styles_do_not_share_one_soup_of_vocabulary(self):
+        """Liquid Rhodes chords and neurofunk formant sweeps in one prompt average
+        into mush, which docs/gotchas.md already records. Each sub-style keeps its
+        own coherent vocabulary."""
+        liquid = " ".join(
+            prompting.build_prompt("Drum & Bass - Liquid", seed=s) for s in range(15)
+        ).lower()
+        neuro = " ".join(
+            prompting.build_prompt("Drum & Bass - Neurofunk", seed=s) for s in range(15)
+        ).lower()
+        self.assertIn("rhodes", liquid)
+        self.assertNotIn("rhodes", neuro)
+        self.assertIn("formant", neuro)
+        self.assertNotIn("formant", liquid)
+
+    def test_the_downtempo_genres_stay_downtempo(self):
+        """Future garage and psydub were asked for as background music, not as
+        heavy bass workouts."""
+        for genre, ceiling in (("Future Garage", 138), ("Psydub", 110),
+                               ("Downtempo", 105), ("Trip Hop", 95)):
+            with self.subTest(genre=genre):
+                spec = prompting.GENRES[genre]
+                self.assertLessEqual(spec.bpm[1], ceiling)
+
     def test_proper_nouns_survive_prompt_assembly(self):
         """str.capitalize lowercases the rest, turning an Amen break into an amen
         break and a Rhodes into a rhodes."""
         joined = " ".join(
-            prompting.build_prompt("Drum & Bass", seed=seed) for seed in range(30)
+            prompting.build_prompt("Drum & Bass - Liquid", seed=seed) for seed in range(30)
         )
         self.assertNotIn("amen break", joined)
         self.assertNotIn("rhodes chords", joined)
@@ -1342,12 +1384,12 @@ class Registry(unittest.TestCase):
         for style in ("tags", "caption", "description"):
             with self.subTest(style=style):
                 self.assertIn("174", prompting.build_prompt(
-                    "Drum & Bass", style=style, bpm=174, seed=3,
+                    "Drum & Bass - Liquid", style=style, bpm=174, seed=3,
                 ))
 
     def test_prompt_builder_refuses_an_unknown_style_or_genre(self):
         with self.assertRaisesRegex(ValueError, "unknown prompt style"):
-            prompting.build_prompt("Drum & Bass", style="interpretive dance")
+            prompting.build_prompt("Drum & Bass - Liquid", style="interpretive dance")
         with self.assertRaisesRegex(ValueError, "unknown genre"):
             prompting.build_prompt("Sea Shanty")
 
