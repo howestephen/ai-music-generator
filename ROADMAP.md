@@ -19,26 +19,20 @@ they are never buried in a chat.
 
 - Goal: describe music in words, render it locally on Apple Silicon, and keep adding
   models cheap
-- Current phase: Phase 1.2 complete; next direction pending owner review
+- Current phase: Phase 3, the track library
 - Biggest known risk: no listening assessment has been done on any output
-- Default backend: `minimax-mlx` (owner decision, resolved 2026-09-17)
+- Default backend: `stable-audio-medium` (2026-09-19, superseding `minimax-mlx`)
 
 ## Phase 0: Retrofit and remediation
 
-- Status: `done`. All 19 verified audit findings of 2026-09-09 closed (4 high, 8
-  medium, 7 low); detail in git and [docs/decisions.md](docs/decisions.md). The
-  sidecar change was additive, so older sidecars still parse
-
-| # | Title | Status | Landed |
-|---|---|---|---|
-| 0.1 | Retrofit to `ai-product-base`: rules, commit gates, frontmatter, structure lock | `done` | 2026-09-10 |
-| 0.2 | Per-backend parameter plumbing, so a control that cannot apply is refused not dropped | `done` | 2026-09-10 |
-| 0.3 | Model selector and persistent UI history rebuilt from the files on disk | `done` | 2026-09-15 |
-| 0.3.1 | Serial render queue, server-owned across browsers | `done` | 2026-09-16 |
-| 0.3.2 | Manifest-driven UI controls: `synth/backends.json` is the source of truth | `done` | 2026-09-16 |
-| 0.4 | Harden the runner seam: UTF-8, nested timeouts, process-group cleanup, loud failures | `done` | 2026-09-16 |
-| 0.5 | Make `analyze.py` honest: no invented key score, no claimed fades | `done` | 2026-09-16 |
-| 0.6 | Docs match the code: locked environments and pinned MiniMax source commit | `done` | 2026-09-16 |
+- Status: `done` 2026-09-16. All 19 verified audit findings of 2026-09-09 closed (4
+  high, 8 medium, 7 low). The retrofit put the house standard, commit gates and
+  structure lock in place; per-backend parameter plumbing stopped controls being
+  silently dropped; the UI gained a model selector and a persistent, serial,
+  manifest-driven render queue; the runner seam was hardened with UTF-8, nested
+  timeouts and process-group cleanup; `analyze.py` stopped inventing a key score; and
+  the docs were made to match the code. Detail in git and
+  [docs/decisions.md](docs/decisions.md)
 
 ## Phase 1: Output acceptance
 
@@ -48,27 +42,16 @@ they are never buried in a chat.
 
 ## Phase 2: Any model, any length
 
-- Status: `done`
-- Goal: adding a model is a manifest entry plus a runner, an exact-length model is not
-  policed as though it might stop early, and the UI tells the truth. Detail in
-  [docs/decisions.md](docs/decisions.md), traps in [docs/gotchas.md](docs/gotchas.md)
-
-| # | Title | Status | Landed |
-|---|---|---|---|
-| 2.1 | Per-backend duration contract: `best_effort` or `exact` | `done` | 2026-09-19 |
-| 2.2 | Per-backend runner options, so a variant costs only a manifest entry | `done` | 2026-09-19 |
-| 2.3 | Serve generated audio to the browser (`allowed_paths`) | `done` | 2026-09-19 |
-| 2.4 | Stable Audio 3 small and medium, the first exact-length backends | `done` | 2026-09-19 |
-| 2.5 | Genre dropdown writing prompts in each backend's own style | `done` | 2026-09-19 |
-| 2.6 | Render estimate fitted from measurements; one track plays at a time | `done` | 2026-09-19 |
-| 2.7 | Mobile layout no longer scrolls sideways | `done` | 2026-09-19 |
-| 2.8 | Queue panel reflects reality (`gr.Timer` inert, `queue=False` blocks renders) | `done` | 2026-09-19 |
-| 2.10 | Prompts vary in shape and vocabulary, not just adjectives | `done` | 2026-09-19 |
-| 2.11 | Menus compose the prompt; lyrics only where a backend can sing | `done` | 2026-09-19 |
-| 2.12 | Structure builder: bars per section, described to the model | `done` | 2026-09-20 |
-| 2.13 | Genres split into sub-styles; 34 genres with distinct vocabulary | `done` | 2026-09-20 |
-| 2.9 | Section editing and whole-track remixing through inpainting | `done` | 2026-09-20 |
-
+- Status: `done`, signed off 2026-09-20. Adding a model is a manifest entry plus a
+  runner; an exact-length model is not policed as though it might stop early; the UI
+  tells the truth. Detail in [docs/decisions.md](docs/decisions.md), traps in
+  [docs/gotchas.md](docs/gotchas.md)
+- Delivered: duration contracts and runner options per backend; audio actually served
+  to the browser; Stable Audio 3 as the first exact-length backend and now the default;
+  prompts composed from menus across 34 genres with distinct sub-style vocabulary;
+  honest render estimates; a mobile layout that does not scroll sideways; a queue panel
+  that reflects reality; arrangements laid out in bars; and section editing or
+  whole-track remixing of any audio, including uploads
 
 ## Phase 3: Track library and generate panel
 
@@ -85,6 +68,10 @@ they are never buried in a chat.
 | 3.3 | Delete and keep/discard per track | `planned` | **Blocked on an owner decision:** `CLAUDE.md` says generated audio is never deleted, but a generation is treated as disposable in practice |
 | 3.4 | Filter by genre, rating and text | `planned` | 31 tracks was already unmanageable. A view concern that must not touch files |
 | 3.5 | Regenerate sits next to the prompt | `planned` | You cannot see what you are regenerating. The only visual design question here |
+| 3.6 | Dropdowns are clickable across their whole area | `planned` | Only the small arrow responds, so every menu takes several attempts. Gradio's own hit area, so it needs CSS over the component |
+| 3.7 | Instruments, character and keywords collapse | `planned` | They are open by default and dominate the panel. They belong behind an Advanced disclosure, closed |
+| 3.8 | Decide whether Stable Audio keeps a vocals control | `planned` | Owner reports it appears ignored. Stability document that their models never produce intelligible vocals, only textures, so it may be a control that cannot be honoured. Test before changing it |
+
 
 ## Phase 4: Visual design pass
 
@@ -99,10 +86,19 @@ they are never buried in a chat.
 
 ## Deferred ideas
 
-- Runner diagnostics (`device`, `sampling_rate`, `load_seconds`) into the sidecar.
-  Why deferred: a second sidecar format change. Trigger: a track whose device is in doubt
-- Runtime notice on the CC-BY-NC MusicGen backend. Why deferred: the licence is already
-  stated in the registry, README and decisions. Trigger: any output leaving personal use
+- ACE-Step 1.5 as a backend, replacing v1. MIT code and weights, licensed training data,
+  10s to 600s, explicit BPM, key, scale and time signature, repaint, cover and
+  vocal-to-BGM, with an MLX path. Recommended on 2026-09-19 when the owner asked for
+  every good model, then not built. Needs its own venv: `transformers>=4.51,<4.58`
+- Route heavy renders to Seneca, the 4090 box. Its ComfyUI already has nodes for
+  ACE-Step, ACE-Step 1.5, MiniMax Music 3 and Stable Audio, but no audio checkpoints
+  yet. Raised 2026-09-19 after a Mac render fought another agent for the GPU. A
+  departure from the local-only premise, so it needs an owner decision
+
+- Runner diagnostics (`device`, `sampling_rate`, `load_seconds`) into the sidecar. Do it
+  with the Phase 3 sidecar change or not at all
+- Runtime notice on the CC-BY-NC MusicGen backend. Trigger: any output leaving personal
+  use
 - Research further local music models. Compare Apple Silicon support, licence, duration,
   controllability, genre evidence, runtime and integration cost before proposing any
 - Deliver vocals and instruments as separate audio files. Compare the routes rather than
@@ -110,19 +106,24 @@ they are never buried in a chat.
   runs locally on any audio, including tracks already in `output/`; LALAL.AI is installed
   with paid credit, so it costs no install. Whichever wins, a stem is a generated asset
   and needs its own sidecar and audit. Trigger: the first track that needs one
-- Vocal-specific synthesis, so a written topline can be sung. SoulX-Singer (Feb 2026,
-  zero-shot) takes a melody as F0 or MIDI plus lyrics rather than a text prompt, so it
-  needs an input surface no backend here has. Open questions: no Apple Silicon build was
-  found, and its training-data provenance is less clearly stated than Stability's.
-  Trigger: wanting to sing a melody written in Ableton
+- Vocal-specific synthesis, so a written topline can be sung. SoulX-Singer takes a
+  melody as F0 or MIDI plus lyrics rather than a text prompt, so it needs an input
+  surface no backend here has. Open: no Apple Silicon build found, and its training-data
+  provenance is less clearly stated than Stability's
 
 ## Owner decisions open
 
-1. Resolved 2026-09-17: `minimax-mlx` is the default backend on Stephen's instruction
-2. Resolved 2026-09-10: the finished client brief`briefs/` was deleted on
-   Stephen's instruction; `briefs/` stays declared for future prompt sets
-3. Resolved 2026-09-10: no new top-level file at this level; the pinned `.venv-mlx`
-   install command goes in the README (milestone 0.6)
+1. **Delete or archive a generation.** `CLAUDE.md` says generated audio is a creative
+   asset to be archived and never deleted, but on 2026-09-20 all 31 tracks were
+   deleted on instruction because a generation is disposable in practice. Phase 3.3 is
+   blocked until the rule or the behaviour changes
+2. **Whether renders may leave this Mac.** Routing heavy work to Seneca's 4090 departs
+   from the project's local-only premise
+
+Resolved: `stable-audio-medium` is the default backend (2026-09-19, superseding
+`minimax-mlx` of 2026-09-17); `briefs/` stays declared for future prompt sets though
+its contents were deleted (2026-09-10); the pinned `.venv-mlx` install command lives
+in the README rather than a new top-level file (2026-09-10).
 
 ## Current next step
 
@@ -130,7 +131,7 @@ they are never buried in a chat.
   genres, prompts composed from menus, arrangements laid out in bars, and any span of
   any track regeneratable
 - Then: Phase 3, the track library, executed by Codex against its spec
-- Not started, and the honest gap: nobody has listened to any output yet
-- Phase 1.2 exit gates: the runner passes one target as both minimum and maximum; a real
-  render reaches its requested duration; unit tests, mutations and validators pass;
-  installed model probes pass; independent audit is clean
+- The honest gap: nobody has listened to any output yet, so no claim in this file is a
+  judgement of how anything sounds
+- Exit gates for any milestone: unit tests, mutations and validators pass; installed
+  model probes pass; a real render is verified by artifact; independent audit is clean
