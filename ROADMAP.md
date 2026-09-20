@@ -72,7 +72,7 @@ they are never buried in a chat.
 | 2.10 | Prompts vary in shape and vocabulary, not just adjectives | `done` | 2026-09-19 |
 | 2.11 | Menus compose the prompt; lyrics only where a backend can sing | `done` | 2026-09-19 |
 | 2.12 | Structure builder: bars per section, described to the model | `done` | 2026-09-20 |
-| 2.13 | Genres split into sub-styles; 31 genres with distinct vocabulary | `done` | 2026-09-20 |
+| 2.13 | Genres split into sub-styles; 34 genres with distinct vocabulary | `done` | 2026-09-20 |
 | 2.9 | Section editing and whole-track remixing through inpainting | `done` | 2026-09-20 |
 
 

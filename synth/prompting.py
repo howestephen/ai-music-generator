@@ -410,8 +410,53 @@ GENRES: dict[str, Genre] = {
         keywords=("tech house", "vocal stabs", "rubbery bass", "dry percussion",
                   "sidechain", "rolling groove"),
     ),
-    "Dubstep": Genre(
-        tags=("Genre: Dubstep",),
+    "Dubstep - Deep": Genre(
+        tags=("Genre: Dubstep", "Genre: Dub", "Genre: Bass"),
+        bpm=(138, 142),
+        drums=(
+            "a sparse half-time beat with a dry rimshot on the third beat",
+            "a skeletal two-step pattern with shuffled hats and long gaps",
+            "a restrained beat with a soft kick and a cracking wooden snare",
+            "swung percussion with a single tambourine hit marking the bar",
+        ),
+        bass=(
+            "an enormous sine sub moving in slow, whole notes",
+            "a deep dub bassline that swells and decays under everything",
+            "a warm sub felt in the chest rather than heard, drifting slowly in pitch",
+            "a heavy sub pressure that holds one note for bars at a time",
+        ),
+        lead=(
+            "a minor key dub chord stab drenched in tape delay",
+            "a distant melodica line echoing into the space",
+            "a sparse bell melody left to ring out",
+            "a lonely, detuned string pad drifting across the bars",
+        ),
+        texture=(
+            "cavernous reverb and long dub delay throws",
+            "vinyl crackle, rain and distant room noise",
+            "a low drone humming underneath the whole track",
+        ),
+        mood=(
+            "meditative and heavy", "dark and spacious",
+            "dread-laden and warm", "hypnotic and patient",
+        ),
+        production=(
+            "the production is deep and murky, built for a sound system",
+            "the mix prizes weight and space over loudness, with enormous low end",
+        ),
+        structure=(
+            "a long atmospheric intro, the sub entering as the drop rather than "
+            "any gimmick, sixteen-bar sections, and a stripped dub outro",
+            "it rolls patiently, dropping to bass and percussion in the middle "
+            "before the full weight returns",
+        ),
+        instruments=("Instruments: Bass, Drums, Synthesizer",),
+        prose="deep dubstep",
+        keywords=("deep dubstep", "sub bass pressure", "half-time", "two-step",
+                  "dub chords", "tape delay", "meditative", "sound system"),
+    ),
+    "Dubstep - Brostep": Genre(
+        tags=("Genre: Dubstep", "Genre: Bass"),
         bpm=(140, 145),
         drums=(
             "a half-time drum pattern with a huge snare on the third beat",
@@ -420,6 +465,7 @@ GENRES: dict[str, Genre] = {
         bass=(
             "a growling wobble bass modulated by an LFO",
             "a screaming talking bass full of formant movement",
+            "a violently distorted mid-range bass",
         ),
         lead=(
             "a detuned supersaw lead cutting through the drop",
@@ -436,8 +482,52 @@ GENRES: dict[str, Genre] = {
             "heavier drop",
         ),
         instruments=("Instruments: Bass, Drums, Synthesizer",),
-        prose="dubstep",
-        keywords=("wobble bass", "half-time drums", "huge snare", "supersaw lead", "sub drop"),
+        prose="brostep",
+        keywords=("brostep", "wobble bass", "half-time drums", "huge snare",
+                  "supersaw lead", "sub drop"),
+    ),
+    "Glitch Hop": Genre(
+        tags=("Genre: Glitch Hop", "Genre: Hip Hop", "Genre: Electronic"),
+        bpm=(100, 112),
+        drums=(
+            "a chopped breakbeat cut into stuttering micro-edits",
+            "heavy hip-hop drums with glitched retriggers and gated stutters",
+            "a swung beat interrupted by rapid triplet fills and tape stops",
+            "thick, compressed drums with a snare that stutters into the next bar",
+        ),
+        bass=(
+            "a heavily processed synth bass that talks and morphs",
+            "a fat, distorted bass riff with a funky swagger",
+            "a bit-crushed sub that grinds under the groove",
+            "a rubbery modulated bass locked to the drum edits",
+        ),
+        lead=(
+            "a filtered funk guitar sample chopped into a riff",
+            "a warped, pitch-bent synth melody",
+            "a chopped vocal shard stuttering on the offbeat",
+            "a warm, melodic synth line cutting through the grit",
+        ),
+        texture=(
+            "granular glitches, digital debris and reversed hits",
+            "bit-crushed artefacts and tape-stop sweeps between sections",
+            "vinyl crackle under heavily processed sound design",
+        ),
+        mood=(
+            "funky and mechanical", "gritty and cinematic",
+            "playful and heavy", "swaggering and warped",
+        ),
+        production=(
+            "the production is dense and heavily sound-designed, punchy and mid-tempo",
+            "the mix is thick and gritty with every element processed hard",
+        ),
+        structure=(
+            "an atmospheric intro, a heavy swung groove, a glitched breakdown "
+            "where everything stutters, then a fuller final groove",
+        ),
+        instruments=("Instruments: Drums, Bass, Synthesizer, Guitar",),
+        prose="glitch hop",
+        keywords=("glitch hop", "stutter edits", "chopped breaks", "processed bass",
+                  "hip-hop swing", "bitcrush", "tape stop", "sound design"),
     ),
     "Ambient": Genre(
         tags=("Genre: Ambient",),
@@ -581,6 +671,51 @@ GENRES: dict[str, Genre] = {
         prose="future garage",
         keywords=("future garage", "two-step shuffle", "muted sub", "vocal chops",
                   "rainy atmosphere", "reverb-soaked", "study beats"),
+    ),
+    "Post-Dubstep": Genre(
+        tags=("Genre: Garage", "Genre: Downtempo", "Genre: Electronic"),
+        bpm=(128, 138),
+        drums=(
+            "a clattering, unquantised two-step pattern that never sits on the grid",
+            "sparse garage drums made of vinyl clicks, lighter flicks and rimshots",
+            "a loose shuffle with a dry snare and long silences between hits",
+            "hand-placed percussion that drags and rushes like a worn tape",
+        ),
+        bass=(
+            "a deep, warm sub that appears for a few bars and vanishes",
+            "a soft low pulse buried far beneath the surface noise",
+            "a muted sub weight that never resolves anywhere",
+        ),
+        lead=(
+            "a pitched-up wordless vocal fragment, anonymous and yearning",
+            "a slowed, time-stretched R&B vocal shard repeating out of context",
+            "a single detuned synth chord holding across the whole section",
+            "a faint, ghostly melody half-buried in the hiss",
+        ),
+        texture=(
+            "heavy vinyl crackle used as percussion in its own right",
+            "rain, distant traffic and late-night city ambience",
+            "tape hiss, room noise and the sound of a worn recording",
+            "reversed reverb tails bleeding between sections",
+        ),
+        mood=(
+            "melancholy and isolated", "nocturnal and yearning",
+            "haunted and weightless", "lonely and unresolved",
+        ),
+        production=(
+            "the production is lo-fi and murky, everything distant and off-grid",
+            "the mix is hazy and degraded, as if recorded off a worn tape",
+        ),
+        structure=(
+            "it fades in on crackle and rain, drifts through loose sections that "
+            "never quite repeat, and dissolves rather than ending",
+            "a long ambient opening, a broken shuffle that comes and goes, and a "
+            "final section stripped back to vocal and noise",
+        ),
+        instruments=("Instruments: Drums, Bass, Synthesizer",),
+        prose="post-dubstep",
+        keywords=("post-dubstep", "two-step", "vinyl crackle", "pitched vocal chops",
+                  "rain", "melancholy", "off-grid", "night bus", "lo-fi"),
     ),
     "Psydub": Genre(
         tags=("Genre: Dub", "Genre: Chillout", "Genre: Electronic"),

@@ -1362,6 +1362,50 @@ class Registry(unittest.TestCase):
         self.assertIn("formant", neuro)
         self.assertNotIn("formant", liquid)
 
+    def test_deep_dubstep_is_not_brostep(self):
+        """The single Dubstep entry produced brostep: wobble bass, supersaw leads
+        and a huge snare. Deep dubstep is the two-step, sub-pressure, dub-influenced
+        sound and must not borrow that vocabulary."""
+        deep = " ".join(
+            prompting.build_prompt("Dubstep - Deep", seed=s) for s in range(20)
+        ).lower()
+        bro = " ".join(
+            prompting.build_prompt("Dubstep - Brostep", seed=s) for s in range(20)
+        ).lower()
+        for brostep_word in ("wobble", "supersaw", "screaming"):
+            self.assertNotIn(brostep_word, deep, f"deep dubstep must avoid {brostep_word}")
+        self.assertIn("sub", deep)
+        self.assertIn("dub", deep)
+        self.assertIn("wobble", bro)
+
+    def test_post_dubstep_is_sparser_and_sadder_than_future_garage(self):
+        """Both are garage-derived and atmospheric, so they have to stay distinct:
+        post-dubstep is off-grid, crackle-led and unresolved."""
+        post = " ".join(
+            prompting.build_prompt("Post-Dubstep", seed=s) for s in range(20)
+        ).lower()
+        future = " ".join(
+            prompting.build_prompt("Future Garage", seed=s) for s in range(20)
+        ).lower()
+        self.assertIn("crackle", post)
+        self.assertIn("unquantised", post + " ")
+        for word in ("melancholy", "nocturnal", "haunted", "lonely"):
+            if word in post:
+                break
+        else:
+            self.fail("post-dubstep should read as melancholy")
+        self.assertNotEqual(post, future)
+
+    def test_glitch_hop_sits_at_hip_hop_tempo(self):
+        spec = prompting.GENRES["Glitch Hop"]
+        self.assertGreaterEqual(spec.bpm[0], 95)
+        self.assertLessEqual(spec.bpm[1], 115)
+        built = " ".join(
+            prompting.build_prompt("Glitch Hop", seed=s) for s in range(15)
+        ).lower()
+        self.assertIn("glitch", built)
+        self.assertIn("stutter", built)
+
     def test_the_downtempo_genres_stay_downtempo(self):
         """Future garage and psydub were asked for as background music, not as
         heavy bass workouts."""
