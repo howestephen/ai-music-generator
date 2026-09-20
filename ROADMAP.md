@@ -25,10 +25,9 @@ they are never buried in a chat.
 
 ## Phase 0: Retrofit and remediation
 
-- Status: `done`, all 19 verified audit findings of 2026-09-09 closed (4 high, 8
-  medium, 7 low). Detail is in git history and [docs/decisions.md](docs/decisions.md)
-- The sidecar change was kept additive: `backend` was added and `model` kept, so
-  sidecars written before it still parse
+- Status: `done`. All 19 verified audit findings of 2026-09-09 closed (4 high, 8
+  medium, 7 low); detail in git and [docs/decisions.md](docs/decisions.md). The
+  sidecar change was additive, so older sidecars still parse
 
 | # | Title | Status | Landed |
 |---|---|---|---|
@@ -43,14 +42,9 @@ they are never buried in a chat.
 
 ## Phase 1: Output acceptance
 
-- Status: `done`
-- Goal: a request is complete only when the resulting file satisfies its declared
-  contract. Detail in git history and [docs/decisions.md](docs/decisions.md)
-
-| # | Title | Status | Landed |
-|---|---|---|---|
-| 1.1 | Audit every delivered WAV; requested and delivered are separate facts | `done` | 2026-09-16 |
-| 1.2 | Enforce the MiniMax target during generation, not just after it | `done` | 2026-09-17 |
+- Status: `done`. A request is complete only when the delivered file satisfies its
+  contract: every WAV audited (1.1, 2026-09-16), and MiniMax's target enforced during
+  generation rather than only after it (1.2, 2026-09-17)
 
 ## Phase 2: Any model, any length
 
@@ -76,17 +70,32 @@ they are never buried in a chat.
 | 2.9 | Section editing and whole-track remixing through inpainting | `done` | 2026-09-20 |
 
 
-## Phase 3: Design pass
+## Phase 3: Track library and generate panel
 
-- Status: `planned`, and it comes before the stem and vocal work below
-- Goal: the UI is functional and plain, and has grown a model picker, genre and parameter
-  menus, a queue, a history and a rework tab. Design it rather than letting it accrete
-- Owner instruction 2026-09-19: run this with Fable for the product design work
+- Status: `planned`. Spec: [specs/2026-09-20-track-library.md](specs/2026-09-20-track-library.md)
+- Owner instruction 2026-09-20: Codex executes this, not Fable or Opus
+- Goal: a generation can be named, kept, found and removed. `output/` is flat and
+  unbounded, the card buries the genre in a block of text, and Regenerate has drifted
+  too far from the prompt to use
 
 | # | Title | Status | Why it matters |
 |---|---|---|---|
-| 3.1 | Product design pass on the whole surface | `planned` | Visual hierarchy, grouping and naming across generate, queue, history and rework, so the growing control set stays readable. Phone layout is part of the brief, not an afterthought |
-| 3.2 | Rebuild the UI against that design | `planned` | Gradio constrains layout, so this is custom CSS and JS over its components, as the queue cards already are. Read [docs/gotchas.md](docs/gotchas.md) first: `gr.Timer` never fires here and `@gr.render` will not re-run for a `queue=False` event; a redesign can silently reintroduce both |
+| 3.1 | Sidecar gains title, rating and genre | `planned` | Nothing identifies a track but its filename. Old sidecars must keep parsing |
+| 3.2 | History card leads with title and genre | `planned` | The detail goes behind a disclosure; waveform, seek and playback stay as they are |
+| 3.3 | Delete and keep/discard per track | `planned` | **Blocked on an owner decision:** `CLAUDE.md` says generated audio is never deleted, but a generation is treated as disposable in practice |
+| 3.4 | Filter by genre, rating and text | `planned` | 31 tracks was already unmanageable. A view concern that must not touch files |
+| 3.5 | Regenerate sits next to the prompt | `planned` | You cannot see what you are regenerating. The only visual design question here |
+
+## Phase 4: Visual design pass
+
+- Status: `planned`, after Phase 3
+- Goal: the UI is functional and plain, and keeps growing. Design it rather than
+  letting it accrete
+
+| # | Title | Status | Why it matters |
+|---|---|---|---|
+| 4.1 | Product design pass on the whole surface | `planned` | Hierarchy, grouping and naming across generate, queue, history and rework. Phone layout is in the brief, not an afterthought |
+| 4.2 | Rebuild against that design | `planned` | Gradio constrains layout, so this is custom CSS and JS over its components. Read [docs/gotchas.md](docs/gotchas.md) first: `gr.Timer` never fires here and `@gr.render` will not re-run for a `queue=False` event; a redesign can silently reintroduce both |
 
 ## Deferred ideas
 
@@ -106,12 +115,6 @@ they are never buried in a chat.
   needs an input surface no backend here has. Open questions: no Apple Silicon build was
   found, and its training-data provenance is less clearly stated than Stability's.
   Trigger: wanting to sing a melody written in Ableton
-- Decide how generations are managed over time. `output/` is flat and grows without
-  limit, and there is no way to keep, rate, label or clear a batch from the UI. On
-  2026-09-20 all 31 tracks were deleted by hand because most were the wrong length.
-  The rule in CLAUDE.md says archive, never delete, which conflicts with treating a
-  generation as disposable, so the rule may need changing too. Needs a discussion with
-  Stephen before any design. Trigger: the next time output/ becomes unmanageable
 
 ## Owner decisions open
 
@@ -123,10 +126,10 @@ they are never buried in a chat.
 
 ## Current next step
 
-- Current milestone: Phase 2 complete and signed off 2026-09-20. Five backends, prompts
-  composed from menus, arrangements laid out in bars, and any span of any track
-  regeneratable
-- Then: Phase 3, the design pass, with Fable
+- Current milestone: Phase 2 complete and signed off 2026-09-20. Five backends, 34
+  genres, prompts composed from menus, arrangements laid out in bars, and any span of
+  any track regeneratable
+- Then: Phase 3, the track library, executed by Codex against its spec
 - Not started, and the honest gap: nobody has listened to any output yet
 - Phase 1.2 exit gates: the runner passes one target as both minimum and maximum; a real
   render reaches its requested duration; unit tests, mutations and validators pass;
