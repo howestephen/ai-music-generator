@@ -306,7 +306,46 @@ def _prompt_hint(backend: backends.Backend) -> str:
     return "Use a structured caption in prose: genre, BPM, key, scale and arrangement."
 
 
-def _compose_prompt(genre, model, bpm, mood, vocals, instruments, character, keywords):
+def _structure_plan(bpm, *bar_counts):
+    """Build the section timeline from the bar boxes, or nothing if all are empty."""
+    try:
+        bars = dict(zip(prompting.SECTION_NAMES, (float(c or 0) for c in bar_counts)))
+        return prompting.plan_sections(float(bpm or 120), bars)
+    except (TypeError, ValueError):
+        return []
+
+
+def _structure_preview(bpm, *bar_counts):
+    plan = _structure_plan(bpm, *bar_counts)
+    if not plan:
+        return "No structure set: the genre's own arrangement is described instead."
+    total = prompting.structure_total(plan)
+    rows = " · ".join(
+        f"**{section['name']}** {section['start']:.0f}-{section['end']:.0f}s"
+        for section in plan
+    )
+    total_bars = sum(section["bars"] for section in plan)
+    return (
+        f"{rows}\n\n{total_bars:g} bars, **{total:.0f}s** total at {float(bpm or 120):g} "
+        "BPM. The track length follows this. Stable Audio has no structural input, so "
+        "this is described to it, not enforced; use **Rework a section** to force one."
+    )
+
+
+def _structure_duration(model, bpm, *bar_counts):
+    """Track length follows the arrangement, clamped to what the backend allows."""
+    plan = _structure_plan(bpm, *bar_counts)
+    if not plan:
+        return gr.skip()
+    total = prompting.structure_total(plan)
+    control = backends.get(model).duration
+    if control.maximum is not None:
+        total = min(total, control.maximum)
+    return gr.update(value=max(control.minimum, round(total)))
+
+
+def _compose_prompt(genre, model, bpm, mood, vocals, instruments, character, keywords,
+                    *bar_counts):
     """Build the prompt from the menu selections, in the backend's own style."""
     if not genre:
         return gr.skip()
@@ -321,6 +360,7 @@ def _compose_prompt(genre, model, bpm, mood, vocals, instruments, character, key
         character=tuple(character or ()),
         vocals=wants_vocals,
         extra=keywords or "",
+        structure=prompting.describe_structure(_structure_plan(bpm, *bar_counts)),
     )
 
 
@@ -600,7 +640,7 @@ def _history_waveform(track: dict) -> str:
 # project renders with Stable Audio already matches; ACE-Step writes 48 kHz, so a
 # track from there cannot be reworked without a conversion step.
 EDIT_SAMPLE_RATE = 44100
-BEATS_PER_BAR = 4
+BEATS_PER_BAR = prompting.BEATS_PER_BAR
 BAR_CHOICES = (8, 16, 32, 64, 128)
 
 
@@ -1075,6 +1115,23 @@ def build_ui() -> gr.Blocks:
                             label="Character", value=[],
                             info="Recording space, effects and era. Empty varies it.",
                         )
+                        with gr.Accordion("Structure (bars)", open=False):
+                            gr.Markdown(
+                                "Lay the arrangement out in bars. Leave all at 0 to let "
+                                "the genre decide."
+                            )
+                            with gr.Row():
+                                section_bars = [
+                                    gr.Number(
+                                        value=0, precision=0, minimum=0, maximum=512,
+                                        label=name,
+                                    )
+                                    for name in prompting.SECTION_NAMES
+                                ]
+                            structure_preview = gr.Markdown(
+                                "No structure set: the genre's own arrangement is "
+                                "described instead."
+                            )
                         keywords = gr.Textbox(
                             label="Extra keywords", lines=1,
                             placeholder="amen break, jungle, ragga chops",
@@ -1242,7 +1299,7 @@ def build_ui() -> gr.Blocks:
             queue=False,
         )
         compose_inputs = [genre, model, bpm, mood, vocals, instruments, character,
-                          keywords]
+                          keywords, *section_bars]
         # Any menu change recomposes the prompt, so the text always reflects the
         # selections rather than drifting away from them.
         genre.change(_mood_choices, genre, mood).then(
@@ -1253,6 +1310,14 @@ def build_ui() -> gr.Blocks:
         ).then(_compose_prompt, compose_inputs, prompt)
         for control in (bpm, mood, vocals, instruments, character, keywords):
             control.change(_compose_prompt, compose_inputs, prompt)
+        # Changing the arrangement redraws its timeline, sets the track length from
+        # the total, and rewrites the prompt to describe it.
+        for control in (bpm, *section_bars):
+            control.change(
+                _structure_preview, [bpm, *section_bars], structure_preview
+            ).then(
+                _structure_duration, [model, bpm, *section_bars], duration
+            ).then(_compose_prompt, compose_inputs, prompt)
         for control in (mood, instruments, character):
             control.select(_compose_prompt, compose_inputs, prompt)
         regenerate.click(_compose_prompt, compose_inputs, prompt)

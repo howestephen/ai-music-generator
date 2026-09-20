@@ -429,6 +429,56 @@ def genre_names() -> list[str]:
 # pins one axis while Regenerate keeps varying the rest.
 RANDOM_CHOICE = "(let the genre decide)"
 
+# A structure is laid out in bars, because that is how music is counted, and reaches
+# the model in seconds, because that is all it understands. Nothing here makes the
+# model obey the plan: Stable Audio has no structural input, so this is a described
+# arrangement, not a guarantee. The only hard guarantee is reworking a span after the
+# fact, which is what the Rework tab does.
+SECTION_NAMES = ("Intro", "Build", "Drop", "Breakdown", "Second drop", "Outro")
+BEATS_PER_BAR = 4
+
+
+def plan_sections(bpm: float, bars: dict[str, float]) -> list[dict]:
+    """Turn a bar count per section into a timeline in seconds.
+
+    Sections with no bars are dropped, so an arrangement is built by filling in only
+    the parts you want.
+    """
+    if not bpm or bpm <= 0:
+        raise ValueError(f"tempo must be positive (got {bpm!r})")
+    bar_seconds = BEATS_PER_BAR * 60.0 / float(bpm)
+    plan, cursor = [], 0.0
+    for name in SECTION_NAMES:
+        count = float(bars.get(name) or 0)
+        if count <= 0:
+            continue
+        length = count * bar_seconds
+        plan.append({
+            "name": name,
+            "bars": count,
+            "start": round(cursor, 2),
+            "end": round(cursor + length, 2),
+        })
+        cursor += length
+    return plan
+
+
+def structure_total(plan: list[dict]) -> float:
+    return round(plan[-1]["end"], 2) if plan else 0.0
+
+
+def describe_structure(plan: list[dict]) -> str:
+    """One sentence naming each section and when it lands, for the prompt."""
+    if not plan:
+        return ""
+    parts = []
+    for section in plan:
+        parts.append(
+            f"{section['name'].lower()} for {section['bars']:g} bars "
+            f"({section['start']:.0f}s to {section['end']:.0f}s)"
+        )
+    return "arranged as " + ", then ".join(parts)
+
 
 def character_options() -> list[str]:
     """Everything selectable on the character axis, for a UI multiselect."""
@@ -470,6 +520,7 @@ def build_prompt(
     instruments: tuple[str, ...] = (),
     character: tuple[str, ...] = (),
     vocals: bool = False,
+    structure: str = "",
 ) -> str:
     """Compose one prompt variation for `genre_name` in the backend's own style.
 
@@ -516,8 +567,11 @@ def build_prompt(
             caption += f" Instruments: {', '.join(instruments)}."
         if character:
             caption += f" Production: {', '.join(character)}."
-        if genre.structure:
-            caption += f" Structure: {rng.choice(genre.structure)}."
+        chosen_structure = structure or (
+            rng.choice(genre.structure) if genre.structure else ""
+        )
+        if chosen_structure:
+            caption += f" Structure: {chosen_structure}."
         if extra.strip():
             caption += f" {extra.strip().rstrip('.')}."
         return caption + (
@@ -560,7 +614,9 @@ def build_prompt(
     if rng.random() < 0.5:
         # Fragment form, closest to Stability's own examples.
         parts = [opening, *core_phrases, *colour]
-        if genre.structure and rng.random() < 0.7:
+        if structure:
+            parts.append(structure)
+        elif genre.structure and rng.random() < 0.7:
             parts.append(rng.choice(genre.structure))
         if rng.random() < 0.6:
             parts.append(rng.choice(genre.production))
@@ -576,7 +632,9 @@ def build_prompt(
     sentences.append(_upper_first(colour[0]) + (
         f", {', '.join(colour[1:])}." if len(colour) > 1 else "."
     ))
-    if genre.structure and rng.random() < 0.7:
+    if structure:
+        sentences.append(f"Structurally, {structure}.")
+    elif genre.structure and rng.random() < 0.7:
         sentences.append(f"Structurally, {rng.choice(genre.structure)}.")
     if rng.random() < 0.6:
         sentences.append(_upper_first(rng.choice(genre.production)) + ".")

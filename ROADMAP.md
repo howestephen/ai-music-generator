@@ -70,9 +70,10 @@ they are never buried in a chat.
 | 2.7 | Mobile layout no longer scrolls sideways | `done` | 2026-09-19 |
 | 2.8 | Queue panel reflects reality (`gr.Timer` inert, `queue=False` blocks renders) | `done` | 2026-09-19 |
 | 2.10 | Prompts vary in shape and vocabulary, not just adjectives | `done` | 2026-09-19 |
+| 2.11 | Menus compose the prompt; lyrics only where a backend can sing | `done` | 2026-09-19 |
+| 2.12 | Structure builder: bars per section, described to the model | `done` | 2026-09-20 |
 
-| 2.11 | Menus compose the prompt | `done` | Prompting meant writing prose into a box. Genre, tempo, mood, voice, instruments and character are now controls, with a keywords box folded in, and any change recomposes the prompt in the selected backend's own style. Picking a genre also sets its typical tempo. Lyrics appear only where a backend has a channel for them, and words aimed at one that cannot sing are refused rather than dropped | none | 2.10 |
-| 2.9 | Section editing through inpainting | `in_progress` | Stable Audio has no section tokens, so prose is the only pre-generation structure control; regenerating a span of a finished track is the real mechanism, and bars convert to seconds once BPM is known. Core, manifest and runner carry init audio and an inpaint range, refused loudly where unsupported, proven on a real render. New track and Rework are separate tabs, and a rework takes an uploaded file as well as a history pick, converting an odd sample rate or an MP3 rather than refusing it. Still to do: the noise level for whole-track remixing, and a structure builder | none | 2.8 |
+| 2.9 | Section editing through inpainting | `in_progress` | Stable Audio has no section tokens, so prose is the only pre-generation structure control; regenerating a span of a finished track is the real mechanism, and bars convert to seconds once BPM is known. Core, manifest and runner carry init audio and an inpaint range, refused loudly where unsupported, proven on a real render. New track and Rework are separate tabs, and a rework takes an uploaded file as well as a history pick, converting an odd sample rate or an MP3 rather than refusing it. Still to do: the noise level for whole-track remixing | none | 2.8 |
 
 ## Phase 3: Design pass
 

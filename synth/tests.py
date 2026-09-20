@@ -1058,6 +1058,52 @@ class Registry(unittest.TestCase):
         self.addCleanup(lambda: prepared.unlink(missing_ok=True))
         self.assertNotEqual(prepared.parent, core.OUTPUT_DIR)
 
+    def test_bar_counts_become_a_timeline_in_seconds(self):
+        plan = prompting.plan_sections(174, {
+            "Intro": 16, "Build": 16, "Drop": 32, "Breakdown": 16,
+            "Second drop": 32, "Outro": 16,
+        })
+        self.assertEqual([section["name"] for section in plan], list(prompting.SECTION_NAMES))
+        self.assertEqual(plan[0]["start"], 0.0)
+        # 16 bars of 4 beats at 174 BPM is 22.07s.
+        self.assertAlmostEqual(plan[0]["end"], 22.07, places=1)
+        for earlier, later in zip(plan, plan[1:]):
+            self.assertEqual(earlier["end"], later["start"], "sections must not gap")
+        self.assertAlmostEqual(prompting.structure_total(plan), 176.55, places=1)
+
+    def test_empty_sections_are_dropped_not_rendered_as_zero_length(self):
+        plan = prompting.plan_sections(120, {"Intro": 8, "Drop": 16, "Outro": 0})
+        self.assertEqual([section["name"] for section in plan], ["Intro", "Drop"])
+        plan = prompting.plan_sections(120, {name: 0 for name in prompting.SECTION_NAMES})
+        self.assertEqual(plan, [])
+        self.assertEqual(prompting.structure_total([]), 0.0)
+
+    def test_structure_replaces_the_genre_boilerplate_in_every_style(self):
+        plan = prompting.plan_sections(174, {"Intro": 16, "Drop": 32})
+        described = prompting.describe_structure(plan)
+        self.assertIn("intro for 16 bars", described)
+        for style in ("tags", "caption", "description"):
+            with self.subTest(style=style):
+                built = prompting.build_prompt(
+                    "Drum & Bass", style=style, seed=1, structure=described,
+                )
+                if style == "tags":
+                    continue  # tag style carries no structure sentence
+                self.assertIn("intro for 16 bars", built)
+
+    def test_a_zero_or_negative_tempo_is_refused(self):
+        for bad in (0, -120):
+            with self.subTest(bpm=bad), self.assertRaisesRegex(ValueError, "must be positive"):
+                prompting.plan_sections(bad, {"Intro": 8})
+
+    def test_track_length_follows_the_arrangement_within_the_backend_cap(self):
+        bars = (16, 16, 32, 16, 32, 16)  # 176.55s at 174 BPM
+        update = app._structure_duration("stable-audio-medium", 174, *bars)
+        self.assertEqual(update["value"], 177)
+        # 512 bars at 60 BPM is far past every cap, so it clamps rather than failing.
+        wide = app._structure_duration("stable-audio-sm", 60, 512, 0, 0, 0, 0, 0)
+        self.assertEqual(wide["value"], backends.get("stable-audio-sm").duration.maximum)
+
     def test_menu_selections_reach_every_prompt_style(self):
         """The menus are the interface now, so a selection that quietly fails to
         appear in the prompt is the same class of fault as a dead control."""
