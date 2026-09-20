@@ -103,8 +103,11 @@ installation; it does not retrofit a project's files.
    and run `<python> scripts/validate.py --index` to see exactly what the
    commit hook will see. Resolve errors before committing.
 8. **Prove enforcement.** In a disposable copy of the migrated target, commit
-   the baseline cleanly, then stage an unlisted markdown file and confirm a real
-   commit is refused for the expected reason. Start the selected agent host in the target
+   the baseline cleanly, then confirm real commits reject an unlisted markdown
+   file, a generated synthetic credential and private conversation attribution.
+   Confirm a commit body and personal identity email are rejected, then push a
+   synthetic two-commit branch where a credential is introduced and deleted;
+   pre-push must still reject the earlier commit. Start the selected agent host in the target
    and record which configured events actually fire. Claude ConfigChange blocks
    a runtime reload after a disk edit; it cannot prevent that edit and the PC host
    tested so far hides its reason. Restore any probe changes. A parseable agent

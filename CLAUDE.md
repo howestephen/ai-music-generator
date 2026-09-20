@@ -28,6 +28,11 @@ in itself.
 Keep the architecture easy to add models to. Write decisions down. Record traps.
 
 ## Autonomy
+- **Global rules and machine profiles are read-only here.** `~/.claude/*.md`, the Codex aliases and `_projects-admin/machines/` belong to `_projects-admin`. Append what belongs there, with evidence, to `_projects-admin/REQUESTS.md`. Do not reach for a shell to do what the editor refused: redirects, `sed -i`, `tee`, `cp`, `mv` and `rm` are covered too
+- **Spending money needs approval, per service, per session.** Paid APIs, image and video generation, hosted inference and purchases all prompt first. Never route around a prompt with another tool or an unlisted endpoint
+- Push without asking: yes on a branch, never on main. A main push needs Stephen's permission, per instance. A creative project has no maturity level to declare, so the early-stage exemption that product projects get does not apply here and never will
+
+The hook kit enforces these; they refuse rather than warn. A refusal is the answer, not an obstacle to route around. If a gate is genuinely wrong, say so and stop: the bypass is Stephen's.
 
 House defaults, with this project's tightening:
 
