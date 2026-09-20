@@ -12,6 +12,20 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-20 - A duration default is a track, not the shortest clip
+
+**Decided:** each backend defaults to a usable track length rather than a flat 60 seconds.
+Stable Audio medium starts at 180s, small and ACE-Step at 120s. MiniMax stays at 60s
+because it renders near realtime, so 180s there is roughly 25 minutes of GPU.
+
+**Why:** every backend defaulted to 60s whatever it could deliver, so a fresh page gave a
+one-minute clip from a model that makes six-minute tracks, and it was only visible after
+the render. Of the first 31 tracks generated here, 15 were the wrong length for this
+reason and were discarded.
+
+**Would revisit if:** a backend's render cost changes enough that its default is no longer
+a fair trade, or a session remembers the last length used.
+
 ## 2026-09-20 - Structure is described before, enforced only after
 
 **Decided:** an arrangement is laid out in bars per section, converted to seconds from the

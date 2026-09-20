@@ -1375,6 +1375,21 @@ class Registry(unittest.TestCase):
                 self.assertEqual(backend.output_audit.random_seed_retries, 0)
                 self.assertFalse(backend.supports_lyrics)
 
+    def test_default_duration_is_a_usable_track_not_the_shortest_clip(self):
+        """Every backend defaulted to 60s whatever it could do, so a fresh page gave
+        a one-minute clip from a model that makes six-minute tracks, and you only
+        noticed after the render."""
+        for name, backend in backends.BACKENDS.items():
+            with self.subTest(backend=name):
+                cap = backend.duration.maximum
+                default = backend.duration.default
+                self.assertLessEqual(default, cap)
+                if cap >= 120 and name != "minimax-mlx":
+                    self.assertGreaterEqual(
+                        default, 120,
+                        "a backend that can make a track should default to one",
+                    )
+
     def test_only_stable_audio_declares_editing_support(self):
         editable = {n for n, b in backends.BACKENDS.items() if b.supports_editing}
         self.assertEqual(editable, {"stable-audio-sm", "stable-audio-medium"})

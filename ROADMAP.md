@@ -105,6 +105,12 @@ they are never buried in a chat.
   needs an input surface no backend here has. Open questions: no Apple Silicon build was
   found, and its training-data provenance is less clearly stated than Stability's.
   Trigger: wanting to sing a melody written in Ableton
+- Decide how generations are managed over time. `output/` is flat and grows without
+  limit, and there is no way to keep, rate, label or clear a batch from the UI. On
+  2026-09-20 all 31 tracks were deleted by hand because most were the wrong length.
+  The rule in CLAUDE.md says archive, never delete, which conflicts with treating a
+  generation as disposable, so the rule may need changing too. Needs a discussion with
+  Stephen before any design. Trigger: the next time output/ becomes unmanageable
 
 ## Owner decisions open
 
