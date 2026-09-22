@@ -10,9 +10,12 @@ import html
 import json
 import math
 import random
+import re
+import shutil
 import statistics
 import tempfile
 import threading
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,6 +23,11 @@ import gradio as gr
 import soundfile as sf
 
 from synth import backends, core, jobs, prompting
+
+# Deleted tracks sit here for one hour, then the WAV and sidecar are removed for good.
+PENDING_DELETE_DIR = ".pending-delete"
+UNDO_WINDOW_SECONDS = 3600
+PENDING_META_SUFFIX = ".pending.json"
 
 UI_CSS = """
 #generate-button:disabled {
@@ -113,6 +121,61 @@ UI_CSS = """
     display: block;
     margin-top: 0.4rem;
     width: 100%;
+}
+
+.history-title {
+    font-size: 1.15rem;
+    font-weight: 650;
+    margin: 0.15rem 0 0.1rem;
+    overflow-wrap: anywhere;
+}
+
+.history-meta {
+    color: var(--body-text-color-subdued);
+    font-size: 0.9em;
+    margin: 0 0 0.45rem;
+    overflow-wrap: anywhere;
+}
+
+.history-details {
+    color: var(--body-text-color-subdued);
+    font-size: 0.9em;
+    margin-top: 0.55rem;
+    overflow-wrap: anywhere;
+}
+
+.history-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+.history-pending {
+    background: var(--block-background-fill);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--block-radius);
+    margin-bottom: 0.65rem;
+    padding: 0.55rem 0.75rem;
+}
+
+/* Gradio only opens a dropdown when the small arrow is hit. Make the whole
+   control the hit target so the label text and field body also open it. */
+#controls-panel .dropdown-arrow,
+#history-panel .dropdown-arrow {
+    pointer-events: none;
+}
+
+#controls-panel [data-testid="dropdown"] .wrap,
+#history-panel [data-testid="dropdown"] .wrap,
+#controls-panel .wrap.svelte-1hfxr4,
+#history-panel .wrap.svelte-1hfxr4 {
+    cursor: pointer;
+}
+
+#controls-panel [data-testid="dropdown"] input,
+#history-panel [data-testid="dropdown"] input {
+    caret-color: transparent;
+    cursor: pointer;
 }
 
 .queue-job {
@@ -350,7 +413,7 @@ def _compose_prompt(genre, model, bpm, mood, vocals, instruments, character, key
     if not genre:
         return gr.skip()
     backend = backends.get(model)
-    wants_vocals = vocals == "With vocals"
+    wants_vocals = vocals in ("With vocals", "Vocal texture")
     return prompting.build_prompt(
         genre,
         style=backend.prompt_style,
@@ -364,11 +427,31 @@ def _compose_prompt(genre, model, bpm, mood, vocals, instruments, character, key
     )
 
 
-def _voice_updates(model: str, vocals: str):
-    """Lyrics only exist where the model has a channel for them."""
+def _voice_choice_labels(model: str) -> tuple[list[str], str]:
+    """Honest labels: lyrics backends can sing; Stable Audio only textures."""
     backend = backends.get(model)
-    wants_vocals = vocals == "With vocals"
-    return gr.update(visible=backend.supports_lyrics and wants_vocals)
+    if backend.supports_lyrics:
+        return (
+            ["Instrumental", "With vocals"],
+            "Models with a lyrics channel can sing words when lyrics are provided.",
+        )
+    return (
+        ["Instrumental", "Vocal texture"],
+        "Stable Audio never sings words; this only asks for a wordless vocal texture "
+        "in the prompt.",
+    )
+
+
+def _voice_updates(model: str, vocals: str):
+    """Keep the voice control honest for the selected backend, and show lyrics only
+    where a lyrics channel exists."""
+    backend = backends.get(model)
+    choices, info = _voice_choice_labels(model)
+    wants_vocals = vocals in ("With vocals", "Vocal texture")
+    return (
+        gr.update(choices=choices, value=choices[1] if wants_vocals else choices[0], info=info),
+        gr.update(visible=backend.supports_lyrics and wants_vocals),
+    )
 
 
 def _mood_choices(genre: str | None):
@@ -481,6 +564,220 @@ def _history_audio_audit(
         return None, str(exc)
 
 
+def _pending_root(output_dir: Path | None = None) -> Path:
+    root = Path(output_dir) if output_dir else core.OUTPUT_DIR
+    pending = root / PENDING_DELETE_DIR
+    pending.mkdir(parents=True, exist_ok=True)
+    return pending
+
+
+def _display_title(track: dict) -> str:
+    title = track.get("title")
+    if isinstance(title, str) and title.strip():
+        return title.strip()
+    prompt = str(track.get("prompt") or "")
+    if prompt and prompt != "Prompt unavailable":
+        words = [
+            word for word in re.findall(r"[A-Za-z][A-Za-z'-]*", prompt) if len(word) > 2
+        ][:4]
+        if words:
+            return " ".join(words)
+    return str(track.get("name") or "Untitled")
+
+
+def _normalise_rating(value) -> str | None:
+    if value in (None, "", "none"):
+        return None
+    if value in ("keep", "discard"):
+        return value
+    return None
+
+
+def _read_sidecar(path: Path) -> dict:
+    try:
+        metadata = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeError):
+        return {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _write_sidecar_update(wav_path: Path, updates: dict) -> dict:
+    metadata = _read_sidecar(wav_path)
+    metadata.update(updates)
+    if "path" not in metadata:
+        metadata["path"] = wav_path.name
+    target = wav_path.with_suffix(".json")
+    target.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    return metadata
+
+
+def filter_history(
+    tracks: list[dict],
+    *,
+    genre: str | None = None,
+    rating: str | None = None,
+    query: str | None = None,
+) -> list[dict]:
+    """View-only filter. Never touches files."""
+    genre_filter = (genre or "").strip()
+    rating_raw = (rating or "any").strip().lower() if isinstance(rating, str) else "any"
+    if rating_raw in ("", "any", "none"):
+        rating_filter = "any"
+    elif rating_raw == "unrated":
+        rating_filter = "unrated"
+    elif rating_raw in ("keep", "discard"):
+        rating_filter = rating_raw
+    else:
+        rating_filter = "any"
+    needle = (query or "").strip().lower()
+    results = []
+    for track in tracks:
+        if genre_filter and genre_filter not in ("", "any"):
+            if str(track.get("genre") or "") != genre_filter:
+                continue
+        track_rating = _normalise_rating(track.get("rating"))
+        if rating_filter == "unrated":
+            if track_rating is not None:
+                continue
+        elif rating_filter != "any" and track_rating != rating_filter:
+            continue
+        if needle:
+            haystack = " ".join(
+                str(part or "")
+                for part in (track.get("title"), track.get("prompt"), track.get("name"))
+            ).lower()
+            if needle not in haystack:
+                continue
+        results.append(track)
+    return results
+
+
+def _pending_entries(output_dir: Path | None = None) -> list[dict]:
+    pending = _pending_root(output_dir)
+    entries = []
+    for meta_path in pending.glob(f"*{PENDING_META_SUFFIX}"):
+        try:
+            payload = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        try:
+            deleted_at = float(payload.get("deleted_at"))
+        except (TypeError, ValueError, OverflowError):
+            continue
+        stem = meta_path.name[: -len(PENDING_META_SUFFIX)]
+        wav = pending / f"{stem}.wav"
+        sidecar = pending / f"{stem}.json"
+        if not wav.is_file():
+            continue
+        entries.append({
+            "stem": stem,
+            "deleted_at": deleted_at,
+            "expires_at": deleted_at + UNDO_WINDOW_SECONDS,
+            "wav": wav,
+            "sidecar": sidecar,
+            "meta": meta_path,
+            "title": payload.get("title") or stem,
+            "name": f"{stem}.wav",
+        })
+    return sorted(entries, key=lambda item: item["deleted_at"], reverse=True)
+
+
+def purge_expired_deletions(
+    output_dir: Path | None = None,
+    *,
+    now: float | None = None,
+) -> int:
+    """Permanently remove pending deletions whose undo window has elapsed."""
+    clock = time.time() if now is None else now
+    removed = 0
+    for entry in _pending_entries(output_dir):
+        if entry["expires_at"] > clock:
+            continue
+        for path in (entry["wav"], entry["sidecar"], entry["meta"]):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        removed += 1
+    return removed
+
+
+def delete_track(path_string: str, output_dir: Path | None = None) -> list[dict]:
+    """Move a track out of the library into the one-hour undo area."""
+    output_dir = Path(output_dir) if output_dir else core.OUTPUT_DIR
+    wav = Path(path_string)
+    if wav.parent.resolve() != output_dir.resolve():
+        raise ValueError("can only delete tracks from the library folder")
+    if not wav.is_file() or wav.suffix.lower() != ".wav":
+        raise FileNotFoundError(f"track not found: {wav}")
+    sidecar = wav.with_suffix(".json")
+    pending = _pending_root(output_dir)
+    metadata = _read_sidecar(wav)
+    destination_wav = pending / wav.name
+    destination_sidecar = pending / sidecar.name
+    destination_meta = pending / f"{wav.stem}{PENDING_META_SUFFIX}"
+    if destination_wav.exists() or destination_meta.exists():
+        raise FileExistsError(f"a pending deletion already uses {wav.name}")
+    shutil.move(str(wav), str(destination_wav))
+    if sidecar.is_file():
+        shutil.move(str(sidecar), str(destination_sidecar))
+    destination_meta.write_text(
+        json.dumps({
+            "deleted_at": time.time(),
+            "title": metadata.get("title") or _display_title({
+                "title": metadata.get("title"),
+                "prompt": metadata.get("prompt"),
+                "name": wav.name,
+            }),
+            "name": wav.name,
+        }),
+        encoding="utf-8",
+    )
+    return _load_history(output_dir)
+
+
+def undo_delete(stem: str, output_dir: Path | None = None) -> list[dict]:
+    """Restore a pending deletion back into the library."""
+    output_dir = Path(output_dir) if output_dir else core.OUTPUT_DIR
+    pending = _pending_root(output_dir)
+    entry = next((item for item in _pending_entries(output_dir) if item["stem"] == stem), None)
+    if entry is None:
+        raise FileNotFoundError(f"no pending deletion for {stem!r}")
+    if entry["expires_at"] <= time.time():
+        purge_expired_deletions(output_dir)
+        raise FileNotFoundError(f"undo window expired for {stem!r}")
+    destination_wav = output_dir / entry["wav"].name
+    destination_sidecar = output_dir / entry["sidecar"].name
+    if destination_wav.exists():
+        raise FileExistsError(f"library already has {destination_wav.name}")
+    shutil.move(str(entry["wav"]), str(destination_wav))
+    if entry["sidecar"].is_file():
+        shutil.move(str(entry["sidecar"]), str(destination_sidecar))
+    entry["meta"].unlink(missing_ok=True)
+    return _load_history(output_dir)
+
+
+def set_track_rating(
+    path_string: str,
+    rating: str | None,
+    output_dir: Path | None = None,
+) -> list[dict]:
+    """Persist keep/discard on the sidecar. Never deletes the track."""
+    output_dir = Path(output_dir) if output_dir else core.OUTPUT_DIR
+    wav = Path(path_string)
+    if wav.parent.resolve() != output_dir.resolve():
+        raise ValueError("can only rate tracks in the library folder")
+    if not wav.is_file():
+        raise FileNotFoundError(f"track not found: {wav}")
+    normalised = _normalise_rating(rating)
+    if rating not in (None, "", "none", "keep", "discard") and normalised is None:
+        raise ValueError(f"rating must be keep, discard or none (got {rating!r})")
+    _write_sidecar_update(wav, {"rating": normalised})
+    return _load_history(output_dir)
+
+
 def _load_history(output_dir: Path | None = None) -> list[dict]:
     output_dir = Path(output_dir) if output_dir else core.OUTPUT_DIR
     if not output_dir.exists():
@@ -488,13 +785,7 @@ def _load_history(output_dir: Path | None = None) -> list[dict]:
 
     tracks = []
     for path in output_dir.glob("*.wav"):
-        metadata = {}
-        try:
-            metadata = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeError):
-            pass
-        if not isinstance(metadata, dict):
-            metadata = {}
+        metadata = _read_sidecar(path)
         try:
             modified_ns = path.stat().st_mtime_ns
         except OSError:
@@ -527,7 +818,14 @@ def _load_history(output_dir: Path | None = None) -> list[dict]:
                         audit_status = "passed"
         except (TypeError, ValueError, OverflowError):
             requested_duration = None
-        tracks.append({
+
+        title = metadata.get("title")
+        if not isinstance(title, str) or not title.strip():
+            title = None
+        genre = metadata.get("genre")
+        if not isinstance(genre, str) or not genre.strip():
+            genre = None
+        track = {
             "path": str(path),
             "name": path.name,
             "modified_ns": modified_ns,
@@ -545,8 +843,35 @@ def _load_history(output_dir: Path | None = None) -> list[dict]:
             "seed": metadata.get("seed"),
             "prompt": metadata.get("prompt", "Prompt unavailable"),
             "generated_at": metadata.get("generated_at", "Time unavailable"),
-        })
+            "title": title,
+            "rating": _normalise_rating(metadata.get("rating")),
+            "genre": genre,
+        }
+        track["display_title"] = _display_title(track)
+        tracks.append(track)
     return sorted(tracks, key=lambda item: (item["modified_ns"], item["name"]), reverse=True)
+
+
+def _history_heading(track: dict) -> str:
+    title = html.escape(_display_title(track))
+    bits = []
+    if track.get("genre"):
+        bits.append(html.escape(str(track["genre"])))
+    if track["duration"] is not None:
+        try:
+            delivered = float(track["duration"])
+            if math.isfinite(delivered):
+                bits.append(f"{delivered:.1f}s")
+        except (TypeError, ValueError, OverflowError):
+            pass
+    rating = _normalise_rating(track.get("rating"))
+    if rating:
+        bits.append(rating)
+    meta = " · ".join(bits) if bits else "No genre recorded"
+    return (
+        f'<div class="history-title">{title}</div>'
+        f'<div class="history-meta">{meta}</div>'
+    )
 
 
 def _history_copy(track: dict) -> str:
@@ -570,10 +895,20 @@ def _history_copy(track: dict) -> str:
         details.append(str(audit_status).upper())
     if track["seed"] is not None:
         details.append(f"seed {html.escape(str(track['seed']))}")
+    sample_rate = track.get("sample_rate")
+    if sample_rate is not None:
+        details.append(f"{html.escape(str(sample_rate))} Hz")
+    if track.get("elapsed_seconds") is not None:
+        details.append(f"{html.escape(str(track['elapsed_seconds']))}s render")
+    body = (
+        f"<div>{' · '.join(details)} · {html.escape(str(track['generated_at']))}</div>"
+        f"<div>{html.escape(str(track['prompt']))}</div>"
+    )
     return (
-        f"**{html.escape(track['name'])}**  \n"
-        f"{' · '.join(details)} · {html.escape(str(track['generated_at']))}  \n"
-        f"{html.escape(str(track['prompt']))}"
+        f'<details class="history-details">'
+        f"<summary>Details</summary>"
+        f"{body}"
+        f"</details>"
     )
 
 
@@ -694,7 +1029,10 @@ def _editable_track_choices() -> list[tuple[str, str]]:
     for track in _load_history():
         if track["duration"] is None:
             continue
-        label = f"{track['backend']} · {track['duration']:.0f}s · {track['name'][:44]}"
+        label = (
+            f"{_display_title(track)} · {track['backend']} · "
+            f"{track['duration']:.0f}s"
+        )
         choices.append((label, track["path"]))
     return choices
 
@@ -942,7 +1280,7 @@ def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps
 
 
 def _enqueue_generation(model, prompt, duration, steps, guidance, seed,
-                        use_seed, lyrics=None):
+                        use_seed, lyrics=None, genre=None):
     if not prompt or not prompt.strip():
         raise gr.Error("Enter a prompt first.")
     backend = backends.get(model)
@@ -965,6 +1303,7 @@ def _enqueue_generation(model, prompt, duration, steps, guidance, seed,
             "MiniMax and ACE-Step can."
         )
     chosen_seed = int(seed) if use_seed else random.randint(0, 2**31 - 1)
+    chosen_genre = str(genre).strip() if genre else None
     payload = {
         "prompt": prompt.strip(),
         "lyrics": words or None,
@@ -973,6 +1312,7 @@ def _enqueue_generation(model, prompt, duration, steps, guidance, seed,
         "infer_step": steps,
         "guidance_scale": guidance,
         "model": backend.name,
+        "genre": chosen_genre or None,
         "_duration_retries": backend.output_audit.random_seed_retries if not use_seed else 0,
         "_retry_seed": not use_seed,
     }
@@ -1004,11 +1344,44 @@ def _history_signature(output_dir: Path | None = None) -> tuple[tuple[str, int],
                 signature.append((path.name, path.stat().st_mtime_ns))
             except OSError:
                 continue
+    pending = output_dir / PENDING_DELETE_DIR
+    if pending.exists():
+        for path in pending.iterdir():
+            try:
+                signature.append((f"{PENDING_DELETE_DIR}/{path.name}", path.stat().st_mtime_ns))
+            except OSError:
+                continue
     return tuple(sorted(signature))
 
 
 def _refresh_history():
+    purge_expired_deletions()
     return _load_history(), _history_signature()
+
+
+def _genre_filter_choices(tracks: list[dict] | None = None) -> list[str]:
+    known = ["any", *prompting.genre_names()]
+    present = sorted({
+        str(track.get("genre"))
+        for track in (tracks or [])
+        if track.get("genre")
+    })
+    for genre in present:
+        if genre not in known:
+            known.append(genre)
+    return known
+
+
+def _rate_track_ui(path, rating):
+    return set_track_rating(path, rating), _history_signature()
+
+
+def _delete_track_ui(path):
+    return delete_track(path), _history_signature()
+
+
+def _undo_delete_ui(stem):
+    return undo_delete(stem), _history_signature()
 
 
 def _queue_items_for_render(_session_value=None):
@@ -1106,13 +1479,10 @@ def build_ui() -> gr.Blocks:
                 model_summary = gr.Markdown(_backend_summary(core.DEFAULT_MODEL))
                 with gr.Tabs():
                     with gr.Tab("New track"):
-                        with gr.Row():
-                            genre = gr.Dropdown(
-                                choices=prompting.genre_names(), label="Genre", value=None,
-                                scale=3,
-                                info="Writes a prompt in this model's own style. Then edit it.",
-                            )
-                            regenerate = gr.Button("Regenerate", scale=1)
+                        genre = gr.Dropdown(
+                            choices=prompting.genre_names(), label="Genre", value=None,
+                            info="Writes a prompt in this model's own style. Then edit it.",
+                        )
                         bpm = gr.Slider(
                             50, 200, value=120, step=1, label="Tempo (BPM)",
                             info="Written into the prompt. No model takes a tempo directly.",
@@ -1123,19 +1493,26 @@ def build_ui() -> gr.Blocks:
                                 value=prompting.RANDOM_CHOICE, label="Mood",
                             )
                             vocals = gr.Radio(
-                                choices=["Instrumental", "With vocals"],
+                                choices=_voice_choice_labels(core.DEFAULT_MODEL)[0],
                                 value="Instrumental", label="Voice",
+                                info=_voice_choice_labels(core.DEFAULT_MODEL)[1],
                             )
-                        instruments = gr.Dropdown(
-                            choices=prompting.instrument_options(), multiselect=True,
-                            label="Instruments", value=[],
-                            info="Empty uses the genre's own instrumentation.",
-                        )
-                        character = gr.Dropdown(
-                            choices=prompting.character_options(), multiselect=True,
-                            label="Character", value=[],
-                            info="Recording space, effects and era. Empty varies it.",
-                        )
+                        with gr.Accordion("Advanced", open=False):
+                            instruments = gr.Dropdown(
+                                choices=prompting.instrument_options(), multiselect=True,
+                                label="Instruments", value=[],
+                                info="Empty uses the genre's own instrumentation.",
+                            )
+                            character = gr.Dropdown(
+                                choices=prompting.character_options(), multiselect=True,
+                                label="Character", value=[],
+                                info="Recording space, effects and era. Empty varies it.",
+                            )
+                            keywords = gr.Textbox(
+                                label="Extra keywords", lines=1,
+                                placeholder="amen break, jungle, ragga chops",
+                                info="Folded into the prompt below.",
+                            )
                         with gr.Accordion("Structure (bars)", open=False):
                             gr.Markdown(
                                 "Lay the arrangement out in bars. Leave all at 0 to let "
@@ -1153,21 +1530,20 @@ def build_ui() -> gr.Blocks:
                                 "No structure set: the genre's own arrangement is "
                                 "described instead."
                             )
-                        keywords = gr.Textbox(
-                            label="Extra keywords", lines=1,
-                            placeholder="amen break, jungle, ragga chops",
-                            info="Folded into the prompt below.",
-                        )
                         lyrics = gr.Textbox(
                             label="Lyrics", lines=3, visible=False,
                             placeholder="[verse]\nfirst line here",
                             info="Only models with a lyrics channel can sing words.",
                         )
-                        prompt = gr.Textbox(
-                            label="Prompt (composed from the menus above)", lines=4,
-                            placeholder="Pick a genre, or type your own prompt here.",
-                        )
+                        with gr.Row():
+                            prompt = gr.Textbox(
+                                label="Prompt (composed from the menus above)", lines=4,
+                                placeholder="Pick a genre, or type your own prompt here.",
+                                scale=4,
+                            )
+                            regenerate = gr.Button("Regenerate", scale=1)
                         prompt_help = gr.Markdown(_prompt_hint(initial_backend))
+                        gr.Markdown("#### Render settings")
                         with gr.Row():
                             # Components use the union of every backend's schema so Gradio's
                             # static API preprocessor never rejects a value that is valid for
@@ -1294,17 +1670,63 @@ def build_ui() -> gr.Blocks:
                 with gr.Row():
                     gr.Markdown("## Track history")
                     refresh = gr.Button("Refresh history", size="sm")
+                with gr.Row():
+                    filter_genre = gr.Dropdown(
+                        choices=_genre_filter_choices(),
+                        value="any",
+                        label="Genre filter",
+                    )
+                    filter_rating = gr.Dropdown(
+                        choices=["any", "keep", "discard", "unrated"],
+                        value="any",
+                        label="Rating filter",
+                    )
+                filter_query = gr.Textbox(
+                    label="Search title or prompt",
+                    lines=1,
+                    placeholder="liquid amen",
+                )
                 history = gr.State([])
                 history_signature = gr.State(_history_signature())
+                history_filters = [history, filter_genre, filter_rating, filter_query]
 
-                @gr.render(inputs=history)
-                def render_history(session_tracks):
-                    tracks = _history_items_for_render(session_tracks)
+                @gr.render(inputs=history_filters)
+                def render_history(session_tracks, genre_value, rating_value, query_value):
+                    pending = [
+                        entry for entry in _pending_entries()
+                        if entry["expires_at"] > time.time()
+                    ]
+                    for entry in pending:
+                        remaining = max(0, int(entry["expires_at"] - time.time()))
+                        minutes = remaining // 60
+                        with gr.Group(elem_classes="history-pending", key=f"pending-{entry['stem']}"):
+                            gr.HTML(
+                                f'<div>Deleted <strong>{html.escape(str(entry["title"]))}</strong>'
+                                f' · Undo for {minutes}m</div>'
+                            )
+                            undo = gr.Button("Undo delete", size="sm")
+                            undo.click(
+                                lambda stem=entry["stem"]: _undo_delete_ui(stem),
+                                outputs=[history, history_signature],
+                            )
+                    tracks = filter_history(
+                        _history_items_for_render(session_tracks),
+                        genre=genre_value,
+                        rating=rating_value,
+                        query=query_value,
+                    )
                     if not tracks:
-                        gr.Markdown("No generated tracks yet.")
+                        if _history_items_for_render(session_tracks):
+                            gr.Markdown("No tracks match these filters.")
+                        else:
+                            gr.Markdown("No generated tracks yet.")
                         return
                     for track in tracks:
                         with gr.Group(elem_classes="history-card"):
+                            gr.HTML(
+                                _history_heading(track),
+                                key=f"heading-{track['path']}",
+                            )
                             gr.HTML(
                                 _history_waveform(track),
                                 key=f"waveform-{track['path']}",
@@ -1313,9 +1735,30 @@ def build_ui() -> gr.Blocks:
                                 _history_player(track),
                                 key=f"audio-{track['path']}",
                             )
-                            gr.Markdown(
+                            gr.HTML(
                                 _history_copy(track),
                                 key=f"details-{track['path']}",
+                            )
+                            with gr.Row():
+                                keep = gr.Button("Keep", size="sm")
+                                discard = gr.Button("Discard", size="sm")
+                                clear = gr.Button("Clear rating", size="sm")
+                                delete = gr.Button("Delete", size="sm")
+                            keep.click(
+                                lambda path=track["path"]: _rate_track_ui(path, "keep"),
+                                outputs=[history, history_signature],
+                            )
+                            discard.click(
+                                lambda path=track["path"]: _rate_track_ui(path, "discard"),
+                                outputs=[history, history_signature],
+                            )
+                            clear.click(
+                                lambda path=track["path"]: _rate_track_ui(path, None),
+                                outputs=[history, history_signature],
+                            )
+                            delete.click(
+                                lambda path=track["path"]: _delete_track_ui(path),
+                                outputs=[history, history_signature],
                             )
 
         model.change(
@@ -1353,7 +1796,7 @@ def build_ui() -> gr.Blocks:
             control.select(_compose_prompt, compose_inputs, prompt)
         regenerate.click(_compose_prompt, compose_inputs, prompt)
         for control in (model, vocals):
-            control.change(_voice_updates, [model, vocals], lyrics)
+            control.change(_voice_updates, [model, vocals], [vocals, lyrics])
 
         refresh.click(
             _refresh_history,
@@ -1402,7 +1845,7 @@ def build_ui() -> gr.Blocks:
         )
         submission = request.then(
             _enqueue_generation,
-            [model, prompt, duration, steps, guidance, seed, use_seed, lyrics],
+            [model, prompt, duration, steps, guidance, seed, use_seed, lyrics, genre],
             [status, seed, queue_state],
             show_progress="hidden",
         )
@@ -1435,6 +1878,7 @@ def build_ui() -> gr.Blocks:
 def main(share: bool = False, port: int = 7860) -> None:
     # Gradio serves only from paths it has been told about. Tracks are read back from
     # `output/` by absolute path, so without this every player 403s and renders silent.
+    purge_expired_deletions()
     build_ui().launch(
         share=share,
         server_port=port,

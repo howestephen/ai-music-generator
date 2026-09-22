@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-20
+updated: 2026-09-22
 ---
 
 # ROADMAP
@@ -55,23 +55,22 @@ they are never buried in a chat.
 
 ## Phase 3: Track library and generate panel
 
-- Status: `planned`. Spec: [specs/2026-09-20-track-library.md](specs/2026-09-20-track-library.md)
-- Owner instruction 2026-09-20: Codex executes this, not Fable or Opus. Handoff:
-  [handoffs/2026-09-20-track-library.md](handoffs/2026-09-20-track-library.md)
+- Status: `in_progress`. Spec: [specs/2026-09-20-track-library.md](specs/2026-09-20-track-library.md)
+- Handoff: [handoffs/2026-09-20-track-library.md](handoffs/2026-09-20-track-library.md)
 - Goal: a generation can be named, kept, found and removed. `output/` is flat and
   unbounded, the card buries the genre in a block of text, and Regenerate has drifted
   too far from the prompt to use
 
 | # | Title | Status | Why it matters |
 |---|---|---|---|
-| 3.1 | Sidecar gains title, rating and genre | `planned` | Nothing identifies a track but its filename. Old sidecars must keep parsing |
-| 3.2 | History card leads with title and genre | `planned` | The detail goes behind a disclosure; waveform, seek and playback stay as they are |
-| 3.3 | Delete and keep/discard per track | `planned` | Delete hides the track immediately, offers Undo for one hour, then permanently removes the WAV and sidecar. No archive copy |
-| 3.4 | Filter by genre, rating and text | `planned` | 31 tracks was already unmanageable. A view concern that must not touch files |
-| 3.5 | Regenerate sits next to the prompt | `planned` | You cannot see what you are regenerating. The only visual design question here |
-| 3.6 | Dropdowns are clickable across their whole area | `planned` | Only the small arrow responds, so every menu takes several attempts. Gradio's own hit area, so it needs CSS over the component |
-| 3.7 | Instruments, character and keywords collapse | `planned` | They are open by default and dominate the panel. They belong behind an Advanced disclosure, closed |
-| 3.8 | Decide whether Stable Audio keeps a vocals control | `planned` | Owner reports it appears ignored. Stability document that their models never produce intelligible vocals, only textures, so it may be a control that cannot be honoured. Test before changing it |
+| 3.1 | Sidecar gains title, rating and genre | `done` | Nothing identifies a track but its filename. Old sidecars must keep parsing |
+| 3.2 | History card leads with title and genre | `done` | The detail goes behind a disclosure; waveform, seek and playback stay as they are |
+| 3.3 | Delete and keep/discard per track | `done` | Delete hides the track immediately, offers Undo for one hour, then permanently removes the WAV and sidecar. No archive copy |
+| 3.4 | Filter by genre, rating and text | `done` | 31 tracks was already unmanageable. A view concern that must not touch files |
+| 3.5 | Regenerate sits next to the prompt | `done` | You cannot see what you are regenerating. The only visual design question here |
+| 3.6 | Dropdowns are clickable across their whole area | `done` | Only the small arrow responds, so every menu takes several attempts. Gradio's own hit area, so it needs CSS over the component |
+| 3.7 | Instruments, character and keywords collapse | `done` | They are open by default and dominate the panel. They belong behind an Advanced disclosure, closed |
+| 3.8 | Decide whether Stable Audio keeps a vocals control | `done` | Relabelled to Vocal texture on backends without a lyrics channel; kept as With vocals where lyrics exist |
 
 
 ## Phase 4: Visual design pass
@@ -128,10 +127,10 @@ no archive copy (2026-09-20).
 
 ## Current next step
 
-- Current milestone: Phase 2 complete and signed off 2026-09-20. Five backends, 34
-  genres, prompts composed from menus, arrangements laid out in bars, and any span of
-  any track regeneratable
-- Then: Phase 3, the track library, executed by Codex against its spec and handoff
+- Current milestone: Phase 3 track library on branch `phase-3-track-library`. Code,
+  tests (189) and mutations (92/92) are green; waiting on Stephen review and an
+  independent audit before merge
+- Then: Phase 4, the visual design pass
 - The honest gap: nobody has listened to any output yet, so no claim in this file is a
   judgement of how anything sounds
 - Exit gates for any milestone: unit tests, mutations and validators pass; installed

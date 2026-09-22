@@ -77,15 +77,18 @@ MUTATIONS = [
      '        "--duration", str(float(job["duration"])),',
      '        "--duration", str(int(float(job["duration"]))),'),
     ("UI history oldest first", "app.py",
-     'reverse=True)', 'reverse=False)'),
+     'return sorted(tracks, key=lambda item: (item["modified_ns"], item["name"]), reverse=True)',
+     'return sorted(tracks, key=lambda item: (item["modified_ns"], item["name"]), reverse=False)'),
     ("queued UI job ignores selected model", "app.py",
      '        "guidance_scale": guidance,\n'
      '        "model": backend.name,\n'
+     '        "genre": chosen_genre or None,\n'
      '        "_duration_retries": backend.output_audit.random_seed_retries if not use_seed else 0,\n'
      '        "_retry_seed": not use_seed,\n'
      '    }',
      '        "guidance_scale": guidance,\n'
      '        "model": core.DEFAULT_MODEL,\n'
+     '        "genre": chosen_genre or None,\n'
      '        "_duration_retries": backend.output_audit.random_seed_retries if not use_seed else 0,\n'
      '        "_retry_seed": not use_seed,\n'
      '    }'),
@@ -339,6 +342,24 @@ MUTATIONS = [
     ("MiniMax runner loses the documented XET workaround", "runners/minimax_mlx_runner.py",
      'os.environ.setdefault("HF_HUB_DISABLE_XET", "1")',
      'os.environ.setdefault("HF_HUB_DISABLE_XET", "0")'),
+    ("track title ignores seed and genre", "synth/prompting.py",
+     'rng = random.Random(f"{int(seed)}\\0{genre or \'\'}\\0{prompt}")',
+     "rng = random.Random()"),
+    ("new renders drop the selected genre", "synth/core.py",
+     "            genre=genre,",
+     "            genre=None,"),
+    ("text filter matches every track", "app.py",
+     "            if needle not in haystack:\n                continue",
+     "            if False:\n                continue"),
+    ("purge never removes expired deletions", "app.py",
+     '        if entry["expires_at"] > clock:\n            continue',
+     "        if True:\n            continue"),
+    ("keep discard never reaches the sidecar", "app.py",
+     '    _write_sidecar_update(wav, {"rating": normalised})',
+     "    normalised = normalised"),
+    ("delete copies into pending instead of moving", "app.py",
+     "    shutil.move(str(wav), str(destination_wav))",
+     "    shutil.copy2(str(wav), str(destination_wav))"),
 ]
 
 

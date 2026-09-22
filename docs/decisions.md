@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-20
+updated: 2026-09-22
 ---
 
 # Decisions
@@ -11,6 +11,38 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-09-22 - Stable Audio's voice control promises a texture, not singing
+
+**Decided:** backends without a lyrics channel label the voice choice **Vocal texture**,
+not **With vocals**. Backends that can take lyrics keep **With vocals**. The control
+still changes the prompt (`VocalType: Instrumental` off, wordless texture on); it is
+not removed.
+
+**Why:** Stability's Stable Audio 3 prompting guide states the models never output
+intelligible vocals and only sometimes produce unintelligible vocal textures. A label
+that says "With vocals" on Stable Audio is the same class of dead control milestone 0.2
+already fixed once. A listening A/B was not run here (Metal unavailable in the agent
+sandbox; the agent also cannot hear), so the decision rests on Stability's published
+claim plus the existing unit test that the selection changes the prompt.
+
+**Would revisit if:** a listening A/B on this machine shows the texture prompt never
+changes the sound, or Stability ships a lyrics channel.
+
+## 2026-09-22 - Library metadata lives on the sidecar, deletion is pending then gone
+
+**Decided:** every new render writes `title`, `rating` and `genre` on the sidecar.
+`title` is a deterministic two-to-four word label from prompt, genre and seed. Old
+sidecars without those fields still load. Delete moves the WAV and sidecar into
+`output/.pending-delete/` for one hour of Undo, then permanently removes both. Filters
+are view-only.
+
+**Why:** Phase 3 needs tracks that can be named, kept, found and removed without a
+second store of truth. The pending folder stays under `output/` so no new top-level
+directory is required.
+
+**Would revisit if:** a shared library or external backup policy changes what deletion
+can promise.
 
 ## 2026-09-20 - Track deletion has a one-hour undo window, not an archive
 

@@ -358,6 +358,23 @@ class GenerateSeam(unittest.TestCase):
         side = json.loads(self.gen(model="musicgen").sidecar_path().read_text())
         self.assertIsNone(side["infer_step"])
 
+    def test_new_render_writes_title_rating_and_genre(self):
+        track = self.gen(
+            model="minimax-mlx",
+            genre="Drum & Bass - Liquid",
+        )
+        side = json.loads(track.sidecar_path().read_text(encoding="utf-8"))
+        self.assertEqual(track.genre, "Drum & Bass - Liquid")
+        self.assertIsNone(track.rating)
+        self.assertEqual(side["genre"], "Drum & Bass - Liquid")
+        self.assertIsNone(side["rating"])
+        self.assertEqual(side["title"], track.title)
+        self.assertEqual(
+            track.title,
+            prompting.track_title("probe", "Drum & Bass - Liquid", 1),
+        )
+        self.assertTrue(2 <= len(track.title.split()) <= 4)
+
     def test_core_refuses_a_runner_result_without_audio(self):
         with mock.patch.object(
             backends,
@@ -1145,6 +1162,27 @@ class Registry(unittest.TestCase):
         self.assertNotIn("VocalType: Instrumental", voiced)
         self.assertIn("vocal", voiced.lower())
 
+    def test_track_title_is_deterministic_and_short(self):
+        first = prompting.track_title(
+            "a sombre solo acoustic guitar track with cavernous reverb",
+            "Acoustic Folk",
+            42,
+        )
+        second = prompting.track_title(
+            "a sombre solo acoustic guitar track with cavernous reverb",
+            "Acoustic Folk",
+            42,
+        )
+        other = prompting.track_title(
+            "a sombre solo acoustic guitar track with cavernous reverb",
+            "Acoustic Folk",
+            43,
+        )
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, other)
+        self.assertTrue(2 <= len(first.split()) <= 4)
+        self.assertTrue(first[0].isupper())
+
     def test_menu_options_are_offered_for_every_genre(self):
         self.assertGreater(len(prompting.instrument_options()), 10)
         self.assertGreater(len(prompting.character_options()), 10)
@@ -1173,6 +1211,32 @@ class Registry(unittest.TestCase):
                 "minimax-mlx", "a song", 30, 30, None, 42, True, "[verse] hello",
             )
         self.assertEqual(captured["payload"]["lyrics"], "[verse] hello")
+
+    def test_selected_genre_reaches_the_generation_payload(self):
+        captured = {}
+        queue = SimpleNamespace(
+            enqueue=lambda payload, summary, estimate: captured.update(payload=payload),
+            snapshot=lambda: [],
+        )
+        with mock.patch.object(app, "_get_job_queue", return_value=queue), \
+                mock.patch.object(app, "_load_history", return_value=[]):
+            app._enqueue_generation(
+                "stable-audio-sm", "a track", 30, 8, 1, 42, True, None,
+                "Drum & Bass - Liquid",
+            )
+        self.assertEqual(captured["payload"]["genre"], "Drum & Bass - Liquid")
+
+    def test_voice_control_is_honest_per_backend(self):
+        """Stable Audio has no lyrics channel and never sings words. The control
+        must promise a texture, not vocals, on those backends."""
+        sa_choices, sa_info = app._voice_choice_labels("stable-audio-sm")
+        self.assertEqual(sa_choices, ["Instrumental", "Vocal texture"])
+        self.assertIn("never sings", sa_info.lower())
+        lyrics_choices, _ = app._voice_choice_labels("minimax-mlx")
+        self.assertEqual(lyrics_choices, ["Instrumental", "With vocals"])
+        vocals, lyrics = app._voice_updates("stable-audio-sm", "Vocal texture")
+        self.assertEqual(vocals["value"], "Vocal texture")
+        self.assertFalse(lyrics["visible"])
 
     def test_edit_refuses_a_backend_that_cannot_rework(self):
         with self.assertRaisesRegex(app.gr.Error, "cannot rework"):
@@ -1919,30 +1983,57 @@ class UiHistory(unittest.TestCase):
 
     def test_invalid_sidecar_values_do_not_break_history_copy(self):
         self._track("invalid-values", 10, {"duration": {"not": "a number"}})
-        copy = app._history_copy(app._load_history(self.out)[0])
-        self.assertIn("invalid-values.wav", copy)
+        track = app._load_history(self.out)[0]
+        copy = app._history_copy(track)
+        heading = app._history_heading(track)
+        self.assertIn("invalid-values", heading)
+        self.assertIn("Details", copy)
 
         self._track("overflow", 20, {"duration": 10 ** 1000})
-        copy = app._history_copy(app._load_history(self.out)[0])
-        self.assertIn("overflow.wav", copy)
+        track = app._load_history(self.out)[0]
+        copy = app._history_copy(track)
+        self.assertIn("Details", copy)
 
     def test_history_uses_sidecar_details_when_present(self):
         self._track("complete", 10, {
             "backend": "minimax-mlx",
             "duration": 45,
             "seed": 123,
-            "prompt": "probe",
+            "prompt": "probe liquid amen break",
             "generated_at": "20260915-120000",
+            "title": "Liquid Amen Probe",
+            "genre": "Drum & Bass - Liquid",
+            "rating": "keep",
         })
         track = app._load_history(self.out)[0]
         self.assertEqual((track["backend"], track["seed"]), ("minimax-mlx", 123))
         self.assertEqual(track["duration"], 1)
         self.assertEqual(track["requested_duration"], 45)
         self.assertEqual(track["audit_status"], "short")
+        self.assertEqual(track["title"], "Liquid Amen Probe")
+        self.assertEqual(track["genre"], "Drum & Bass - Liquid")
+        self.assertEqual(track["rating"], "keep")
+        heading = app._history_heading(track)
+        self.assertIn("Liquid Amen Probe", heading)
+        self.assertIn("Drum &amp; Bass - Liquid", heading)
+        self.assertIn("keep", heading)
         copy = app._history_copy(track)
         self.assertIn("1.0s delivered", copy)
         self.assertIn("45s target", copy)
         self.assertIn("SHORT", copy)
+        self.assertIn("<details", copy)
+
+    def test_old_sidecars_without_library_fields_still_load(self):
+        self._track("legacy", 10, {
+            "backend": "minimax-mlx",
+            "prompt": "warm rhodes and soft drums overnight",
+            "duration": 5,
+        })
+        track = app._load_history(self.out)[0]
+        self.assertIsNone(track["title"])
+        self.assertIsNone(track["rating"])
+        self.assertIsNone(track["genre"])
+        self.assertEqual(track["display_title"], "warm rhodes and soft")
 
     def test_history_does_not_call_a_long_silent_file_passed(self):
         path = self.out / "silent.wav"
@@ -1972,6 +2063,95 @@ class UiHistory(unittest.TestCase):
         self.assertEqual(waveform.count("<rect "), 3)
         self.assertIn('role="slider"', waveform)
         self.assertIn("probe &amp; &quot;seek&quot;.wav", waveform)
+
+    def test_filter_history_is_view_only(self):
+        self._track("alpha", 10, {
+            "title": "Alpha Liquid",
+            "genre": "Drum & Bass - Liquid",
+            "rating": "keep",
+            "prompt": "liquid amen",
+            "duration": 5,
+        })
+        self._track("beta", 20, {
+            "title": "Beta Neuro",
+            "genre": "Drum & Bass - Neurofunk",
+            "rating": "discard",
+            "prompt": "reese bass",
+            "duration": 5,
+        })
+        self._track("gamma", 30, {
+            "title": "Gamma Free",
+            "prompt": "soft pads",
+            "duration": 5,
+        })
+        tracks = app._load_history(self.out)
+        before = {(path.name, path.stat().st_mtime_ns) for path in self.out.glob("*")}
+        filtered = app.filter_history(tracks, genre="Drum & Bass - Liquid")
+        self.assertEqual([track["name"] for track in filtered], ["alpha.wav"])
+        filtered = app.filter_history(tracks, rating="discard")
+        self.assertEqual([track["name"] for track in filtered], ["beta.wav"])
+        filtered = app.filter_history(tracks, rating="unrated")
+        self.assertEqual([track["name"] for track in filtered], ["gamma.wav"])
+        filtered = app.filter_history(tracks, query="amen")
+        self.assertEqual([track["name"] for track in filtered], ["alpha.wav"])
+        after = {(path.name, path.stat().st_mtime_ns) for path in self.out.glob("*")}
+        self.assertEqual(before, after)
+
+    def test_delete_moves_to_pending_and_undo_restores(self):
+        path = self._track("doomed", 10, {
+            "title": "Doomed Track",
+            "prompt": "probe",
+            "duration": 5,
+        })
+        history = app.delete_track(str(path), self.out)
+        self.assertEqual(history, [])
+        self.assertFalse(path.exists())
+        pending = list(app._pending_entries(self.out))
+        self.assertEqual(len(pending), 1)
+        restored = app.undo_delete(pending[0]["stem"], self.out)
+        self.assertEqual([track["name"] for track in restored], ["doomed.wav"])
+        self.assertTrue(path.is_file())
+        self.assertTrue(path.with_suffix(".json").is_file())
+        self.assertEqual(app._pending_entries(self.out), [])
+
+    def test_expired_pending_deletion_is_purged(self):
+        path = self._track("expired", 10, {"title": "Gone", "prompt": "x", "duration": 5})
+        app.delete_track(str(path), self.out)
+        entry = app._pending_entries(self.out)[0]
+        entry["meta"].write_text(
+            json.dumps({"deleted_at": time.time() - app.UNDO_WINDOW_SECONDS - 5, "title": "Gone"}),
+            encoding="utf-8",
+        )
+        removed = app.purge_expired_deletions(self.out)
+        self.assertEqual(removed, 1)
+        self.assertFalse(entry["wav"].exists())
+        self.assertFalse(entry["sidecar"].exists())
+        self.assertFalse(entry["meta"].exists())
+        self.assertEqual(app._load_history(self.out), [])
+
+    def test_keep_discard_persists_on_the_sidecar(self):
+        path = self._track("rated", 10, {"prompt": "probe", "duration": 5})
+        app.set_track_rating(str(path), "keep", self.out)
+        track = app._load_history(self.out)[0]
+        self.assertEqual(track["rating"], "keep")
+        sidecar = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+        self.assertEqual(sidecar["rating"], "keep")
+        app.set_track_rating(str(path), None, self.out)
+        self.assertIsNone(app._load_history(self.out)[0]["rating"])
+
+    def test_dropdown_hit_area_css_covers_the_whole_control(self):
+        self.assertIn("dropdown-arrow", app.UI_CSS)
+        self.assertIn("pointer-events: none", app.UI_CSS)
+        self.assertIn('caret-color: transparent', app.UI_CSS)
+
+    def test_generate_panel_puts_regenerate_beside_the_prompt(self):
+        source = Path(app.__file__).read_text(encoding="utf-8")
+        prompt_at = source.index('label="Prompt (composed from the menus above)"')
+        regenerate_at = source.index('regenerate = gr.Button("Regenerate"')
+        advanced_at = source.index('gr.Accordion("Advanced", open=False)')
+        self.assertLess(advanced_at, prompt_at)
+        self.assertLess(prompt_at, regenerate_at)
+        self.assertLess(abs(regenerate_at - prompt_at), 400)
 
 
 class UiModelSelection(unittest.TestCase):

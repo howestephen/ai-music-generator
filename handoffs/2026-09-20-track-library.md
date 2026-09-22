@@ -3,13 +3,13 @@ status: active
 author: stephen+claude
 type: handoff
 task: Build Phase 3, the track library and generate panel, against its spec
-owner: codex
-state: needs-work
-round: 1
+owner: stephen
+state: needs-review
+round: 2
 created: 2026-09-20
-updated: 2026-09-20
-generated_by: claude-opus-5
-generated_at: 2026-09-20T15:40Z
+updated: 2026-09-22
+generated_by: cursor-composer
+generated_at: 2026-09-22T16:40Z
 generated_from: conversation
 ---
 
@@ -22,49 +22,49 @@ At round 3, escalate to Stephen with both positions rather than looping.
 ## Context
 
 A local workbench for describing music in words and rendering it on Apple Silicon.
-Five backends behind one CLI and one Gradio UI. Stephen owns it. Layer zero, so work
-goes straight to `main`, no feature branches for small changes.
+Five backends behind one CLI and one Gradio UI. Stephen owns it. Phase 3 work is on
+branch `phase-3-track-library`.
 
 Read in this order before touching anything: `CLAUDE.md`, `ROADMAP.md`,
 `docs/gotchas.md`, `docs/decisions.md`, then the spec at
 [specs/2026-09-20-track-library.md](../specs/2026-09-20-track-library.md). The spec is
 the work. This file is only the state around it.
 
-Where things stand: Phases 0 to 2 are done and signed off. The app generates, queues,
-audits, and can rework any span of any track. What it cannot do is help you live with
-the results: a generation cannot be named, kept, rated, found or removed.
-
 ## Done
 
 - Spec written and agreed, covering 3.1 to 3.8
 - Roadmap restructured: Phase 3 is this work, Phase 4 is the visual design pass
 - Documentation audited by a separate agent on 2026-09-20 and the findings fixed
-- 177 unit tests pass; `scripts/mutate.py` catches every listed mutation
+- 3.1 Sidecar writes `title`, `rating`, `genre`; old sidecars still load
+- 3.2 History card leads with title and genre; detail behind a closed disclosure
+- 3.3 Delete moves WAV+sidecar to `output/.pending-delete/` for one-hour Undo, then
+  purges; keep/discard persists on the sidecar
+- 3.4 Genre, rating and text filters are view-only
+- 3.5 Regenerate sits beside the prompt; render settings are grouped below
+- 3.6 Dropdown hit-area CSS covers the whole control
+- 3.7 Instruments, character and keywords sit in a closed Advanced accordion
+- 3.8 Stable Audio voice choice relabelled to **Vocal texture**; lyrics backends keep
+  **With vocals**. Decision recorded in `docs/decisions.md` (Stability guide + prompt
+  delta test; no listening A/B this session)
+- Unit tests and mutate anchors for the new rules added
 
 ## Outstanding
 
-All of the spec. Nothing in Phase 3 has been started.
-
-Two things shape it:
-
-1. **Delete is settled.** Remove the track from the library immediately, retain its WAV
-   and sidecar together for a one-hour Undo, then permanently delete both. Do not make
-   or keep an archive copy. Purge expired pending deletions on app startup as well.
-2. **3.8 is a question, not a task.** Test whether the Stable Audio vocals control
-   changes the output at all before changing any wording. It may be a control the
-   model cannot honour.
+- Independent adversarial audit
+- Stephen review / listening A/B of Stable Audio instrumental vs texture if he wants
+  sound evidence beyond Stability's docs
+- Merge or push of `phase-3-track-library` (ask before main push)
 
 ## Acceptance
 
 The spec's own "Done when" list, plus the project's standing gates:
 
-- `./.venv/bin/python -m synth.cli models` lists every backend as `ok`
-- `./.venv/bin/python -m unittest discover -s synth -t .` passes
-- `./.venv/bin/python scripts/mutate.py` catches every mutation, with a new one added
-  for each new rule
-- `python3.13 scripts/validate.py` reports 0 errors, and no file this work touches is
-  pushed over its word budget
-- A real render is verified by artifact, not by assertion
+- `./.venv/bin/python -m synth.cli models` lists every backend as `ok` (Metal required;
+  sandbox probes may show MISSING)
+- `./.venv/bin/python -m unittest discover -s synth -t .` passes (189 tests)
+- `./.venv/bin/python scripts/mutate.py` catches every mutation (92/92 on 2026-09-22)
+- `python3.13 scripts/validate.py` reports 0 errors
+- A real render is verified by artifact, not by assertion (not run this session)
 - `ROADMAP.md` and `docs/decisions.md` updated in the same change as the code
 
 ## Traps
@@ -91,3 +91,8 @@ Rebuilding the history cards is exactly the change that reintroduces all three.
 - 2026-09-20 codex: Owner settled deletion. A deleted track leaves the library
   immediately, remains recoverable through Undo for one hour, then its WAV and sidecar
   are permanently removed. No archive copy is kept.
+- 2026-09-22 cursor: Picked up the handoff on Stephen's request. Implemented 3.1-3.8 on
+  branch `phase-3-track-library`. Voice control is model-aware (Vocal texture vs With
+  vocals). Pending deletions live under `output/.pending-delete/`. Unit tests 189 OK;
+  mutate 92/92 caught; validate 0 errors. Handing back for review. No listening A/B
+  and no real render this session.

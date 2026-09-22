@@ -15,6 +15,7 @@ inpainting, which lives in `core.generate`'s job contract rather than here.
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass, field
 
 # Tags Stability names explicitly as raising quality and coherence for music.
@@ -1013,6 +1014,52 @@ GENRES: dict[str, Genre] = {
 
 def genre_names() -> list[str]:
     return list(GENRES)
+
+
+# Words that never earn a place in a generated track title. Prompt tags and
+# production jargon are noise; the label should read like a short name.
+_TITLE_STOP = frozenset({
+    "a", "an", "the", "and", "or", "of", "to", "in", "with", "for", "on", "at",
+    "by", "from", "as", "is", "are", "be", "this", "that", "its", "into", "over",
+    "under", "only", "no", "not", "bpm", "track", "tracks", "instrumental",
+    "music", "genre", "mood", "arrangement", "structure", "instruments",
+    "production", "tracktype", "vocaltype", "global", "metadata", "seconds",
+    "bars", "then", "sits", "under", "wordless", "vocal", "texture", "vocals",
+})
+
+
+def track_title(prompt: str, genre: str | None = None, seed: int = 0) -> str:
+    """A short two-to-four word label. Deterministic for the same inputs.
+
+    The title is a filing name, not a creative act: the same prompt, genre and
+    seed always produce the same string so a re-render does not rename the track.
+    """
+    rng = random.Random(f"{int(seed)}\0{genre or ''}\0{prompt}")
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def _consider(raw: str) -> None:
+        lower = raw.lower()
+        if lower in _TITLE_STOP or len(lower) < 3 or lower in seen:
+            return
+        seen.add(lower)
+        candidates.append(raw)
+
+    if genre:
+        for part in re.findall(r"[A-Za-z][A-Za-z'-]*", genre):
+            _consider(part)
+    for part in re.findall(r"[A-Za-z][A-Za-z'-]*", prompt or ""):
+        _consider(part)
+
+    if not candidates:
+        return "Untitled Track"
+
+    count = rng.randint(2, min(4, max(2, len(candidates))))
+    count = min(count, len(candidates))
+    picked = rng.sample(candidates, count)
+    order = {word.lower(): index for index, word in enumerate(candidates)}
+    picked.sort(key=lambda word: order[word.lower()])
+    return " ".join(_upper_first(word) for word in picked)
 
 
 # Offered in the UI as menus. Empty means "let the genre decide", so a selection

@@ -9,10 +9,12 @@ import re
 import time
 import warnings
 
-from . import backends
+from . import backends, prompting
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
+
+VALID_RATINGS = (None, "keep", "discard")
 
 # Hugging Face's Xet transfer backend hangs on the first model download here:
 # four 0-byte .incomplete files and no progress. Forcing plain HTTPS transfer fixes it.
@@ -49,6 +51,9 @@ class Track:
     `backend` is the registry key (what `--model` takes); `model` is the weights id.
     `infer_step` and `guidance_scale` are None when the backend has no such control,
     so the sidecar never claims a setting that did not apply.
+    `title`, `rating` and `genre` are library fields: a short generated name, an
+    optional keep/discard label, and the UI genre when one was selected. Old
+    sidecars omit them; loaders must tolerate that.
     """
 
     path: Path
@@ -71,6 +76,9 @@ class Track:
     dtype: str
     generated_at: str
     elapsed_seconds: float
+    title: str
+    rating: str | None = None
+    genre: str | None = None
 
     def sidecar_path(self) -> Path:
         return self.path.with_suffix(".json")
@@ -156,6 +164,8 @@ def generate(
     init_audio: Path | str | None = None,
     init_noise_level: float | None = None,
     inpaint_range: tuple[float, float] | None = None,
+    genre: str | None = None,
+    rating: str | None = None,
 ) -> Track:
     """Generate one track.
 
@@ -249,9 +259,15 @@ def generate(
     if seed is None:
         seed = random.randint(0, 2**31 - 1)
 
+    if rating not in VALID_RATINGS:
+        raise ValueError(f"rating must be one of {VALID_RATINGS!r} (got {rating!r})")
+    if genre is not None:
+        genre = str(genre).strip() or None
+
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     stem = f"{stamp}_{backend.name}_{_slug(prompt)}_seed{seed}"
     path, reservation = _reserve_output_path(output_dir, stem)
+    title = prompting.track_title(prompt, genre, int(seed))
 
     try:
         started = time.time()
@@ -327,6 +343,9 @@ def generate(
             dtype=backend.dtype,
             generated_at=stamp,
             elapsed_seconds=round(elapsed, 1),
+            title=title,
+            rating=rating,
+            genre=genre,
         )
         track.write_sidecar()
         if audit_status != "passed":
