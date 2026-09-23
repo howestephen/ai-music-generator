@@ -360,6 +360,9 @@ MUTATIONS = [
     ("delete copies into pending instead of moving", "app.py",
      "    shutil.move(str(wav), str(destination_wav))",
      "    shutil.copy2(str(wav), str(destination_wav))"),
+    ("overdue render still claims estimated percent", "app.py",
+     '                f"Rendering · {elapsed:.0f}s elapsed · past {expected:.0f}s estimate"',
+     '                f"Rendering · {elapsed:.0f}s elapsed · estimated {job[\'progress\']:g}%"'),
 ]
 
 

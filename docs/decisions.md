@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Decisions
@@ -11,6 +11,19 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-09-23 - Bar structure leaves the generate UI; remix stays whole-track
+
+**Decided:** the Structure (bars) accordion is removed from the generate panel, and the
+rework tab is whole-track remix only. Bar-to-second section inpainting remains in
+`core.generate` and the Stable Audio runner for CLI use, but the UI no longer offers it.
+
+**Why:** Stable Audio conditions on text and duration alone. Described bar structure was
+a request the model could ignore, and a section rework still ran a full-length diffusion
+pass, so a long source looked hung while the optimistic estimate sat at 95%.
+
+**Would revisit if:** a backend gains real structural conditioning, or section inpaint
+becomes cheap enough that a bar UI is honest again.
 
 ## 2026-09-22 - Stable Audio's voice control promises a texture, not singing
 

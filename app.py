@@ -407,8 +407,7 @@ def _structure_duration(model, bpm, *bar_counts):
     return gr.update(value=max(control.minimum, round(total)))
 
 
-def _compose_prompt(genre, model, bpm, mood, vocals, instruments, character, keywords,
-                    *bar_counts):
+def _compose_prompt(genre, model, bpm, mood, vocals, instruments, character, keywords):
     """Build the prompt from the menu selections, in the backend's own style."""
     if not genre:
         return gr.skip()
@@ -423,7 +422,6 @@ def _compose_prompt(genre, model, bpm, mood, vocals, instruments, character, key
         character=tuple(character or ()),
         vocals=wants_vocals,
         extra=keywords or "",
-        structure=prompting.describe_structure(_structure_plan(bpm, *bar_counts)),
     )
 
 
@@ -1263,7 +1261,10 @@ def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps
         "seed": chosen_seed,
     }
     queue = _get_job_queue()
-    queue.enqueue(payload, summary, _estimate_runtime(model, duration))
+    # Init-audio remixes of long tracks are much slower than text-to-audio of the
+    # same length. A 347s remix took 221s here while the txt2audio fit predicted ~29s.
+    estimate = max(_estimate_runtime(model, duration), float(duration) * 0.5, 60.0)
+    queue.enqueue(payload, summary, estimate)
     detail = f" · {note}" if note else ""
     if whole_track:
         headline = (
@@ -1409,15 +1410,26 @@ def _remove_job(job_id: str):
 
 
 def _queue_job_html(job: dict) -> str:
-    status_labels = {
-        "queued": f"Queued #{job.get('queue_position', 1)}",
-        "running": (
-            f"Rendering · {job.get('elapsed_seconds') or 0:.0f}s elapsed · "
-            f"estimated {job['progress']:g}%"
-        ),
-        "complete": "Finishing",
-        "failed": "Failed",
-    }
+    elapsed = float(job.get("elapsed_seconds") or 0)
+    expected = float(job.get("expected_seconds") or 0)
+    if job["status"] == "queued":
+        status_text = f"Queued #{job.get('queue_position', 1)}"
+    elif job["status"] == "running":
+        # Estimated progress caps at 95% until the worker finishes. A long remix of a
+        # 347s track sat there for minutes after the estimate and read as hung.
+        if expected > 0 and elapsed > expected:
+            status_text = (
+                f"Rendering · {elapsed:.0f}s elapsed · past {expected:.0f}s estimate"
+            )
+        else:
+            status_text = (
+                f"Rendering · {elapsed:.0f}s elapsed · "
+                f"estimated {job['progress']:g}%"
+            )
+    elif job["status"] == "complete":
+        status_text = "Finishing"
+    else:
+        status_text = "Failed"
     prompt = html.escape(str(job["prompt"]))
     if len(prompt) > 180:
         prompt = f"{prompt[:177]}..."
@@ -1433,7 +1445,7 @@ def _queue_job_html(job: dict) -> str:
         f'style="--job-progress: {float(job["progress"]):g}%">'
         '<div class="queue-job-header">'
         f'<span class="queue-job-title">{details}</span>'
-        f'<span class="queue-job-status">{status_labels[job["status"]]}</span>'
+        f'<span class="queue-job-status">{status_text}</span>'
         '</div>'
         f'<div class="queue-job-summary">{prompt}</div>{error}'
         '<div class="queue-job-track"><span class="queue-job-fill"></span></div>'
@@ -1513,23 +1525,6 @@ def build_ui() -> gr.Blocks:
                                 placeholder="amen break, jungle, ragga chops",
                                 info="Folded into the prompt below.",
                             )
-                        with gr.Accordion("Structure (bars)", open=False):
-                            gr.Markdown(
-                                "Lay the arrangement out in bars. Leave all at 0 to let "
-                                "the genre decide."
-                            )
-                            with gr.Row():
-                                section_bars = [
-                                    gr.Number(
-                                        value=0, precision=0, minimum=0, maximum=512,
-                                        label=name,
-                                    )
-                                    for name in prompting.SECTION_NAMES
-                                ]
-                            structure_preview = gr.Markdown(
-                                "No structure set: the genre's own arrangement is "
-                                "described instead."
-                            )
                         lyrics = gr.Textbox(
                             label="Lyrics", lines=3, visible=False,
                             placeholder="[verse]\nfirst line here",
@@ -1583,13 +1578,11 @@ def build_ui() -> gr.Blocks:
                         go = gr.Button("Generate", variant="primary", elem_id="generate-button")
                         status = gr.Markdown("Ready to queue a generation.")
 
-                        # The only bar-accurate structural control this model family has.
-                        # Before generation, structure is prose; afterwards, a span can be
-                        # regenerated in place, and bars convert to seconds from the tempo.
-                    with gr.Tab("Rework a section"):
+                    with gr.Tab("Remix a track"):
                         gr.Markdown(
-                            "Regenerate part of a finished track and keep the rest. "
-                            "Stable Audio only."
+                            "Start from a finished track and push it toward a new prompt. "
+                            "Stable Audio only. The whole track is re-rendered, so a long "
+                            "source takes as long as generating one of the same length."
                         )
                         edit_track = gr.Dropdown(
                             choices=_editable_track_choices(),
@@ -1600,35 +1593,17 @@ def build_ui() -> gr.Blocks:
                             type="filepath",
                             sources=["upload"],
                         )
-                        edit_mode = gr.Radio(
-                            choices=[SECTION_MODE, REMIX_MODE], value=SECTION_MODE,
-                            label="What to change",
-                        )
                         edit_noise = gr.Slider(
-                            0.1, 1.2, value=0.6, step=0.05, visible=False,
+                            0.1, 1.2, value=0.6, step=0.05,
                             label="Amount of change",
                             info="Low keeps the melody and rhythm and swaps the sounds; "
                                  "high keeps only the timbre and tonality.",
                         )
-                        with gr.Row() as edit_bars_row:
-                            edit_bpm = gr.Number(
-                                value=120, label="Tempo (BPM)", precision=0,
-                                minimum=20, maximum=300,
-                            )
-                            edit_start_bar = gr.Number(
-                                value=33, label="From bar", precision=0, minimum=1,
-                            )
-                            edit_bars = gr.Dropdown(
-                                choices=[str(count) for count in BAR_CHOICES],
-                                value="32", label="Length (bars)",
-                            )
-                        edit_span = gr.Markdown("Pick a track to rework.")
                         edit_prompt = gr.Textbox(
-                            label="This section becomes", lines=2,
-                            placeholder="a stripped breakdown, no drums, just pads and a "
-                                        "filtered vocal texture",
+                            label="Become", lines=2,
+                            placeholder="a VIP remix, tighter drums, brighter lead",
                         )
-                        edit_go = gr.Button("Rework section", variant="secondary")
+                        edit_go = gr.Button("Remix track", variant="secondary")
                         edit_status = gr.Markdown("")
 
             with gr.Column(scale=1, elem_id="history-panel"):
@@ -1773,7 +1748,7 @@ def build_ui() -> gr.Blocks:
             queue=False,
         )
         compose_inputs = [genre, model, bpm, mood, vocals, instruments, character,
-                          keywords, *section_bars]
+                          keywords]
         # Any menu change recomposes the prompt, so the text always reflects the
         # selections rather than drifting away from them.
         genre.change(_mood_choices, genre, mood).then(
@@ -1784,14 +1759,6 @@ def build_ui() -> gr.Blocks:
         ).then(_compose_prompt, compose_inputs, prompt)
         for control in (bpm, mood, vocals, instruments, character, keywords):
             control.change(_compose_prompt, compose_inputs, prompt)
-        # Changing the arrangement redraws its timeline, sets the track length from
-        # the total, and rewrites the prompt to describe it.
-        for control in (bpm, *section_bars):
-            control.change(
-                _structure_preview, [bpm, *section_bars], structure_preview
-            ).then(
-                _structure_duration, [model, bpm, *section_bars], duration
-            ).then(_compose_prompt, compose_inputs, prompt)
         for control in (mood, instruments, character):
             control.select(_compose_prompt, compose_inputs, prompt)
         regenerate.click(_compose_prompt, compose_inputs, prompt)
@@ -1802,39 +1769,15 @@ def build_ui() -> gr.Blocks:
             _refresh_history,
             outputs=[history, history_signature],
         )
-        def _span_update(path, bpm, start, bars):
-            return _edit_span(
-                path, float(bpm or 120), float(start or 1), float(bars or 32)
-            )
-
-        span_inputs = [edit_track, edit_bpm, edit_start_bar, edit_bars]
-        for control in span_inputs:
-            control.change(_span_update, span_inputs, edit_span)
-        # A dropdown reports a user's pick as `select`, not `change`, so without this
-        # the span never updates when you choose a track.
-        for control in (edit_track, edit_bars):
-            control.select(_span_update, span_inputs, edit_span)
         refresh.click(_editable_track_choices_update, outputs=edit_track)
-        # Bars belong to a section rework; the change amount belongs to a whole-track
-        # remix. Showing both at once invites setting one that is ignored.
-        edit_mode.change(
-            lambda mode: (
-                gr.update(visible=mode == SECTION_MODE),
-                gr.update(visible=mode == SECTION_MODE),
-                gr.update(visible=mode == REMIX_MODE),
-            ),
-            edit_mode,
-            [edit_bars_row, edit_span, edit_noise],
-        )
         edit_go.click(
-            lambda model, path, upload, prompt, bpm, start, bars, steps, guidance, mode, noise: (
+            lambda model, path, upload, prompt, steps, guidance, noise: (
                 _enqueue_edit(
-                    model, path, upload, prompt, float(bpm or 120), float(start or 1),
-                    float(bars or 32), steps, guidance, mode, noise,
+                    model, path, upload, prompt, 120, 1, 32, steps, guidance,
+                    REMIX_MODE, noise,
                 )
             ),
-            [model, edit_track, edit_upload, edit_prompt, edit_bpm, edit_start_bar,
-             edit_bars, steps, guidance, edit_mode, edit_noise],
+            [model, edit_track, edit_upload, edit_prompt, steps, guidance, edit_noise],
             [edit_status, queue_state],
         )
         request = go.click(

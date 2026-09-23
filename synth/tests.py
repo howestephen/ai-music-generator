@@ -1265,7 +1265,7 @@ class Registry(unittest.TestCase):
         captured = {}
         queue = SimpleNamespace(
             enqueue=lambda payload, summary, estimate: captured.update(
-                payload=payload, summary=summary
+                payload=payload, summary=summary, estimate=estimate,
             ),
             snapshot=lambda: [],
         )
@@ -1284,6 +1284,8 @@ class Registry(unittest.TestCase):
         self.assertEqual(payload["init_noise_level"], 0.7)
         self.assertEqual(payload["init_audio"], str(source))
         self.assertIn("remix", headline.lower())
+        # 120s * 0.5 floor beats the optimistic txt2audio fit for a long remix.
+        self.assertGreaterEqual(captured["estimate"], 60.0)
 
     def test_a_section_rework_sends_no_noise_level(self):
         out = Path(tempfile.mkdtemp())
@@ -2152,6 +2154,9 @@ class UiHistory(unittest.TestCase):
         self.assertLess(advanced_at, prompt_at)
         self.assertLess(prompt_at, regenerate_at)
         self.assertLess(abs(regenerate_at - prompt_at), 400)
+        self.assertNotIn('gr.Accordion("Structure (bars)"', source)
+        self.assertIn('gr.Tab("Remix a track")', source)
+        self.assertNotIn('gr.Tab("Rework a section")', source)
 
 
 class UiModelSelection(unittest.TestCase):
@@ -2186,12 +2191,19 @@ class UiModelSelection(unittest.TestCase):
         })
         running = app._queue_job_html({
             **base, "status": "running", "progress": 45,
+            "elapsed_seconds": 20, "expected_seconds": 60,
+        })
+        overdue = app._queue_job_html({
+            **base, "status": "running", "progress": 95,
+            "elapsed_seconds": 180, "expected_seconds": 40,
         })
         self.assertIn('class="queue-job queued"', queued)
         self.assertIn("Queued #2", queued)
         self.assertIn("quiet &amp; focused", queued)
         self.assertIn("estimated 45%", running)
         self.assertIn("--job-progress: 45%", running)
+        self.assertIn("past 40s estimate", overdue)
+        self.assertNotIn("estimated 95%", overdue)
 
     def test_switching_to_musicgen_clamps_duration_and_hides_steps(self):
         updates = app._model_updates("musicgen", 60, None, None)

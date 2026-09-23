@@ -55,7 +55,8 @@ they are never buried in a chat.
 
 ## Phase 3: Track library and generate panel
 
-- Status: `in_progress`. Spec: [specs/2026-09-20-track-library.md](specs/2026-09-20-track-library.md)
+- Status: `done` on branch `phase-3-track-library`, merging to main. Spec:
+  [specs/2026-09-20-track-library.md](specs/2026-09-20-track-library.md)
 - Handoff: [handoffs/2026-09-20-track-library.md](handoffs/2026-09-20-track-library.md)
 - Goal: a generation can be named, kept, found and removed. `output/` is flat and
   unbounded, the card buries the genre in a block of text, and Regenerate has drifted
@@ -127,10 +128,8 @@ no archive copy (2026-09-20).
 
 ## Current next step
 
-- Current milestone: Phase 3 track library on branch `phase-3-track-library`. Code,
-  tests (189) and mutations (92/92) are green; waiting on Stephen review and an
-  independent audit before merge
-- Then: Phase 4, the visual design pass
+- Current milestone: Phase 3 track library merged to main with a remix progress-honesty
+  fix and the bar-structure UI removed. Next is Phase 4, the visual design pass
 - The honest gap: nobody has listened to any output yet, so no claim in this file is a
   judgement of how anything sounds
 - Exit gates for any milestone: unit tests, mutations and validators pass; installed

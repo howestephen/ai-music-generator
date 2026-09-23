@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-19
+updated: 2026-09-23
 ---
 
 # Gotchas
@@ -97,7 +97,10 @@ weight download, and averaging that in as render time poisons every later estima
 
 **Fix:** fit `overhead + rate * duration` from the most recent renders only, and keep
 measured per-backend fallbacks. Elapsed seconds are shown next to the percentage so a
-wrong estimate reads as wrong rather than as hung.
+wrong estimate reads as wrong rather than as hung. Once elapsed passes the estimate the
+card says `past Ns estimate` instead of sitting on `estimated 95%`. Whole-track remixes
+also take a `max(fit, 0.5 * duration, 60s)` floor, because init-audio of a long track is
+far slower than text-to-audio of the same length (a 347s remix took 221s here).
 
 ### Hugging Face Xet backend hangs silently
 
@@ -244,7 +247,7 @@ the handler. This is why MiniMax's 300-second requests must not inherit ACE-Step
 
 ### Concurrent generations distort timings
 
-Two jobs on the GPU at once made per-track times balloon 2–4×, which looks like a
+Two jobs on the GPU at once made per-track times balloon 2-4x, which looks like a
 performance regression and isn't. **Benchmark one at a time.**
 
 Rough figures, single job, M3 Max:
