@@ -2766,8 +2766,63 @@ GENRES: dict[str, Genre] = {
 }
 
 
+# Menu order. Definitions above can grow in place; this is the order a person sees.
+_GENRE_ORDER = (
+    "Drum & Bass - Liquid",
+    "Drum & Bass - Neurofunk",
+    "Drum & Bass - Dancefloor",
+    "Drum & Bass - Jungle",
+    "Drum & Bass - Halftime",
+    "Drum & Bass - Jump-up",
+    "Techno - Hypnotic",
+    "Techno - Industrial",
+    "Techno - Melodic",
+    "House - Deep",
+    "House - Classic",
+    "House - Tech",
+    "House - Acid",
+    "Dubstep - Deep",
+    "Dubstep - Brostep",
+    "Glitch Hop",
+    "Breakbeat",
+    "Ambient",
+    "Cinematic / Trailer",
+    "Lo-fi Hip Hop",
+    "Hip Hop",
+    "Synthwave",
+    "Trance",
+    "UK Garage",
+    "Future Garage",
+    "Post-Dubstep",
+    "Psydub",
+    "Reggae",
+    "Trip Hop",
+    "Dub Techno",
+    "Downtempo",
+    "Chillwave",
+    "IDM",
+    "Funk",
+    "Soul",
+    "Jazz",
+    "Bossa Nova",
+    "Blues",
+    "Rock",
+    "Metal",
+    "Folk / Acoustic",
+    "Classical",
+    "Minimal Electronic",
+    "Corporate / Uplifting",
+)
+
+
 def genre_names() -> list[str]:
-    return list(GENRES)
+    missing = set(GENRES) - set(_GENRE_ORDER)
+    extra = set(_GENRE_ORDER) - set(GENRES)
+    if missing or extra or len(_GENRE_ORDER) != len(set(_GENRE_ORDER)):
+        raise RuntimeError(
+            f"genre menu is out of date (missing {sorted(missing)}, extra {sorted(extra)})"
+        )
+    return list(_GENRE_ORDER)
 
 
 # Words that never earn a place in a generated track title. Prompt tags and

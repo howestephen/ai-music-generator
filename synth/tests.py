@@ -1522,6 +1522,12 @@ class Registry(unittest.TestCase):
             "drums": 6, "bass": 6, "lead": 6, "texture": 4, "mood": 4,
             "production": 3, "structure": 2, "instruments": 3, "keywords": 8,
         }
+        names = prompting.genre_names()
+        self.assertEqual(set(names), set(prompting.GENRES))
+        self.assertLess(
+            names.index("Drum & Bass - Jump-up"), names.index("Techno - Hypnotic"),
+        )
+        self.assertLess(names.index("House - Acid"), names.index("Dubstep - Deep"))
         for name, genre in prompting.GENRES.items():
             with self.subTest(genre=name):
                 self.assertTrue(genre.prose, "needs a prose name for sentences")
