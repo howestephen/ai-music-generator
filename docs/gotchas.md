@@ -158,6 +158,19 @@ bfloat16 errors on macOS. Upstream says pass `--bf16 false`; the equivalent here
 
 ## Runtime
 
+### Regenerate keeps saying Rhodes, plate reverb, or a polished finish
+
+**Symptom:** prompts from different genres, or repeated presses of Regenerate, use
+the same instruments and the same studio phrases.
+
+**Cause:** each genre had only a few lines, and every description prompt also
+pulled from one shared list of rooms, effects and eras. Liquid drum and bass
+always tagged electric piano.
+
+**Fix:** the draw stays inside that genre's own lists, including which instrument
+tag is used. The shared list is only added when it is chosen as a character pin.
+Lines are not copied from one genre into another.
+
 ### The genre filter shows one dancefloor track when the library is full of them
 
 **Symptom:** Drum & Bass - Dancefloor lists a single track. The other drum and bass

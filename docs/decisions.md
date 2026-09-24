@@ -12,6 +12,23 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-24 - Prompt vocabulary stays inside each genre
+
+**Decided:** each genre keeps its own drums, bass, lead, texture, mood, production,
+structure, instrument tags and keywords, and those lines are not copied from one
+genre to another. Regenerate draws from that genre only. The shared room, effect
+and era list remains a manual character pin. It is not applied on its own.
+
+Added, each with its own vocabulary: Drum & Bass - Jump-up, House - Acid, Breakbeat,
+Reggae, Soul, Bossa Nova, Blues, Hip Hop, Rock, Classical.
+
+**Why:** the old pools were short, and a shared colour list was appended to every
+style, so regenerating kept landing on the same words. Liquid drum and bass put
+electric piano on every prompt and Rhodes in the lead pool.
+
+**Would revisit if:** a genre's lines start being reused, or a new style cannot be
+told apart from one already in the menu.
+
 ## 2026-09-24 - The next UI is React and Tailwind
 
 **Decided:** the page `python app.py` serves is a React and Tailwind app in `web/`.

@@ -1518,14 +1518,104 @@ class Registry(unittest.TestCase):
             prompting.build_prompt("Sea Shanty")
 
     def test_genre_vocabulary_is_complete_enough_to_vary(self):
+        minimums = {
+            "drums": 6, "bass": 6, "lead": 6, "texture": 4, "mood": 4,
+            "production": 3, "structure": 2, "instruments": 3, "keywords": 8,
+        }
         for name, genre in prompting.GENRES.items():
             with self.subTest(genre=name):
                 self.assertTrue(genre.prose, "needs a prose name for sentences")
-                self.assertGreaterEqual(len(genre.keywords), 4, "tag style needs 4+")
                 self.assertLess(genre.bpm[0], genre.bpm[1])
-                for pool in (genre.drums, genre.bass, genre.lead, genre.texture,
-                             genre.mood, genre.production):
-                    self.assertTrue(pool)
+                for field, minimum in minimums.items():
+                    self.assertGreaterEqual(
+                        len(getattr(genre, field)), minimum,
+                        f"{field} has too few options",
+                    )
+
+    def test_construction_lines_are_not_copied_between_genres(self):
+        """The same sentence in two genres is how every prompt started to sound
+        like the same record."""
+        seen = {}
+        for name, genre in prompting.GENRES.items():
+            for field in ("drums", "bass", "lead", "texture", "mood",
+                          "production", "structure", "keywords"):
+                for line in getattr(genre, field):
+                    key = (field, " ".join(line.lower().split()))
+                    self.assertNotIn(
+                        key, seen,
+                        f"{field} line shared by {seen.get(key)} and {name}: {line}",
+                    )
+                    seen[key] = name
+
+    def test_regenerate_does_not_dress_every_genre_in_the_same_room(self):
+        stamped = (
+            "tape saturation warming the highs",
+            "drenched in a long plate reverb",
+            "with a modern, polished finish",
+        )
+        for genre in prompting.genre_names():
+            for seed in range(6):
+                built = prompting.build_prompt(genre, seed=seed)
+                for line in stamped:
+                    self.assertNotIn(line, built, genre)
+        pinned = prompting.build_prompt(
+            "Metal", seed=1, character=("drenched in a long plate reverb",),
+        )
+        self.assertIn("drenched in a long plate reverb", pinned)
+
+    def test_liquid_does_not_say_rhodes_on_almost_every_regenerate(self):
+        prompts = [
+            prompting.build_prompt("Drum & Bass - Liquid", seed=seed)
+            for seed in range(40)
+        ]
+        rhodes = sum("rhodes" in prompt.lower() for prompt in prompts)
+        self.assertGreater(rhodes, 0)
+        self.assertLess(rhodes, 16)
+        instruments = {
+            prompt.split("Instruments:", 1)[1].split(".", 1)[0]
+            for prompt in prompts
+            if "Instruments:" in prompt
+        }
+        self.assertGreaterEqual(len(instruments), 3)
+
+    def test_a_built_prompt_still_names_its_own_genre(self):
+        """The library filter reads the style phrase back out of untagged files.
+        A prompt must not contain a longer phrase from a different genre."""
+        for name in prompting.genre_names():
+            for seed in range(4):
+                prompt = prompting.build_prompt(name, seed=seed)
+                with self.subTest(genre=name, seed=seed):
+                    self.assertEqual(
+                        app.genre_for_track({"genre": None, "prompt": prompt}),
+                        name,
+                    )
+
+    def test_new_styles_keep_their_own_words(self):
+        def blob(name):
+            genre = prompting.GENRES[name]
+            parts = [
+                genre.prose, *genre.tags, *genre.drums, *genre.bass, *genre.lead,
+                *genre.texture, *genre.mood, *genre.production, *genre.structure,
+                *genre.keywords, *genre.instruments,
+            ]
+            return " ".join(parts).lower()
+
+        acid = blob("House - Acid")
+        self.assertIn("303", acid)
+        self.assertNotIn("rhodes", acid)
+        jump = blob("Drum & Bass - Jump-up")
+        self.assertIn("jump-up", jump)
+        for banned in ("rhodes", "formant", "supersaw"):
+            self.assertNotIn(banned, jump)
+        chamber = blob("Classical")
+        self.assertIn("chamber", chamber)
+        for banned in ("taiko", "braam", "double-kick"):
+            self.assertNotIn(banned, chamber)
+        self.assertIn("boom bap", blob("Hip Hop"))
+        self.assertNotIn("lo-fi hip hop", blob("Hip Hop"))
+        self.assertIn("skank", blob("Reggae"))
+        self.assertNotIn("neurofunk", blob("Reggae"))
+        self.assertTrue(prompting.build_prompt("House - Acid", seed=2).strip())
 
     def test_stable_audio_backends_share_one_runner_and_differ_only_by_options(self):
         """The point of runner_options: a second variant costs a manifest entry, not
