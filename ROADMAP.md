@@ -76,13 +76,13 @@ they are never buried in a chat.
 
 ## Phase 4: React and Tailwind UI
 
-- Status: `planned`, after Phase 3
-- Goal: replace the Gradio UI in `app.py` with React and Tailwind. Do not skin Gradio
+- Status: `done` 2026-09-24, for review. `python app.py` serves `web/dist`
+- Goal: replace the Gradio page with React and Tailwind. Do not skin Gradio
 
 | # | Title | Status | Why it matters |
 |---|---|---|---|
-| 4.1 | Product design pass on the whole surface | `planned` | Hierarchy, grouping and naming across generate, queue, history and rework. Phone layout is in the brief, not an afterthought |
-| 4.2 | Build that design in React and Tailwind | `planned` | Queue, history and audio serving stay. Do not copy the Gradio traps in [docs/gotchas.md](docs/gotchas.md) |
+| 4.1 | Product design pass on the whole surface | `done` | Generate, queue, history and remix. Phone layout is one column. Menus are native selects |
+| 4.2 | Build that design in React and Tailwind | `done` | Queue, history and audio serving stay. Audio is read from `output/` by filename. The old Gradio builder is still in `app.py` and is not launched |
 
 ## Deferred ideas
 
@@ -130,7 +130,7 @@ no archive copy (2026-09-20).
 
 ## Current next step
 
-- Current milestone: Phase 3 is on main. Next is Phase 4, a React and Tailwind UI, with no spec yet
+- Current milestone: Phase 4 is served at the usual port. Next is your review of that page
 - The honest gap: the owner has heard Stable Audio's vocal texture (occasional vague
   voice noises) and is not happy with the output. Nothing else in this file is a
   judgement of how a track sounds

@@ -236,9 +236,9 @@ MUTATIONS = [
      "            outputs=[queue_state, history, history_signature],\n"
      "            queue=False,\n"
      '            show_progress="hidden",'),
-    ("UI stops serving the output folder", "app.py",
-     "        allowed_paths=[str(core.OUTPUT_DIR)],",
-     "        "),
+    ("UI stops confining audio to the library", "synth/ui_server.py",
+     "    if resolved.parent != root or resolved.suffix.lower() != \".wav\":",
+     "    if resolved.suffix.lower() != \".wav\":"),
     ("runner options never reach the runner", "synth/core.py",
      '                "options": dict(backend.runner_options),',
      "                "),

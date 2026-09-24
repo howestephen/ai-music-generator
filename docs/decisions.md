@@ -14,15 +14,14 @@ rationale and reason to revisit it.
 
 ## 2026-09-24 - The next UI is React and Tailwind
 
-**Decided:** Phase 4 replaces `app.py`'s Gradio surface with a React and Tailwind app.
-Do not restyle Gradio with custom CSS and JS.
+**Decided:** the page `python app.py` serves is a React and Tailwind app in `web/`.
+Do not restyle Gradio with custom CSS and JS. The old Gradio builder remains in
+`app.py` so its checks still compile; `main` does not launch it.
 
-**Why:** this repo's UI is Gradio, and the earlier Phase 4 line treated that as the
-surface to skin. The owner builds this kind of interface in React and Tailwind and
-does not want a second toolkit.
+**Why:** the earlier Phase 4 line treated Gradio as the surface to skin. The owner
+builds this kind of interface in React and Tailwind.
 
-**Would revisit if:** a thin Gradio shell is still needed to serve audio or the queue
-while the React app is incomplete.
+**Would revisit if:** the leftover Gradio builder is deleted once nothing imports it.
 
 ## 2026-09-24 - Renders stay on this Mac for now
 

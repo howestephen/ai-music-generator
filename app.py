@@ -1409,27 +1409,29 @@ def _remove_job(job_id: str):
     return _get_job_queue().remove(job_id)
 
 
-def _queue_job_html(job: dict) -> str:
+def _queue_status_text(job: dict) -> str:
     elapsed = float(job.get("elapsed_seconds") or 0)
     expected = float(job.get("expected_seconds") or 0)
     if job["status"] == "queued":
-        status_text = f"Queued #{job.get('queue_position', 1)}"
-    elif job["status"] == "running":
+        return f"Queued #{job.get('queue_position', 1)}"
+    if job["status"] == "running":
         # Estimated progress caps at 95% until the worker finishes. A long remix of a
         # 347s track sat there for minutes after the estimate and read as hung.
         if expected > 0 and elapsed > expected:
-            status_text = (
+            return (
                 f"Rendering · {elapsed:.0f}s elapsed · past {expected:.0f}s estimate"
             )
-        else:
-            status_text = (
-                f"Rendering · {elapsed:.0f}s elapsed · "
-                f"estimated {job['progress']:g}%"
-            )
-    elif job["status"] == "complete":
-        status_text = "Finishing"
-    else:
-        status_text = "Failed"
+        return (
+            f"Rendering · {elapsed:.0f}s elapsed · "
+            f"estimated {job['progress']:g}%"
+        )
+    if job["status"] == "complete":
+        return "Finishing"
+    return "Failed"
+
+
+def _queue_job_html(job: dict) -> str:
+    status_text = _queue_status_text(job)
     prompt = html.escape(str(job["prompt"]))
     if len(prompt) > 180:
         prompt = f"{prompt[:177]}..."
@@ -1819,17 +1821,12 @@ def build_ui() -> gr.Blocks:
 
 
 def main(share: bool = False, port: int = 7860) -> None:
-    # Gradio serves only from paths it has been told about. Tracks are read back from
-    # `output/` by absolute path, so without this every player 403s and renders silent.
+    """Serve the React UI. `share` is ignored: the page stays on this machine."""
+    del share
     purge_expired_deletions()
-    build_ui().launch(
-        share=share,
-        server_port=port,
-        inbrowser=True,
-        css=UI_CSS,
-        js=UI_JS,
-        allowed_paths=[str(core.OUTPUT_DIR)],
-    )
+    from synth.ui_server import serve
+
+    serve(port)
 
 
 if __name__ == "__main__":

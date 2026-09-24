@@ -13,6 +13,12 @@ output/*
 .env.*
 !.env.example
 
+# Frontend dependencies. The built UI in web/dist is tracked so the page runs
+# without a second install step.
+web/node_modules/
+web/.claude/
+*.tsbuildinfo
+
 # Local editor and tool state. .claude/settings.json (if ever added) stays tracked.
 .vscode/
 .idea/

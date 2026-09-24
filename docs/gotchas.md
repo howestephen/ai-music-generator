@@ -74,6 +74,17 @@ temp cache, and the whole history re-renders whenever a render finishes. A dozen
 `launch(allowed_paths=[output])` already lets the browser fetch the real file, with
 range requests intact, so nothing needs copying.
 
+### The React UI only serves a library filename
+
+**Symptom:** a player is silent, or a request for audio returns 400.
+
+**Cause:** `synth/ui_server.py` serves `GET /audio/<filename>` only when that name
+is a WAV directly in `output/`. A path, a symlink out of the folder, or a file
+Gradio used to copy into its temp cache is refused.
+
+**Fix:** keep the player `src` on `/audio/<filename>`. Verify with a range request:
+it should return 206 and `audio/wav`.
+
 ### Gradio serves no file you have not allowed
 
 **Symptom:** every player in the UI is silent. The WAV on disk is valid, and the

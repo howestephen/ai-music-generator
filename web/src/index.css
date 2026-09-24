@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --bg: #12110f;
+  --panel: #1c1916;
+  --panel-2: #26221d;
+  --line: #3c362f;
+  --text: #f3eee6;
+  --muted: #a3988c;
+  --accent: #e4a15a;
+  --accent-ink: #1c130a;
+  --keep: #9dcc96;
+  --discard: #e09a8c;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#controls-panel,
+#history-panel,
+.queue-job,
+.history-card,
+.queue-job-title {
+  min-width: 0;
+}
+
+#controls-panel,
+#history-panel {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+#history-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.library-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 1023px) {
+  #controls-panel {
+    max-height: 58vh;
+  }
+}
+
+.page-header,
+.card-actions,
+.queue-job-header {
+  flex-wrap: wrap;
+}
+
+.history-card,
+.queue-job,
+.queue-job-title,
+.history-title {
+  overflow-wrap: anywhere;
+}
+
+select,
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+select,
+input[type="number"],
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.4rem 0.55rem;
+}
+
+textarea {
+  min-height: 4.25rem;
+  resize: vertical;
+}
+
+#generate-button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 650;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+
+#generate-button:disabled {
+  cursor: progress;
+}
+
+#generate-button:disabled::before {
+  animation: generation-progress 1.4s ease-in-out infinite;
+  background: rgba(255, 255, 255, 0.35);
+  content: "";
+  inset: 0;
+  position: absolute;
+}
+
+.queue-job.queued .queue-job-fill {
+  animation: queued-job-wipe 1.4s ease-in-out infinite;
+}
+
+.history-audio {
+  width: 100%;
+}
+
+@keyframes queued-job-wipe {
+  from { transform: translateX(-105%); }
+  to { transform: translateX(190%); }
+}
+
+@keyframes generation-progress {
+  from { transform: translateX(-105%); }
+  to { transform: translateX(190%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #generate-button:disabled::before,
+  .queue-job.queued .queue-job-fill {
+    animation: none;
+  }
+}

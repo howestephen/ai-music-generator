@@ -167,7 +167,8 @@ controls are `null`. Sidecars written before milestone 1.1 stored the target und
 synth/core.py       generate() - the single entry point, dispatches to a backend
 synth/backends.json versioned model manifest: runtime, controls, licence, prompt style
 runners/            subprocess entry points for backends in their own venv
-app.py              Gradio web UI
+app.py              local web UI (React and Tailwind, served from web/dist)
+web/                the browser UI
 output/             generated audio + sidecars (gitignored)
 ```
 

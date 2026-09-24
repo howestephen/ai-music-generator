@@ -66,7 +66,8 @@ Every top-level directory is declared here and in `top_dirs` of
 
 | Path | Holds |
 |---|---|
-| `synth/` | the package: `core.py`, `backends.py` + `backends.json`, `prompting.py`, `jobs.py`, `cli.py`, `analyze.py`, `tests.py` |
+| `synth/` | the package: `core.py`, `backends.py` + `backends.json`, `prompting.py`, `jobs.py`, `cli.py`, `analyze.py`, `ui_server.py`, `tests.py` |
+| `web/` | the React and Tailwind UI served by `app.py` |
 | `runners/` | per-backend subprocess entry points, one per isolated venv |
 | `briefs/` | prompt sets per project |
 | `prompts/` | default batch prompts |

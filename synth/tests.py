@@ -28,9 +28,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+import urllib.error
+import urllib.request
+
 import app
 import soundfile as sf
-from synth import analyze, backends, cli, core, jobs, prompting
+from synth import analyze, backends, cli, core, jobs, prompting, ui_server
 
 
 def _write_test_wav(path: Path, frames: int = 1) -> None:
@@ -869,13 +872,11 @@ class Registry(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     backends.load_manifest(path)
 
-    def test_launch_allows_gradio_to_serve_the_output_folder(self):
-        """Gradio serves only declared paths. Without output/ on that list every
-        history player receives 403 and plays silence, which is invisible server-side."""
-        with mock.patch.object(app, "build_ui") as build:
-            app.main(port=7999)
-        allowed = build.return_value.launch.call_args.kwargs["allowed_paths"]
-        self.assertIn(str(core.OUTPUT_DIR), allowed)
+    def test_launch_serves_the_react_ui_not_a_public_share(self):
+        """The page stays on this machine. A public share tunnel is not the UI."""
+        with mock.patch("synth.ui_server.serve") as serve:
+            app.main(share=True, port=7999)
+        serve.assert_called_once_with(7999)
 
     def test_runner_options_reach_the_runner_job_unchanged(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
@@ -2640,6 +2641,113 @@ class DocumentationContract(unittest.TestCase):
         gotchas = (core.PROJECT_ROOT / "docs" / "gotchas.md").read_text(encoding="utf-8")
         for location in expected:
             self.assertIn(f"`{location}`", gotchas)
+
+
+class ServedUi(unittest.TestCase):
+    def setUp(self):
+        self.out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.out, ignore_errors=True)
+        patch = mock.patch.object(core, "OUTPUT_DIR", self.out)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.server, self.port = ui_server.serve_in_thread()
+        self.addCleanup(self.server.shutdown)
+        self.addCleanup(self.server.server_close)
+
+    def _open(self, path: str, data: bytes | None = None, headers: dict | None = None):
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=data, headers=headers or {})
+        try:
+            with urllib.request.urlopen(request) as response:
+                return response.status, response.read(), response.headers
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.read(), exc.headers
+
+    def test_each_model_keeps_its_own_duration_cap(self):
+        caps = {model["name"]: model["duration"]["maximum"] for model in ui_server.bootstrap()["models"]}
+        self.assertEqual(caps["minimax-mlx"], 300)
+        self.assertEqual(caps["musicgen"], 30)
+        self.assertEqual(caps["stable-audio-medium"], 380)
+        self.assertEqual(ui_server.bootstrap()["default_model"], "stable-audio-medium")
+
+    def test_library_audio_is_served_from_output_with_ranges(self):
+        path = self.out / "probe.wav"
+        _write_test_wav(path, frames=8000)
+        status, body, headers = self._open("/audio/probe.wav")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "audio/wav")
+        self.assertEqual(body, path.read_bytes())
+        status, ranged, headers = self._open("/audio/probe.wav", headers={"Range": "bytes=0-3"})
+        self.assertEqual(status, 206)
+        self.assertEqual(ranged, path.read_bytes()[:4])
+        self.assertTrue(headers["Content-Range"].startswith("bytes 0-3/"))
+
+    def test_audio_cannot_leave_the_library(self):
+        outside = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+        leaked = outside / "outside.wav"
+        _write_test_wav(leaked, frames=4)
+        link = self.out / "link.wav"
+        link.symlink_to(leaked)
+        status, body, _headers = self._open("/audio/link.wav")
+        self.assertEqual(status, 400)
+        self.assertNotEqual(body, leaked.read_bytes())
+        status, _body, _headers = self._open("/audio/" + urllib.request.quote("../outside.wav"))
+        self.assertEqual(status, 400)
+        status, _body, _headers = self._open("/audio/" + urllib.request.quote("nested/probe.wav"))
+        self.assertEqual(status, 400)
+
+    def test_an_empty_prompt_is_refused_before_a_job_exists(self):
+        payload = json.dumps({
+            "model": "stable-audio-medium",
+            "prompt": "  ",
+            "duration": 30,
+            "steps": 8,
+            "guidance": 1,
+            "seed": 1,
+            "use_seed": True,
+        }).encode("utf-8")
+        status, body, _headers = self._open(
+            "/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("prompt", body.decode("utf-8").lower())
+
+    def test_state_reads_the_server_queue_not_a_client_guess(self):
+        job = {
+            "id": "job-1", "status": "queued", "progress": 0, "queue_position": 2,
+            "prompt": "quiet", "model": "stable-audio-medium", "duration": 30, "seed": 1,
+        }
+        with mock.patch.object(app, "_queue_items_for_render", return_value=[job]):
+            status, body, _headers = self._open("/api/state?signature=stale-client-queue")
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertEqual(payload["queue"][0]["id"], "job-1")
+        self.assertIn("Queued #2", payload["queue"][0]["status_text"])
+
+    def test_the_page_is_react_and_puts_regenerate_beside_the_prompt(self):
+        source = (core.PROJECT_ROOT / "web" / "src" / "App.tsx").read_text(encoding="utf-8")
+        css = (core.PROJECT_ROOT / "web" / "src" / "index.css").read_text(encoding="utf-8")
+        playback = (core.PROJECT_ROOT / "web" / "src" / "playback.ts").read_text(encoding="utf-8")
+        self.assertIn(">Advanced<", source)
+        prompt_at = source.index(">Prompt<")
+        regenerate_at = source.index(">Regenerate<")
+        self.assertLess(prompt_at, regenerate_at)
+        self.assertLess(regenerate_at - prompt_at, 500)
+        self.assertIn("Remix a track", source)
+        self.assertNotIn("Rework a section", source)
+        self.assertNotIn("Structure (bars)", source)
+        self.assertIn("<select", source)
+        self.assertIn("min-width: 0", css)
+        self.assertIn("overflow-wrap: anywhere", css)
+        self.assertIn("flex-wrap: wrap", css)
+        self.assertIn("pauseEveryOtherPlayer", playback)
+        self.assertIn('audio.addEventListener("play"', playback)
+        self.assertIn("audio.currentTime = Math.max(0, Math.min(1, position)) * audio.duration;", playback)
+        index = ui_server.WEB_DIST / "index.html"
+        self.assertTrue(index.is_file(), "web/dist is missing; run npm run build in web/")
+        self.assertIn('id="root"', index.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
