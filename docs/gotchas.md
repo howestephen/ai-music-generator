@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Gotchas
@@ -157,6 +157,19 @@ bfloat16 errors on macOS. Upstream says pass `--bf16 false`; the equivalent here
 ---
 
 ## Runtime
+
+### The genre filter shows one dancefloor track when the library is full of them
+
+**Symptom:** Drum & Bass - Dancefloor lists a single track. The other drum and bass
+files say "dancefloor drum and bass" in the prompt.
+
+**Cause:** the filter matched only the `genre` field on the sidecar. Tracks written
+before that field existed have no genre, so they matched nothing.
+
+**Fix:** when the field is missing, the view reads the style phrase out of the prompt.
+A saved genre still wins. The sidecar is not rewritten. `metal` does not match
+`metallic`.
+
 
 ### The pinned MiniMax duration flag is only a ceiling without the project wrapper
 

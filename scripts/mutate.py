@@ -79,6 +79,9 @@ MUTATIONS = [
     ("UI history oldest first", "app.py",
      'return sorted(tracks, key=lambda item: (item["modified_ns"], item["name"]), reverse=True)',
      'return sorted(tracks, key=lambda item: (item["modified_ns"], item["name"]), reverse=False)'),
+    ("untagged track ignores the style in its prompt", "app.py",
+     "        if prose and _phrase_in(prompt, prose):",
+     "        if False and prose and _phrase_in(prompt, prose):"),
     ("queued UI job ignores selected model", "app.py",
      '        "guidance_scale": guidance,\n'
      '        "model": backend.name,\n'

@@ -130,7 +130,7 @@ def public_track(track: dict) -> dict:
     return {
         "name": track["name"],
         "title": track["display_title"],
-        "genre": track.get("genre"),
+        "genre": app.genre_for_track(track),
         "duration": track.get("duration"),
         "requested_duration": track.get("requested_duration"),
         "audit_status": track.get("audit_status"),

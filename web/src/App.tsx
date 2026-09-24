@@ -224,10 +224,9 @@ export function App() {
     return haystack.includes(needle);
   });
 
-  const genreFilters = ["any", ...new Set([
-    ...(bootstrap?.genres ?? []),
-    ...tracks.map((track) => track.genre).filter((value): value is string => Boolean(value)),
-  ])];
+  const genreFilters = ["any", ...new Set(
+    tracks.map((track) => track.genre).filter((value): value is string => Boolean(value)),
+  )];
 
   if (!bootstrap || !model) {
     return <p className="p-8 text-[var(--muted)]">Loading the workbench.</p>;

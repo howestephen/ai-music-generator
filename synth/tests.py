@@ -2100,6 +2100,47 @@ class UiHistory(unittest.TestCase):
         after = {(path.name, path.stat().st_mtime_ns) for path in self.out.glob("*")}
         self.assertEqual(before, after)
 
+    def test_untagged_tracks_filter_by_the_style_named_in_the_prompt(self):
+        self._track("dance", 10, {
+            "title": "Old Dancefloor",
+            "prompt": (
+                "Genre: Drum and Bass. An uplifting dancefloor drum and bass "
+                "track with a metallic snare."
+            ),
+        })
+        self._track("liquid", 20, {
+            "title": "Old Liquid",
+            "prompt": "A late-night liquid drum and bass track.",
+        })
+        self._track("plain", 30, {
+            "title": "Just Drums",
+            "prompt": "Genre: Drum and Bass. A dark and driving drum and bass track.",
+        })
+        self._track("labelled", 40, {
+            "title": "Saved As Liquid",
+            "genre": "Drum & Bass - Liquid",
+            "prompt": "An uplifting dancefloor drum and bass track.",
+        })
+        tracks = app._load_history(self.out)
+        before = {
+            path.name: path.read_bytes() for path in self.out.glob("*.json")
+        }
+        dancefloor = app.filter_history(tracks, genre="Drum & Bass - Dancefloor")
+        self.assertEqual([track["name"] for track in dancefloor], ["dance.wav"])
+        liquid = app.filter_history(tracks, genre="Drum & Bass - Liquid")
+        self.assertEqual(
+            [track["name"] for track in liquid],
+            ["labelled.wav", "liquid.wav"],
+        )
+        self.assertEqual(app.filter_history(tracks, genre="Metal"), [])
+        self.assertIsNone(app.genre_for_track(
+            next(track for track in tracks if track["name"] == "plain.wav")
+        ))
+        after = {
+            path.name: path.read_bytes() for path in self.out.glob("*.json")
+        }
+        self.assertEqual(before, after)
+
     def test_delete_moves_to_pending_and_undo_restores(self):
         path = self._track("doomed", 10, {
             "title": "Doomed Track",

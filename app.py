@@ -609,6 +609,42 @@ def _write_sidecar_update(wav_path: Path, updates: dict) -> dict:
     return metadata
 
 
+def _phrase_in(text: str, phrase: str) -> bool:
+    """A whole phrase, so ``metal`` does not match ``metallic``."""
+    return re.search(
+        rf"(?<![a-z0-9]){re.escape(phrase)}(?![a-z0-9])",
+        text,
+    ) is not None
+
+
+def genre_for_track(track: dict) -> str | None:
+    """The genre the library filter should use.
+
+    A saved genre wins. Tracks written before that field existed still name the
+    style in the prompt (``dancefloor drum and bass``). Matching that phrase is
+    a view label only. It does not write the sidecar.
+    """
+    stored = track.get("genre")
+    if isinstance(stored, str) and stored.strip():
+        return stored.strip()
+    prompt = str(track.get("prompt") or "").lower()
+    if not prompt or prompt == "prompt unavailable":
+        return None
+    found: list[tuple[int, str]] = []
+    for name, spec in prompting.GENRES.items():
+        prose = spec.prose.lower().strip()
+        if prose and _phrase_in(prompt, prose):
+            found.append((len(prose), name))
+    if not found:
+        return None
+    found.sort(reverse=True)
+    best_length = found[0][0]
+    names = [name for length, name in found if length == best_length]
+    if len(names) == 1:
+        return names[0]
+    return None
+
+
 def filter_history(
     tracks: list[dict],
     *,
@@ -631,7 +667,7 @@ def filter_history(
     results = []
     for track in tracks:
         if genre_filter and genre_filter not in ("", "any"):
-            if str(track.get("genre") or "") != genre_filter:
+            if genre_for_track(track) != genre_filter:
                 continue
         track_rating = _normalise_rating(track.get("rating"))
         if rating_filter == "unrated":
