@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Decisions
@@ -11,6 +11,28 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-09-24 - The next UI is React and Tailwind
+
+**Decided:** Phase 4 replaces `app.py`'s Gradio surface with a React and Tailwind app.
+Do not restyle Gradio with custom CSS and JS.
+
+**Why:** this repo's UI is Gradio, and the earlier Phase 4 line treated that as the
+surface to skin. The owner builds this kind of interface in React and Tailwind and
+does not want a second toolkit.
+
+**Would revisit if:** a thin Gradio shell is still needed to serve audio or the queue
+while the React app is incomplete.
+
+## 2026-09-24 - Renders stay on this Mac for now
+
+**Decided:** heavy renders do not move to Seneca. Generation stays local.
+
+**Why:** the owner is not happy with the output yet. Moving the same renders to
+another GPU does not fix that.
+
+**Would revisit if:** the sound is good enough that render time, not quality, is the
+problem.
 
 ## 2026-09-23 - Bar structure leaves the generate UI; remix stays whole-track
 
@@ -35,12 +57,11 @@ not removed.
 **Why:** Stability's Stable Audio 3 prompting guide states the models never output
 intelligible vocals and only sometimes produce unintelligible vocal textures. A label
 that says "With vocals" on Stable Audio is the same class of dead control milestone 0.2
-already fixed once. A listening A/B was not run here (Metal unavailable in the agent
-sandbox; the agent also cannot hear), so the decision rests on Stability's published
-claim plus the existing unit test that the selection changes the prompt.
+already fixed once. On 2026-09-24 the owner listened: the control adds vague voice
+noises occasionally. The label matches that. It does not sing.
 
-**Would revisit if:** a listening A/B on this machine shows the texture prompt never
-changes the sound, or Stability ships a lyrics channel.
+**Would revisit if:** the owner wants the noises gone, or Stability ships a lyrics
+channel.
 
 ## 2026-09-22 - Library metadata lives on the sidecar, deletion is pending then gone
 

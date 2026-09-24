@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-22
+updated: 2026-09-24
 ---
 
 # ROADMAP
@@ -20,7 +20,7 @@ they are never buried in a chat.
 - Goal: describe music in words, render it locally on Apple Silicon, and keep adding
   models cheap
 - Current phase: Phase 3, the track library
-- Biggest known risk: no listening assessment has been done on any output
+- Biggest known risk: the owner is not happy with the output yet
 - Default backend: `stable-audio-medium` (2026-09-19, superseding `minimax-mlx`)
 
 ## Phase 0: Retrofit and remediation
@@ -74,16 +74,15 @@ they are never buried in a chat.
 | 3.8 | Decide whether Stable Audio keeps a vocals control | `done` | Relabelled to Vocal texture on backends without a lyrics channel; kept as With vocals where lyrics exist |
 
 
-## Phase 4: Visual design pass
+## Phase 4: React and Tailwind UI
 
 - Status: `planned`, after Phase 3
-- Goal: the UI is functional and plain, and keeps growing. Design it rather than
-  letting it accrete
+- Goal: replace the Gradio UI in `app.py` with React and Tailwind. Do not skin Gradio
 
 | # | Title | Status | Why it matters |
 |---|---|---|---|
 | 4.1 | Product design pass on the whole surface | `planned` | Hierarchy, grouping and naming across generate, queue, history and rework. Phone layout is in the brief, not an afterthought |
-| 4.2 | Rebuild against that design | `planned` | Gradio constrains layout, so this is custom CSS and JS over its components. Read [docs/gotchas.md](docs/gotchas.md) first: `gr.Timer` never fires here and `@gr.render` will not re-run for a `queue=False` event; a redesign can silently reintroduce both |
+| 4.2 | Build that design in React and Tailwind | `planned` | Queue, history and audio serving stay. Do not copy the Gradio traps in [docs/gotchas.md](docs/gotchas.md) |
 
 ## Deferred ideas
 
@@ -93,8 +92,9 @@ they are never buried in a chat.
   every good model, then not built. Needs its own venv: `transformers>=4.51,<4.58`
 - Route heavy renders to Seneca, the 4090 box. Its ComfyUI already has nodes for
   ACE-Step, ACE-Step 1.5, MiniMax Music 3 and Stable Audio, but no audio checkpoints
-  yet. Raised 2026-09-19 after a Mac render fought another agent for the GPU. A
-  departure from the local-only premise, so it needs an owner decision
+  yet. Raised 2026-09-19 after a Mac render fought another agent for the GPU. Deferred
+  2026-09-24: stay on this Mac until the output is good enough that time, not quality,
+  is the limit
 
 - Runner diagnostics (`device`, `sampling_rate`, `load_seconds`) into the sidecar. Do it
   with the Phase 3 sidecar change or not at all
@@ -114,11 +114,13 @@ they are never buried in a chat.
 
 ## Owner decisions open
 
-1. **Whether renders may leave this Mac.** Routing heavy work to Seneca's 4090 departs
-   from the project's local-only premise
+None.
 
-Resolved: a library Delete removes at once, is restorable for an hour, then is
-permanent, with no archived copy (2026-09-20); `stable-audio-medium` is the default
+Resolved: renders stay on this Mac until the output is good enough to move
+(2026-09-24); the next UI is React and Tailwind, not a Gradio skin (2026-09-24);
+Stable Audio's voice control is a texture and the owner has heard it add occasional
+vague voice noises (2026-09-24); a library Delete removes at once, is restorable for
+an hour, then is permanent, with no archived copy (2026-09-20); `stable-audio-medium` is the default
 backend (2026-09-19, superseding
 `minimax-mlx` of 2026-09-17); `briefs/` stays declared for future prompt sets though
 its contents were deleted (2026-09-10); the pinned `.venv-mlx` install command lives
@@ -128,9 +130,9 @@ no archive copy (2026-09-20).
 
 ## Current next step
 
-- Current milestone: Phase 3 track library merged to main with a remix progress-honesty
-  fix and the bar-structure UI removed. Next is Phase 4, the visual design pass
-- The honest gap: nobody has listened to any output yet, so no claim in this file is a
-  judgement of how anything sounds
+- Current milestone: Phase 3 is on main. Next is Phase 4, a React and Tailwind UI, with no spec yet
+- The honest gap: the owner has heard Stable Audio's vocal texture (occasional vague
+  voice noises) and is not happy with the output. Nothing else in this file is a
+  judgement of how a track sounds
 - Exit gates for any milestone: unit tests, mutations and validators pass; installed
   model probes pass; a real render is verified by artifact; independent audit is clean

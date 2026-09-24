@@ -7,7 +7,7 @@ owner: stephen
 state: done
 round: 2
 created: 2026-09-20
-updated: 2026-09-23
+updated: 2026-09-24
 generated_by: cursor-composer
 generated_at: 2026-09-23T15:25Z
 generated_from: conversation
@@ -26,12 +26,13 @@ Cross-tool work item. Merged to `main` on 2026-09-23.
 
 ## Outstanding
 
-- Optional listening A/B for Stable Audio vocal texture
 - Independent audit if desired
-- Push to origin (main is ahead; ask before push)
 
 ## Log
 
+- 2026-09-24 stephen: Heard Stable Audio vocal texture. It adds vague voice noises
+  occasionally. Heavy renders stay on this Mac. Next UI is React and Tailwind, not a
+  Gradio skin.
 - 2026-09-23 cursor: Investigated stuck remix. The 347s VIP remix on disk finished in
   221s; the queue estimate was about 29s so the bar sat at 95%. Fixed messaging and
   estimate floor. Removed bars UI. Merged phase-3-track-library to main and restarted
