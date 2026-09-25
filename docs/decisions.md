@@ -12,6 +12,18 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-25 - Generate and Remix are separate tools
+
+**Decided:** the header carries two tools, Generate and Remix. Remix is no
+longer a disclosure under the prompt. Advanced stays on Generate, and its
+summary is large enough to tap.
+
+**Why:** remix was sitting under the generation form, and the Advanced
+summary was too small to hit on a phone.
+
+**Would revisit if:** another tool has to share that header and the model
+name no longer fits beside the two tabs.
+
 ## 2026-09-25 - Drum and bass opens at 4:20
 
 **Decided:** choosing a Drum & Bass genre sets the duration control to 260

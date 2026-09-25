@@ -48,21 +48,39 @@ body {
   display: flex;
   flex: none;
   align-items: center;
-  justify-content: flex-end;
-  min-height: 2.6rem;
+  justify-content: space-between;
+  gap: 0.4rem;
+  min-height: 2.75rem;
   padding: 0.35rem 0.75rem;
 }
 
-.app-name:empty {
-  display: none;
+.tool-tabs {
+  display: flex;
+  flex: none;
+  gap: 0.15rem;
+}
+
+.tool-tabs button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 650;
+  padding: 0.4rem 0.7rem;
+}
+
+.tool-tabs button.is-selected {
+  background: var(--panel);
+  color: var(--text);
 }
 
 .model-picker {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  max-width: min(78vw, 18rem);
-  margin-left: auto;
+  max-width: min(46vw, 12rem);
+  margin-left: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--panel);
@@ -102,11 +120,16 @@ body {
   padding: 0.15rem 0.75rem calc(4.15rem + env(safe-area-inset-bottom));
 }
 
+.app-shell.drawer-is-peek #controls-panel {
+  padding-bottom: calc(6.1rem + env(safe-area-inset-bottom));
+}
+
 #controls-panel > * {
   flex: none;
 }
 
-#controls-panel > .prompt-block {
+#controls-panel > .prompt-block,
+#controls-panel > .remix-tool {
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -170,6 +193,29 @@ body {
 #controls-panel summary {
   cursor: pointer;
   font-size: 0.82rem;
+}
+
+#controls-panel .advanced-disclosure summary {
+  font-size: 1rem;
+  line-height: 1.2;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.15rem;
+}
+
+.remix-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.remix-tool textarea {
+  flex: 1 1 auto;
+  min-height: 4.5rem;
+  resize: none;
+}
+
+.remix-tool input[type="file"] {
+  width: 100%;
 }
 
 .notice-line {
@@ -411,7 +457,8 @@ textarea {
   padding: 0.28rem 0.45rem;
 }
 
-#generate-button {
+#generate-button,
+.tool-submit {
   position: relative;
   overflow: hidden;
   isolation: isolate;
@@ -426,11 +473,13 @@ textarea {
   cursor: pointer;
 }
 
-#generate-button:disabled {
+#generate-button:disabled,
+.tool-submit:disabled {
   cursor: progress;
 }
 
-#generate-button:disabled::before {
+#generate-button:disabled::before,
+.tool-submit:disabled::before {
   animation: generation-progress 1.4s ease-in-out infinite;
   background: rgba(255, 255, 255, 0.35);
   content: "";
@@ -462,6 +511,7 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   #generate-button:disabled::before,
+  .tool-submit:disabled::before,
   .queue-job.queued .queue-job-fill,
   .queue-badge-ring,
   .drawer-progress-fill.is-queued {

@@ -78,6 +78,7 @@ export function App() {
   const [remixPrompt, setRemixPrompt] = useState("");
   const [remixNoise, setRemixNoise] = useState(0.6);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [tool, setTool] = useState<"generate" | "remix">("generate");
   const [drawer, setDrawer] = useState<DrawerMode>("closed");
   const followQueue = useRef(true);
   const draggingDrawer = useRef(false);
@@ -273,9 +274,12 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${drawer === "peek" ? " drawer-is-peek" : ""}`}>
       <header className="page-header">
-        <div className="app-name" />
+        <div className="tool-tabs" role="tablist" aria-label="Tools">
+          <button type="button" role="tab" aria-selected={tool === "generate"} className={tool === "generate" ? "is-selected" : ""} onClick={() => setTool("generate")}>Generate</button>
+          <button type="button" role="tab" aria-selected={tool === "remix"} className={tool === "remix" ? "is-selected" : ""} onClick={() => setTool("remix")}>Remix</button>
+        </div>
         <label className="model-picker" title={`${model.model_id}. ${model.available ? "Ready" : "Setup missing"}. ${model.licence}. Max ${Math.round(model.max_duration)}s. ${model.notes}`}>
           <span className="model-picker-word">Model</span>
           <select aria-label="Model" value={modelName} onChange={(event) => applyModel(event.target.value)}>
@@ -290,6 +294,8 @@ export function App() {
       </header>
 
       <section id="controls-panel">
+        {tool === "generate" ? (
+        <>
         <label>
           <span className="field-label">Genre</span>
           <select value={genre} onChange={(event) => void onGenre(event.target.value)}>
@@ -388,13 +394,8 @@ export function App() {
         <button id="generate-button" type="button" disabled={busy} onClick={() => void onGenerate()}>
           {busy ? "Generating..." : "Generate"}
         </button>
-        {notice ? (
-          <p className={`notice-line ${notice.tone === "error" ? "text-[var(--discard)]" : "text-[var(--muted)]"}`}>
-            {notice.text}
-          </p>
-        ) : null}
 
-        <details>
+        <details className="advanced-disclosure">
           <summary>Advanced</summary>
           <div className="mt-1 grid gap-1.5">
             <select aria-label="Instruments" multiple size={3} value={instruments} onChange={(event) => setInstruments(selectedValues(event))}>
@@ -406,40 +407,44 @@ export function App() {
             <input aria-label="Extra keywords" value={keywords} placeholder="Extra keywords" onChange={(event) => setKeywords(event.target.value)} />
           </div>
         </details>
-
-        <details>
-          <summary>Remix a track</summary>
-          <div className="mt-1 grid gap-1.5">
-            {model.supports_editing ? null : (
-              <p className="text-xs">Stable Audio only.</p>
-            )}
-            <select aria-label="Track from history" value={remixTrack} onChange={(event) => setRemixTrack(event.target.value)}>
-              <option value="">Track from history</option>
-              {tracks.map((track) => (
-                <option key={track.name} value={track.name}>{track.title}</option>
-              ))}
-            </select>
-            <input
-              aria-label="Upload a track"
-              type="file"
-              accept="audio/*,.wav,.mp3,.flac,.aiff,.aif,.ogg"
-              onChange={(event) => setRemixFile(event.target.files?.[0] ?? null)}
-            />
-            <label title="Low keeps the melody and rhythm. High keeps only the timbre.">
-              <span className="field-label">Change {remixNoise.toFixed(2)}</span>
-              <input type="range" min={0.1} max={1.2} step={0.05} value={remixNoise} onChange={(event) => setRemixNoise(Number(event.target.value))} />
-            </label>
-            <textarea aria-label="Become" value={remixPrompt} placeholder="Become" onChange={(event) => setRemixPrompt(event.target.value)} />
-            <button
-              type="button"
-              disabled={busy || !model.supports_editing}
-              className="rounded-xl border border-[var(--line)] px-3 py-1.5 text-sm"
-              onClick={() => void onRemix()}
-            >
-              Remix track
-            </button>
-          </div>
-        </details>
+        </>
+        ) : (
+        <div className="remix-tool">
+          {model.supports_editing ? null : (
+            <p className="text-xs">Stable Audio only.</p>
+          )}
+          <select aria-label="Track from history" value={remixTrack} onChange={(event) => setRemixTrack(event.target.value)}>
+            <option value="">Track from history</option>
+            {tracks.map((track) => (
+              <option key={track.name} value={track.name}>{track.title}</option>
+            ))}
+          </select>
+          <input
+            aria-label="Upload a track"
+            type="file"
+            accept="audio/*,.wav,.mp3,.flac,.aiff,.aif,.ogg"
+            onChange={(event) => setRemixFile(event.target.files?.[0] ?? null)}
+          />
+          <label title="Low keeps the melody and rhythm. High keeps only the timbre.">
+            <span className="field-label">Change {remixNoise.toFixed(2)}</span>
+            <input className="full-range" type="range" min={0.1} max={1.2} step={0.05} value={remixNoise} onChange={(event) => setRemixNoise(Number(event.target.value))} />
+          </label>
+          <textarea aria-label="Become" value={remixPrompt} placeholder="Become" onChange={(event) => setRemixPrompt(event.target.value)} />
+          <button
+            type="button"
+            disabled={busy || !model.supports_editing}
+            className="tool-submit"
+            onClick={() => void onRemix()}
+          >
+            Remix track
+          </button>
+        </div>
+        )}
+        {notice ? (
+          <p className={`notice-line ${notice.tone === "error" ? "text-[var(--discard)]" : "text-[var(--muted)]"}`}>
+            {notice.text}
+          </p>
+        ) : null}
       </section>
 
       <HistoryDrawer
