@@ -12,6 +12,24 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-25 - Names come from the prose, settings live in History
+
+**Decided:** a track title is two or three consecutive words from the prompt
+prose. The file name is that title and nothing else. None of the installed
+models return a title; Stable Audio, MiniMax and MusicGen hand back audio
+only. Deleted tracks leave the list and sit in Trash until the hour is up.
+The file name and the full settings (model, genre, length, steps, guidance,
+seed, lyrics, prompt) are a History view in the drawer. Using them fills the
+Generate form. A track card shows the title, the length beside it, and Delete
+and Remix.
+
+**Why:** titles were built from tag words, so the library read TrackType and
+Genre, and the file name repeated the whole prompt. Deleted rows and the
+settings disclosure were sitting on every card.
+
+**Would revisit if:** a model starts returning a title worth keeping, or the
+one-hour trash window is the wrong recovery path.
+
 ## 2026-09-25 - Generate and Remix are separate tools
 
 **Decided:** the header carries two tools, Generate and Remix. Remix is no

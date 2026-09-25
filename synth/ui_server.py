@@ -143,6 +143,10 @@ def public_track(track: dict) -> dict:
         "rating": track.get("rating"),
         "sample_rate": track.get("sample_rate"),
         "elapsed_seconds": track.get("elapsed_seconds"),
+        "steps": track.get("steps"),
+        "guidance": track.get("guidance"),
+        "lyrics": track.get("lyrics") or "",
+        "model": track.get("model"),
         "audio": f"/audio/{quote(track['name'])}",
         "peaks": list(peaks),
     }

@@ -7,7 +7,6 @@ import {
   loadOptions,
   loadState,
   moveJob,
-  rateTrack,
   remix,
   removeJob,
   undoDelete,
@@ -78,6 +77,7 @@ export function App() {
   const [remixPrompt, setRemixPrompt] = useState("");
   const [remixNoise, setRemixNoise] = useState(0.6);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [libraryView, setLibraryView] = useState<"tracks" | "history" | "trash">("tracks");
   const [tool, setTool] = useState<"generate" | "remix">("generate");
   const [drawer, setDrawer] = useState<DrawerMode>("closed");
   const followQueue = useRef(true);
@@ -267,6 +267,36 @@ export function App() {
   function settleDrawer(next: DrawerMode) {
     followQueue.current = next !== "closed";
     setDrawer(next);
+  }
+
+  function restoreSettings(track: Track) {
+    const next = bootstrap?.models.find((item) => item.name === track.backend);
+    if (next) applyModel(next.name);
+    setPrompt(track.prompt === "Prompt unavailable" ? "" : track.prompt);
+    if (track.genre) setGenre(track.genre);
+    const durationControl = next?.duration ?? model?.duration;
+    if (durationControl && track.requested_duration != null) {
+      setDuration(clampControl(durationControl, track.requested_duration));
+    }
+    if (track.steps != null) setSteps(track.steps);
+    if (track.guidance != null) setGuidance(track.guidance);
+    if (track.seed != null) {
+      setSeed(track.seed);
+      setUseSeed(true);
+    }
+    setLyrics(track.lyrics || "");
+    setTool("generate");
+    setLibraryView("tracks");
+    settleDrawer("closed");
+    setNotice({ tone: "ok", text: "Settings restored." });
+  }
+
+  function remixTrackFromLibrary(track: Track) {
+    setRemixTrack(track.name);
+    setRemixPrompt(track.prompt === "Prompt unavailable" ? "" : track.prompt);
+    setTool("remix");
+    setLibraryView("tracks");
+    settleDrawer("closed");
   }
 
   if (!bootstrap || !model) {
@@ -460,42 +490,56 @@ export function App() {
           onMove={(id, direction) => void moveJob(id, direction).then((result) => setQueue(result.queue))}
           onRemove={(id) => void removeJob(id).then((result) => setQueue(result.queue))}
         />
-        <div className="mb-2 grid shrink-0 grid-cols-3 gap-2">
-          <select aria-label="Filter by genre" value={filterGenre} onChange={(event) => setFilterGenre(event.target.value)}>
-            {genreFilters.map((name) => <option key={name} value={name}>{name === "any" ? "Any genre" : name}</option>)}
-          </select>
-          <select aria-label="Filter by rating" value={filterRating} onChange={(event) => setFilterRating(event.target.value)}>
-            <option value="any">Any rating</option>
-            <option value="keep">Keep</option>
-            <option value="discard">Discard</option>
-            <option value="unrated">Unrated</option>
-          </select>
-          <input aria-label="Search" value={filterQuery} onChange={(event) => setFilterQuery(event.target.value)} placeholder="Search" />
-        </div>
+        {libraryView === "tracks" ? (
+          <div className="mb-2 grid shrink-0 grid-cols-3 gap-2">
+            <select aria-label="Filter by genre" value={filterGenre} onChange={(event) => setFilterGenre(event.target.value)}>
+              {genreFilters.map((name) => <option key={name} value={name}>{name === "any" ? "Any genre" : name}</option>)}
+            </select>
+            <select aria-label="Filter by rating" value={filterRating} onChange={(event) => setFilterRating(event.target.value)}>
+              <option value="any">Any rating</option>
+              <option value="keep">Keep</option>
+              <option value="discard">Discard</option>
+              <option value="unrated">Unrated</option>
+            </select>
+            <input aria-label="Search" value={filterQuery} onChange={(event) => setFilterQuery(event.target.value)} placeholder="Search" />
+          </div>
+        ) : (
+          <button type="button" className="library-back" onClick={() => setLibraryView("tracks")}>Tracks</button>
+        )}
         <div className="library-scroll">
-          {pending.map((item) => (
-            <div key={item.stem} className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--line)] px-3 py-2 text-sm">
-              <span className="min-w-0">{item.title} deleted. {Math.ceil(item.seconds_left / 60)} min to undo.</span>
-              <button type="button" className="rounded-full border border-[var(--line)] px-3 py-1" onClick={() => void undoDelete(item.stem).then(applyLibrary)}>
-                Undo delete
-              </button>
-            </div>
-          ))}
-          {visibleTracks.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">{tracks.length === 0 ? "No tracks yet." : "No tracks match."}</p>
-          ) : (
-            <div className="flex flex-col gap-3 pr-1">
-              {visibleTracks.map((track) => (
-                <TrackCard
-                  key={track.name}
-                  track={track}
-                  onRate={(rating) => void rateTrack(track.name, rating).then(applyLibrary)}
-                  onDelete={() => void deleteTrack(track.name).then(applyLibrary)}
-                />
-              ))}
-            </div>
-          )}
+          {libraryView === "trash" ? (
+            <TrashList
+              pending={pending}
+              onRestore={(stem) => void undoDelete(stem).then(applyLibrary)}
+            />
+          ) : null}
+          {libraryView === "history" ? (
+            <SettingsHistory tracks={tracks} onRestore={restoreSettings} />
+          ) : null}
+          {libraryView === "tracks" ? (
+            visibleTracks.length === 0 ? (
+              <p className="text-sm text-[var(--muted)]">{tracks.length === 0 ? "No tracks yet." : "No tracks match."}</p>
+            ) : (
+              <div className="flex flex-col gap-2 pr-1">
+                {visibleTracks.map((track) => (
+                  <TrackCard
+                    key={track.name}
+                    track={track}
+                    onRemix={() => remixTrackFromLibrary(track)}
+                    onDelete={() => void deleteTrack(track.name).then(applyLibrary)}
+                  />
+                ))}
+              </div>
+            )
+          ) : null}
         </div>
+        {libraryView === "tracks" ? (
+          <div className="library-links">
+            <button type="button" onClick={() => setLibraryView("history")}>History</button>
+            <button type="button" onClick={() => setLibraryView("trash")}>Trash</button>
+            {pending.length > 0 ? <span className="quiet-meta">{pending.length}</span> : null}
+          </div>
+        ) : null}
       </HistoryDrawer>
     </div>
   );
@@ -741,32 +785,34 @@ function JobCard({
 }
 
 function TrackCard({
-  track, onRate, onDelete,
+  track, onRemix, onDelete,
 }: {
   track: Track;
-  onRate: (rating: string | null) => void;
+  onRemix: () => void;
   onDelete: () => void;
 }) {
   const peakMax = Math.max(...track.peaks, 0) || 1;
-  const meta = [
-    track.genre,
-    formatSeconds(track.duration),
-    track.rating,
-    track.audit_status === "short" || track.audit_status === "long" || track.audit_status === "invalid"
-      ? track.audit_status.toUpperCase()
-      : null,
-  ].filter(Boolean).join(" · ");
+  const length = track.duration != null && Number.isFinite(track.duration)
+    ? formatClock(track.duration)
+    : null;
+  const audit = track.audit_status === "short" || track.audit_status === "long" || track.audit_status === "invalid"
+    ? track.audit_status
+    : null;
   return (
-    <article className="history-card rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">
-      <h2 className="history-title text-lg font-semibold">{track.title}</h2>
-      <p className="text-sm text-[var(--muted)]">{meta || "No genre recorded"}</p>
+    <article className="history-card">
+      <div className="history-heading">
+        <h2 className="history-title">{track.title}</h2>
+        {length || audit ? (
+          <span className="history-length">{[length, audit].filter(Boolean).join(" ")}</span>
+        ) : null}
+      </div>
       <div
         data-waveform
         role="slider"
         aria-label={`Seek ${track.title}`}
         aria-valuemin={0}
         aria-valuemax={100}
-        className="mt-3 flex h-12 cursor-pointer items-center gap-px"
+        className="history-wave"
       >
         {track.peaks.length === 0 ? (
           <span className="text-xs text-[var(--muted)]">Waveform unavailable</span>
@@ -779,7 +825,7 @@ function TrackCard({
         ))}
       </div>
       <audio
-        className="history-audio mt-2"
+        className="history-audio"
         controls
         preload="none"
         src={track.audio}
@@ -790,24 +836,80 @@ function TrackCard({
           }
         }}
       />
-      <details className="mt-3 text-sm text-[var(--muted)]">
-        <summary>Details</summary>
-        <p className="mt-2">
-          {track.backend}
-          {formatSeconds(track.duration) ? ` · ${formatSeconds(track.duration)} delivered` : ""}
-          {track.requested_duration != null ? ` · ${track.requested_duration}s target` : ""}
-          {track.seed != null ? ` · seed ${track.seed}` : ""}
-          {track.sample_rate != null ? ` · ${track.sample_rate} Hz` : ""}
-        </p>
-        <p className="mt-1">{track.prompt}</p>
-        {track.audit_error ? <p className="mt-1">{track.audit_error}</p> : null}
-      </details>
-      <div className="card-actions mt-3 flex gap-2">
-        <button type="button" className="rounded-full border border-[var(--line)] px-3 py-1 text-sm" onClick={() => onRate("keep")}>Keep</button>
-        <button type="button" className="rounded-full border border-[var(--line)] px-3 py-1 text-sm" onClick={() => onRate("discard")}>Discard</button>
-        <button type="button" className="rounded-full border border-[var(--line)] px-3 py-1 text-sm" onClick={() => onRate(null)}>Clear rating</button>
-        <button type="button" className="rounded-full border border-[var(--line)] px-3 py-1 text-sm" onClick={onDelete}>Delete</button>
+      <div className="card-actions">
+        <button type="button" onClick={onRemix}>Remix</button>
+        <button type="button" onClick={onDelete}>Delete</button>
       </div>
     </article>
+  );
+}
+
+function TrashList({
+  pending, onRestore,
+}: {
+  pending: Pending[];
+  onRestore: (stem: string) => void;
+}) {
+  if (pending.length === 0) {
+    return <p className="text-sm text-[var(--muted)]">Trash is empty.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {pending.map((item) => (
+        <article key={item.stem} className="quiet-row">
+          <p className="history-title">{item.title}</p>
+          <p className="quiet-meta">{item.name}</p>
+          <p className="quiet-meta">{Math.ceil(item.seconds_left / 60)} min left to restore</p>
+          <button type="button" onClick={() => onRestore(item.stem)}>Restore</button>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function SettingsHistory({
+  tracks, onRestore,
+}: {
+  tracks: Track[];
+  onRestore: (track: Track) => void;
+}) {
+  if (tracks.length === 0) {
+    return <p className="text-sm text-[var(--muted)]">No tracks yet.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {tracks.map((track) => {
+        const length = track.requested_duration != null && Number.isFinite(track.requested_duration)
+          ? formatClock(track.requested_duration)
+          : formatSeconds(track.duration);
+        const rows = [
+          ["File", track.name],
+          ["Model", track.backend],
+          ["Genre", track.genre || ""],
+          ["Length", length || ""],
+          ["Steps", track.steps == null ? "" : String(track.steps)],
+          ["Guidance", track.guidance == null ? "" : String(track.guidance)],
+          ["Seed", track.seed == null ? "" : String(track.seed)],
+          ["Lyrics", track.lyrics || ""],
+        ].filter(([, value]) => value);
+        return (
+          <article key={track.name} className="quiet-row">
+            <div className="history-heading">
+              <h2 className="history-title">{track.title}</h2>
+            </div>
+            <dl className="settings-list">
+              {rows.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="quiet-meta">{track.prompt}</p>
+            <button type="button" onClick={() => onRestore(track)}>Use these settings</button>
+          </article>
+        );
+      })}
+    </div>
   );
 }

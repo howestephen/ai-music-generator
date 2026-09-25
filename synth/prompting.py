@@ -2837,49 +2837,64 @@ def genre_names() -> list[str]:
 
 
 # Words that never earn a place in a generated track title. Prompt tags and
-# production jargon are noise; the label should read like a short name.
+# the words every track of a genre shares are noise. What remains should read
+# like a short name taken from the prose.
 _TITLE_STOP = frozenset({
     "a", "an", "the", "and", "or", "of", "to", "in", "with", "for", "on", "at",
     "by", "from", "as", "is", "are", "be", "this", "that", "its", "into", "over",
     "under", "only", "no", "not", "bpm", "track", "tracks", "instrumental",
     "music", "genre", "mood", "arrangement", "structure", "instruments",
     "production", "tracktype", "vocaltype", "global", "metadata", "seconds",
-    "bars", "then", "sits", "under", "wordless", "vocal", "texture", "vocals",
+    "bars", "bar", "then", "sits", "wordless", "vocal", "texture", "vocals",
+    "drum", "drums", "bass", "sub", "mix", "phrase", "sound", "sounds",
+    "simple", "basic", "whole", "entire", "just", "very", "your", "out",
+    "off", "notes", "note", "between", "through", "across", "before", "after",
 })
 
 
-def track_title(prompt: str, genre: str | None = None, seed: int = 0) -> str:
-    """A short two-to-four word label. Deterministic for the same inputs.
+def _title_prose(prompt: str) -> str:
+    """Drop a leading tag block (`Key: Value, Key: Value.`) and name the prose."""
+    parts = re.split(r"\.\s+", prompt or "", maxsplit=1)
+    if len(parts) == 2 and ":" in parts[0]:
+        return parts[1]
+    return prompt or ""
 
-    The title is a filing name, not a creative act: the same prompt, genre and
-    seed always produce the same string so a re-render does not rename the track.
+
+def track_title(prompt: str, genre: str | None = None, seed: int = 0) -> str:
+    """A short name of two or three consecutive words from the prompt prose.
+
+    Deterministic for the same inputs. The same prompt, genre and seed always
+    produce the same string so a re-render does not rename the track. Tag names
+    and the genre's own words are left out, because those made every drum and
+    bass title start with Drum and Bass.
     """
     rng = random.Random(f"{int(seed)}\0{genre or ''}\0{prompt}")
-    candidates: list[str] = []
-    seen: set[str] = set()
+    genre_words = {
+        word.lower()
+        for name in (*GENRES, genre or "")
+        for word in re.findall(r"[A-Za-z][A-Za-z'-]*", name)
+    }
 
-    def _consider(raw: str) -> None:
-        lower = raw.lower()
-        if lower in _TITLE_STOP or len(lower) < 3 or lower in seen:
-            return
-        seen.add(lower)
-        candidates.append(raw)
+    def _words(text: str) -> list[str]:
+        found = []
+        for raw in re.findall(r"[A-Za-z][A-Za-z'-]*", text):
+            lower = raw.lower()
+            if lower in _TITLE_STOP or lower in genre_words or len(lower) < 3:
+                continue
+            found.append(raw)
+        return found
 
-    if genre:
-        for part in re.findall(r"[A-Za-z][A-Za-z'-]*", genre):
-            _consider(part)
-    for part in re.findall(r"[A-Za-z][A-Za-z'-]*", prompt or ""):
-        _consider(part)
+    words = _words(_title_prose(prompt))
+    if len(words) < 2:
+        words = _words(prompt or "")
+    if len(words) < 2:
+        only = words[0] if words else "Untitled"
+        return f"{_upper_first(only)} Track"
 
-    if not candidates:
-        return "Untitled Track"
-
-    count = rng.randint(2, min(4, max(2, len(candidates))))
-    count = min(count, len(candidates))
-    picked = rng.sample(candidates, count)
-    order = {word.lower(): index for index, word in enumerate(candidates)}
-    picked.sort(key=lambda word: order[word.lower()])
-    return " ".join(_upper_first(word) for word in picked)
+    count = 3 if len(words) >= 3 and rng.random() < 0.65 else 2
+    count = min(count, len(words))
+    start = rng.randrange(0, len(words) - count + 1)
+    return " ".join(_upper_first(word) for word in words[start:start + count])
 
 
 # Offered in the UI as menus. Empty means "let the genre decide", so a selection

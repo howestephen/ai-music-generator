@@ -265,9 +265,9 @@ def generate(
         genre = str(genre).strip() or None
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    stem = f"{stamp}_{backend.name}_{_slug(prompt)}_seed{seed}"
-    path, reservation = _reserve_output_path(output_dir, stem)
     title = prompting.track_title(prompt, genre, int(seed))
+    stem = _slug(title, max_len=80)
+    path, reservation = _reserve_output_path(output_dir, stem)
 
     try:
         started = time.time()

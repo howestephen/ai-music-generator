@@ -378,6 +378,12 @@ class GenerateSeam(unittest.TestCase):
         )
         self.assertTrue(2 <= len(track.title.split()) <= 4)
 
+    def test_new_render_file_is_the_title_and_nothing_else(self):
+        track = self.gen(model="minimax-mlx", genre="Drum & Bass - Liquid")
+        self.assertEqual(track.path.stem, core._slug(track.title, max_len=80))
+        self.assertNotIn("seed", track.path.name)
+        self.assertNotRegex(track.path.name, r"^\d{8}-")
+
     def test_core_refuses_a_runner_result_without_audio(self):
         with mock.patch.object(
             backends,
@@ -1181,8 +1187,29 @@ class Registry(unittest.TestCase):
         )
         self.assertEqual(first, second)
         self.assertNotEqual(first, other)
-        self.assertTrue(2 <= len(first.split()) <= 4)
+        self.assertTrue(2 <= len(first.split()) <= 3)
         self.assertTrue(first[0].isupper())
+
+    def test_track_title_skips_tags_and_keeps_a_prose_phrase(self):
+        """Titles were opening on TrackType, Genre, Drum and Bass. The name is
+        a consecutive run of the prose, and the file is that name alone."""
+        prompt = (
+            "TrackType: Music, VocalType: Instrumental, Genre: Drum and Bass, "
+            "Instruments: Drums, Bass, Vocal Sample. A rowdy and simple jump-up "
+            "drum and bass instrumental at 174 BPM. A simple, loud break with a "
+            "clownish offbeat snare. An off-key music-box stab."
+        )
+        titled = prompting.track_title(prompt, "Drum & Bass - Jump-up", 7)
+        words = titled.lower().split()
+        self.assertTrue(2 <= len(words) <= 3, titled)
+        for banned in ("tracktype", "vocaltype", "genre", "drum", "bass", "jump-up"):
+            self.assertNotIn(banned, words, titled)
+        prose = prompt.split(". ", 1)[1].lower()
+        cursor = 0
+        for word in words:
+            found = prose.find(word, cursor)
+            self.assertGreaterEqual(found, cursor, titled)
+            cursor = found + len(word)
 
     def test_menu_options_are_offered_for_every_genre(self):
         self.assertGreater(len(prompting.instrument_options()), 10)
@@ -2164,7 +2191,11 @@ class UiHistory(unittest.TestCase):
         self.assertIsNone(track["title"])
         self.assertIsNone(track["rating"])
         self.assertIsNone(track["genre"])
-        self.assertEqual(track["display_title"], "warm rhodes and soft")
+        self.assertEqual(
+            track["display_title"],
+            prompting.track_title("warm rhodes and soft drums overnight", None, 0),
+        )
+        self.assertNotEqual(track["display_title"], "warm rhodes and soft")
 
     def test_history_does_not_call_a_long_silent_file_passed(self):
         path = self.out / "silent.wav"
@@ -2926,6 +2957,12 @@ class ServedUi(unittest.TestCase):
         self.assertIn("formatClock", source)
         self.assertIn("options.duration", source)
         self.assertIn("drawer-progress", source)
+        self.assertIn(">History<", source)
+        self.assertIn(">Trash<", source)
+        self.assertIn("Use these settings", source)
+        self.assertIn("history-length", source)
+        self.assertNotIn(">Clear rating<", source)
+        self.assertNotIn(">Details<", source)
         self.assertIn('input[type="range"].full-range', css)
         self.assertLess(source.index("<QueueList"), source.index("Filter by genre"))
         self.assertNotIn("overflow-y-auto", source)

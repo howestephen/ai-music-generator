@@ -49,6 +49,10 @@ export type Track = {
   rating: "keep" | "discard" | null;
   sample_rate: number | null;
   elapsed_seconds: number | null;
+  steps: number | null;
+  guidance: number | null;
+  lyrics: string;
+  model: string | null;
   audio: string;
   peaks: number[];
 };

@@ -575,11 +575,14 @@ def _display_title(track: dict) -> str:
         return title.strip()
     prompt = str(track.get("prompt") or "")
     if prompt and prompt != "Prompt unavailable":
-        words = [
-            word for word in re.findall(r"[A-Za-z][A-Za-z'-]*", prompt) if len(word) > 2
-        ][:4]
-        if words:
-            return " ".join(words)
+        try:
+            seed = int(track.get("seed") or 0)
+        except (TypeError, ValueError):
+            seed = 0
+        genre = track.get("genre")
+        if not isinstance(genre, str):
+            genre = None
+        return prompting.track_title(prompt, genre, seed)
     return str(track.get("name") or "Untitled")
 
 
@@ -859,6 +862,22 @@ def _load_history(output_dir: Path | None = None) -> list[dict]:
         genre = metadata.get("genre")
         if not isinstance(genre, str) or not genre.strip():
             genre = None
+        lyrics = metadata.get("lyrics")
+        if not isinstance(lyrics, str):
+            lyrics = ""
+        model_id = metadata.get("model")
+        if not isinstance(model_id, str) or not model_id.strip():
+            model_id = None
+        try:
+            steps = int(metadata["infer_step"]) if metadata.get("infer_step") is not None else None
+        except (TypeError, ValueError, OverflowError):
+            steps = None
+        try:
+            guidance = float(metadata["guidance_scale"]) if metadata.get("guidance_scale") is not None else None
+            if guidance is None or not math.isfinite(guidance):
+                guidance = None
+        except (TypeError, ValueError, OverflowError):
+            guidance = None
         track = {
             "path": str(path),
             "name": path.name,
@@ -880,6 +899,10 @@ def _load_history(output_dir: Path | None = None) -> list[dict]:
             "title": title,
             "rating": _normalise_rating(metadata.get("rating")),
             "genre": genre,
+            "steps": steps,
+            "guidance": guidance,
+            "lyrics": lyrics,
+            "model": model_id,
         }
         track["display_title"] = _display_title(track)
         tracks.append(track)
