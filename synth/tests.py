@@ -2879,12 +2879,45 @@ class ServedUi(unittest.TestCase):
         self.assertIn("min-width: 0", css)
         self.assertIn("overflow-wrap: anywhere", css)
         self.assertIn("flex-wrap: wrap", css)
+        self.assertIn(">Track history<", source)
+        self.assertNotIn(">Music<", source)
+        self.assertIn(">Model<", source)
+        self.assertIn("queue-badge", source)
+        self.assertNotIn("overflow-y-auto", source)
+        self.assertIn("nextDrawer", source)
         self.assertIn("pauseEveryOtherPlayer", playback)
         self.assertIn('audio.addEventListener("play"', playback)
         self.assertIn("audio.currentTime = Math.max(0, Math.min(1, position)) * audio.duration;", playback)
         index = ui_server.WEB_DIST / "index.html"
         self.assertTrue(index.is_file(), "web/dist is missing; run npm run build in web/")
         self.assertIn('id="root"', index.read_text(encoding="utf-8"))
+
+    def test_the_drawer_follows_the_queue_and_closes_when_it_is_idle(self):
+        """The peek is the active job only. An idle queue drops it. A full
+        drawer stays put, and a drawer the user pushed shut stays shut."""
+        script = """
+import { nextDrawer, snapDrawer } from "./web/src/drawer.ts";
+const fail = (message) => { throw new Error(message); };
+if (nextDrawer("closed", true, 1) !== "peek") fail("a queued job lifts the drawer");
+if (nextDrawer("peek", true, 2) !== "peek") fail("the next job stays in the peek");
+if (nextDrawer("peek", true, 0) !== "closed") fail("an idle queue closes the peek");
+if (nextDrawer("open", true, 0) !== "open") fail("covering the page stays open");
+if (nextDrawer("closed", false, 3) !== "closed") fail("a dismissed drawer stays shut");
+if (nextDrawer("peek", false, 4) !== "peek") fail("follow is ignored once the user is already looking");
+if (snapDrawer(40, 800, true) !== "closed") fail("a tiny drag stays shut");
+if (snapDrawer(160, 800, true) !== "peek") fail("a short lift shows the active job");
+if (snapDrawer(160, 800, false) !== "closed") fail("without a job a short lift stays shut");
+if (snapDrawer(700, 800, false) !== "open") fail("a long drag covers the page");
+if (snapDrawer(500, 800, true) !== "open") fail("a long drag covers the page even with a job");
+if (snapDrawer(0, 800, true) !== "closed") fail("a zero drag stays shut");
+"""
+        result = subprocess.run(
+            ["node", "--experimental-strip-types", "--input-type=module", "-e", script],
+            cwd=core.PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
 
 if __name__ == "__main__":

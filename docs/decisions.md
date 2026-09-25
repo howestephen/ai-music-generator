@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-24
+updated: 2026-09-25
 ---
 
 # Decisions
@@ -11,6 +11,20 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-09-25 - Track history is a bottom drawer
+
+**Decided:** the library, its filters and the render queue live in one bottom
+drawer titled Track history. Closed, the handle shows how many tracks are
+stored. While a job is running or queued, the drawer lifts to that job only,
+then closes when the queue is idle. Pulling it up covers the page. The model
+control sits at the top right and reads Model, then the backend name.
+
+**Why:** the generation controls have to fit a phone screen with no page
+scroll, and the list was taking the other half of that screen.
+
+**Would revisit if:** the handle can no longer show the active count, or the
+controls stop fitting a phone without the page itself scrolling.
 
 ## 2026-09-24 - Prompt vocabulary stays inside each genre
 
