@@ -19,6 +19,23 @@ import {
 import { nextDrawer, snapDrawer, type DrawerMode } from "./drawer";
 import { bindExclusivePlayback } from "./playback";
 
+const DESKTOP_LAYOUT = "(min-width: 960px)";
+
+function useDesktopLayout() {
+  const [desktop, setDesktop] = useState(
+    () => typeof window.matchMedia === "function" && window.matchMedia(DESKTOP_LAYOUT).matches,
+  );
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia(DESKTOP_LAYOUT);
+    const apply = () => setDesktop(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
+  return desktop;
+}
+
 type Notice = { tone: "ok" | "error"; text: string } | null;
 
 function selectedValues(event: ChangeEvent<HTMLSelectElement>) {
@@ -80,6 +97,7 @@ export function App() {
   const [libraryView, setLibraryView] = useState<"tracks" | "history" | "trash">("tracks");
   const [tool, setTool] = useState<"generate" | "remix">("generate");
   const [drawer, setDrawer] = useState<DrawerMode>("closed");
+  const desktop = useDesktopLayout();
   const followQueue = useRef(true);
   const draggingDrawer = useRef(false);
   const seenFailures = useRef(new Set<string>());
@@ -304,7 +322,7 @@ export function App() {
   }
 
   return (
-    <div className={`app-shell${drawer === "peek" ? " drawer-is-peek" : ""}`}>
+    <div className={`app-shell${desktop ? " is-desktop" : ""}${drawer === "peek" && !desktop ? " drawer-is-peek" : ""}`}>
       <header className="page-header">
         <div className="tool-tabs" role="tablist" aria-label="Tools">
           <button type="button" role="tab" aria-selected={tool === "generate"} className={tool === "generate" ? "is-selected" : ""} onClick={() => setTool("generate")}>Generate</button>
@@ -323,6 +341,7 @@ export function App() {
         </label>
       </header>
 
+      <div className="workspace">
       <section id="controls-panel">
         {tool === "generate" ? (
         <>
@@ -478,6 +497,7 @@ export function App() {
       </section>
 
       <HistoryDrawer
+        layout={desktop ? "column" : "drawer"}
         mode={drawer}
         trackCount={tracks.length}
         activeCount={activeCount}
@@ -541,6 +561,7 @@ export function App() {
           </div>
         ) : null}
       </HistoryDrawer>
+      </div>
     </div>
   );
 
@@ -618,8 +639,9 @@ function NumberField({
 }
 
 function HistoryDrawer({
-  mode, trackCount, activeCount, focusJob, draggingRef, onSettle, children,
+  layout, mode, trackCount, activeCount, focusJob, draggingRef, onSettle, children,
 }: {
+  layout: "drawer" | "column";
   mode: DrawerMode;
   trackCount: number;
   activeCount: number;
@@ -669,6 +691,19 @@ function HistoryDrawer({
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
     handle.addEventListener("pointercancel", up);
+  }
+
+  if (layout === "column") {
+    return (
+      <section id="history-panel" className="library-column" aria-label="Track history">
+        <div className="library-heading">
+          <span className="drawer-title">Track history</span>
+          <span className="track-count" aria-label={`${trackCount} tracks`}>{trackCount}</span>
+          {activeCount > 0 ? <QueueBadge count={activeCount} /> : null}
+        </div>
+        <div className="drawer-body">{children}</div>
+      </section>
+    );
   }
 
   return (

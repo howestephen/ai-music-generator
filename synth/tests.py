@@ -3001,6 +3001,39 @@ if (snapDrawer(0, 800, true) !== "closed") fail("a zero drag stays shut");
         )
         self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
+    def test_desktop_is_two_columns_and_the_page_does_not_scroll(self):
+        """Wide windows keep controls and tracks side by side. The document
+        stays fixed. Only the track list scrolls. The phone drawer stays a
+        drawer, and its hooks still run when the width crosses 960px."""
+        source = (core.PROJECT_ROOT / "web" / "src" / "App.tsx").read_text(encoding="utf-8")
+        css = (core.PROJECT_ROOT / "web" / "src" / "index.css").read_text(encoding="utf-8")
+        self.assertIn('const DESKTOP_LAYOUT = "(min-width: 960px)"', source)
+        self.assertIn('layout={desktop ? "column" : "drawer"}', source)
+        drawer = source.split("function HistoryDrawer", 1)[1].split("function PeekProgress", 1)[0]
+        self.assertLess(drawer.index("useState"), drawer.index('layout === "column"'))
+        column, phone = drawer.split('layout === "column"', 1)[1].split("\n  return (", 1)
+        self.assertIn("library-column", column)
+        self.assertIn("drawer-body", column)
+        self.assertNotIn("drawer-handle", column)
+        self.assertNotIn("style={{ height:", column)
+        self.assertIn("drawer-handle", phone)
+        self.assertIn("drawer-body", phone)
+        phone_css, desktop_css = css.split("@media (min-width: 960px)", 1)
+        desktop_css = desktop_css.split("@media", 1)[0]
+        self.assertIn("position: fixed", phone_css)
+        self.assertIn("flex-direction: column", phone_css)
+        self.assertIn("overflow: hidden", phone_css)
+        self.assertIn(".library-scroll", phone_css)
+        scroll = phone_css.split(".library-scroll", 1)[1].split("}", 1)[0]
+        self.assertIn("overflow-y: auto", scroll)
+        self.assertIn("flex-direction: row", desktop_css)
+        self.assertIn("position: relative", desktop_css)
+        self.assertNotIn("position: fixed", desktop_css)
+        self.assertIn("height: auto", desktop_css)
+        self.assertIn("min-height: 0", desktop_css)
+        self.assertIn("overflow: hidden", desktop_css)
+        self.assertIn("overflow-y: auto", desktop_css)
+
 
 if __name__ == "__main__":
     unittest.main()

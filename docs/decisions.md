@@ -12,6 +12,18 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-25 - Desktop is two columns
+
+**Decided:** at 960px and wider the page is two columns. Controls stay on the
+left. Track history stays on the right, open, and is not a drawer. The page
+does not scroll. The track list scrolls inside the right column. Below 960px
+the bottom drawer remains.
+
+**Why:** the phone drawer had been applied at every width, so a desktop
+window hid the tracks behind a handle.
+
+**Would revisit if:** a width under 960px needs the two columns as well.
+
 ## 2026-09-25 - Names come from the prose, settings live in History
 
 **Decided:** a track title is two or three consecutive words from the prompt

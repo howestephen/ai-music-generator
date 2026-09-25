@@ -44,6 +44,15 @@ body {
   overflow: hidden;
 }
 
+.workspace {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .page-header {
   display: flex;
   flex: none;
@@ -332,10 +341,16 @@ input[type="range"].full-range {
   background: var(--line);
 }
 
-.drawer-title-row {
+.drawer-title-row,
+.library-heading {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+}
+
+.library-heading {
+  flex: none;
+  padding: 0.55rem 0.9rem 0.35rem;
 }
 
 .drawer-title {
@@ -604,6 +619,43 @@ textarea {
 
 @keyframes queue-spin {
   to { transform: rotate(360deg); }
+}
+
+@media (min-width: 960px) {
+  .workspace {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  #controls-panel,
+  .app-shell.drawer-is-peek #controls-panel {
+    flex: 0 0 26rem;
+    width: 26rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-bottom: 0.75rem;
+    border-right: 1px solid var(--line);
+  }
+
+  #history-panel {
+    position: relative;
+    z-index: auto;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    flex: 1 1 auto;
+    align-self: stretch;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    border-top: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    transition: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
