@@ -1636,6 +1636,9 @@ class Registry(unittest.TestCase):
                 self.assertEqual(backend.output_audit.duration_contract, "exact")
                 self.assertEqual(backend.output_audit.random_seed_retries, 0)
                 self.assertFalse(backend.supports_lyrics)
+                self.assertEqual(backend.guidance.default, 1)
+                self.assertLess(backend.guidance.minimum, 1)
+                self.assertIn("pulls away", backend.guidance.info)
 
     def test_the_cli_does_not_carry_its_own_duration_default(self):
         parser = cli.build_parser()

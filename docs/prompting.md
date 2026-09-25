@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-19
-updated: 2026-09-20
+updated: 2026-09-25
 generated_by: claude-opus-5
 generated_at: 2026-09-19T14:34Z
 generated_from: conversation
@@ -19,8 +19,15 @@ place to look when hand-writing a prompt.
 
 ## `description`: Stable Audio 3
 
-Source: Stability's own prompt guide, shipped in their repository at
-`docs/guides/prompting.md`.
+Source: Stability's own prompt guide, copied into
+[docs/stable-audio-prompting.md](stable-audio-prompting.md) from their
+repository at `docs/guides/prompting.md`.
+
+Prompt adherence is `--cfg` on their CLI. `1` is the distilled default: the
+prompt is followed, and the extra guidance pass is skipped. Above `1` pushes
+harder toward the prompt. From `0` up to but not including `1` pulls toward the
+unconditional branch, so the text counts for less. Below `0` pushes away from
+the prompt. The control in this app starts at `1`.
 
 The model was trained on Freesound and AudioSparx audio together with their
 metadata, so prompts that resemble that metadata do best: a short `Key: Value` tag

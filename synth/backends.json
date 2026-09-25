@@ -145,7 +145,7 @@
           "maximum": 10,
           "step": 0.1,
           "label": "Prompt adherence",
-          "info": "Classifier-free guidance. 1 is off; above 1 pushes toward the prompt.",
+          "info": "1 follows the prompt and is this model's own default. Above 1 pushes harder toward the prompt. Below 1 pulls away from it.",
           "integer": false
         }
       }
@@ -197,7 +197,7 @@
           "maximum": 10,
           "step": 0.1,
           "label": "Prompt adherence",
-          "info": "Classifier-free guidance. 1 is off; above 1 pushes toward the prompt.",
+          "info": "1 follows the prompt and is this model's own default. Above 1 pushes harder toward the prompt. Below 1 pulls away from it.",
           "integer": false
         }
       }

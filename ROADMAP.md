@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-24
+updated: 2026-09-25
 ---
 
 # ROADMAP
@@ -100,6 +100,8 @@ they are never buried in a chat.
   with the Phase 3 sidecar change or not at all
 - Runtime notice on the CC-BY-NC MusicGen backend. Trigger: any output leaving personal
   use
+- Copy the MiniMax, ACE-Step and MusicGen prompt guides into `docs/`, as done
+  for Stable Audio on 2026-09-25. Do it with the next prompting change
 - Research further local music models. Compare Apple Silicon support, licence, duration,
   controllability, genre evidence, runtime and integration cost before proposing any
 - Deliver vocals and instruments as separate audio files. Compare the routes rather than

@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-24
+updated: 2026-09-25
 ---
 
 # Gotchas
@@ -298,6 +298,23 @@ Rough figures, single job, M3 Max:
 ---
 
 ## Prompting and evaluation
+
+### Stable Audio below prompt adherence 1 stops following the preset
+
+**Symptom:** a drum and bass preset still writes "drum and bass" into the prompt,
+and the track does not come out as drum and bass. The sidecar says
+`guidance_scale: 0.0`.
+
+**Cause:** the runner passes that number through as `--cfg`. Stability's CLI
+says `1` is the distilled default, so the prompt is followed and the guidance
+pass is skipped. A value from `0` up to but not including `1` pulls toward the
+unconditional branch. The control allows `0`, and a fresh page starts at `1`.
+The four Stable Audio tracks from 01:22 on 2026-09-25 were submitted at `0`.
+Every Stable Audio sidecar before that was `1`, including ones built by the
+expanded vocabulary.
+
+**Fix:** set Prompt adherence back to `1`. For this model, `1` is the setting
+that follows the prompt. `0` is not a milder version of that.
 
 ### Overloaded prompts produce mush
 
