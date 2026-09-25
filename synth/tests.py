@@ -1410,6 +1410,35 @@ class Registry(unittest.TestCase):
         shapes = {prompt.count(". ") for prompt in seen}
         self.assertGreater(len(shapes), 1, "every prompt has the same shape")
 
+    def test_description_lines_are_not_welded_with_sits_under(self):
+        """Joining clauses with "sits under" made "a stab sits under the bass
+        drops out, with the break is basic". Jump-up submitted that way and
+        came back sounding like liquid. A real line may still say "sits under
+        everything". The weld is "sits under a" or "sits under the"."""
+        welded = re.compile(r"sits under (a|the) ")
+        for genre in prompting.genre_names():
+            for seed in range(16):
+                built = prompting.build_prompt(genre, style="description", seed=seed)
+                self.assertIsNone(
+                    welded.search(built),
+                    f"{genre} seed {seed} welded clauses: {built}",
+                )
+
+    def test_drum_and_bass_suggests_four_twenty(self):
+        """4:20 is 260 seconds. Other genres leave the model's own default."""
+        for name in prompting.genre_names():
+            suggested = prompting.suggested_duration(name)
+            if name.startswith("Drum & Bass"):
+                self.assertEqual(suggested, 260, name)
+            else:
+                self.assertIsNone(suggested, name)
+        self.assertEqual(
+            ui_server.genre_options("Drum & Bass - Jump-up")["duration"],
+            260,
+        )
+        self.assertIsNone(ui_server.genre_options("House - Acid")["duration"])
+        self.assertIsNone(ui_server.genre_options(None)["duration"])
+
     def test_the_article_agrees_with_the_word_that_follows_it(self):
         """The article was taken from the genre while the mood came first, giving
         "A uplifting drum and bass" and "A earthy psydub"."""
@@ -2886,6 +2915,12 @@ class ServedUi(unittest.TestCase):
         self.assertNotIn(">Music<", source)
         self.assertIn(">Model<", source)
         self.assertIn("queue-badge", source)
+        self.assertIn("Generation settings", source)
+        self.assertIn("formatClock", source)
+        self.assertIn("options.duration", source)
+        self.assertIn("drawer-progress", source)
+        self.assertIn('input[type="range"].full-range', css)
+        self.assertLess(source.index("<QueueList"), source.index("Filter by genre"))
         self.assertNotIn("overflow-y-auto", source)
         self.assertIn("nextDrawer", source)
         self.assertIn("pauseEveryOtherPlayer", playback)

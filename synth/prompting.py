@@ -78,6 +78,17 @@ class Genre:
         return (self.bpm[0] + self.bpm[1]) // 2
 
 
+# 4:20. Long enough for a drum and bass arrangement, short of the Stable Audio cap.
+DRUM_AND_BASS_DURATION = 260
+
+
+def suggested_duration(genre_name: str | None) -> int | None:
+    """Seconds the duration control should offer when this genre is chosen."""
+    if genre_name and genre_name.startswith("Drum & Bass"):
+        return DRUM_AND_BASS_DURATION
+    return None
+
+
 # Spelling alone gets these wrong: "UK" reads "you-kay", so it takes "a".
 _CONSONANT_SOUNDING = ("uk", "uni", "euro", "eu", "one", "use")
 
@@ -3070,14 +3081,17 @@ def build_prompt(
             parts.append(extra.strip().rstrip("."))
         return ", ".join(tags) + ". " + ", ".join(parts) + "."
 
+    # Each line is already a clause. Joining them with "sits under" / "with"
+    # produced lines like "a stab sits under the bass drops out, with the break
+    # is basic", which the model cannot use.
     sentences = [f"{opening}."]
-    sentences.append(
-        f"{_upper_first(core_phrases[0])} sits under {core_phrases[1]}"
-        f", with {core_phrases[2]}."
+    sentences.extend(
+        f"{_upper_first(phrase).rstrip('.')}." for phrase in core_phrases
     )
-    sentences.append(_upper_first(colour[0]) + (
-        f", {', '.join(colour[1:])}." if len(colour) > 1 else "."
-    ))
+    colour_line = _upper_first(colour[0]).rstrip(".")
+    if len(colour) > 1:
+        colour_line += ", " + ", ".join(part.rstrip(".") for part in colour[1:])
+    sentences.append(colour_line + ".")
     if structure:
         sentences.append(f"Structurally, {structure}.")
     elif genre.structure and rng.random() < 0.7:

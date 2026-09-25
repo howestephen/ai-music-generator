@@ -31,6 +31,13 @@ function formatSeconds(value: number | null) {
   return Number.isInteger(value) ? `${value}s` : `${value.toFixed(1)}s`;
 }
 
+function formatClock(seconds: number) {
+  const total = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return `${minutes}:${String(rest).padStart(2, "0")}`;
+}
+
 function clampControl(control: ModelInfo["duration"], current: number) {
   let value = Number.isFinite(current) ? current : control.default;
   value = Math.max(control.minimum, value);
@@ -70,6 +77,7 @@ export function App() {
   const [remixFile, setRemixFile] = useState<File | null>(null);
   const [remixPrompt, setRemixPrompt] = useState("");
   const [remixNoise, setRemixNoise] = useState(0.6);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [drawer, setDrawer] = useState<DrawerMode>("closed");
   const followQueue = useRef(true);
   const draggingDrawer = useRef(false);
@@ -154,6 +162,9 @@ export function App() {
     setInstrumentChoices(options.instruments);
     setMood(options.moods[0] ?? "");
     if (options.bpm) setBpm(options.bpm);
+    if (model) {
+      setDuration(clampControl(model.duration, options.duration ?? model.duration.default));
+    }
     const result = await composePrompt({
       genre: next,
       model: modelName,
@@ -330,25 +341,49 @@ export function App() {
           <textarea className="lyrics-field" aria-label="Lyrics" value={lyrics} onChange={(event) => setLyrics(event.target.value)} placeholder="Lyrics" />
         ) : null}
 
-        <div className="grid grid-cols-2 gap-2">
-          <Slider label="Duration" hint={`${model.duration.label}. ${model.duration.info}`} control={model.duration} value={duration} onChange={setDuration} />
-          {model.steps ? (
-            <NumberField label="Steps" hint={`${model.steps.label}. ${model.steps.info}`} control={model.steps} value={steps} onChange={setSteps} />
-          ) : null}
-          {model.guidance ? (
-            <Slider label="Guidance" hint={`${model.guidance.label}. ${model.guidance.info}`} control={model.guidance} value={guidance} onChange={setGuidance} />
-          ) : null}
-          <label title="Off uses a new seed each time. On repeats this one.">
-            <span className="field-label seed-label">
-              Seed
-              <span className="inline-flex items-center gap-1">
-                <input type="checkbox" checked={useSeed} onChange={(event) => setUseSeed(event.target.checked)} />
-                Lock
-              </span>
-            </span>
-            <input type="number" aria-label="Seed" value={seed} onChange={(event) => setSeed(Number(event.target.value))} />
-          </label>
+        <div className="duration-row">
+          <Slider
+            wide
+            format={formatClock}
+            label="Duration"
+            hint={`${model.duration.label}. ${model.duration.info}`}
+            control={model.duration}
+            value={duration}
+            onChange={setDuration}
+          />
+          <button
+            type="button"
+            className="settings-toggle"
+            aria-label="Generation settings"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen((open) => !open)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M12 3.2v2.3M12 18.5v2.3M3.2 12h2.3M18.5 12h2.3M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
+        {settingsOpen ? (
+          <div className="settings-panel">
+            {model.steps ? (
+              <NumberField label="Steps" hint={`${model.steps.label}. ${model.steps.info}`} control={model.steps} value={steps} onChange={setSteps} />
+            ) : null}
+            {model.guidance ? (
+              <Slider wide label="Guidance" hint={`${model.guidance.label}. ${model.guidance.info}`} control={model.guidance} value={guidance} onChange={setGuidance} />
+            ) : null}
+            <label title="Off uses a new seed each time. On repeats this one.">
+              <span className="field-label seed-label">
+                Seed
+                <span className="inline-flex items-center gap-1">
+                  <input type="checkbox" checked={useSeed} onChange={(event) => setUseSeed(event.target.checked)} />
+                  Lock
+                </span>
+              </span>
+              <input type="number" aria-label="Seed" value={seed} onChange={(event) => setSeed(Number(event.target.value))} />
+            </label>
+          </div>
+        ) : null}
 
         <button id="generate-button" type="button" disabled={busy} onClick={() => void onGenerate()}>
           {busy ? "Generating..." : "Generate"}
@@ -414,9 +449,12 @@ export function App() {
         focusJob={focusJob}
         draggingRef={draggingDrawer}
         onSettle={settleDrawer}
-        onMove={(id, direction) => void moveJob(id, direction).then((result) => setQueue(result.queue))}
-        onRemove={(id) => void removeJob(id).then((result) => setQueue(result.queue))}
       >
+        <QueueList
+          jobs={queue}
+          onMove={(id, direction) => void moveJob(id, direction).then((result) => setQueue(result.queue))}
+          onRemove={(id) => void removeJob(id).then((result) => setQueue(result.queue))}
+        />
         <div className="mb-2 grid shrink-0 grid-cols-3 gap-2">
           <select aria-label="Filter by genre" value={filterGenre} onChange={(event) => setFilterGenre(event.target.value)}>
             {genreFilters.map((name) => <option key={name} value={name}>{name === "any" ? "Any genre" : name}</option>)}
@@ -430,11 +468,6 @@ export function App() {
           <input aria-label="Search" value={filterQuery} onChange={(event) => setFilterQuery(event.target.value)} placeholder="Search" />
         </div>
         <div className="library-scroll">
-          <QueueList
-            jobs={queue}
-            onMove={(id, direction) => void moveJob(id, direction).then((result) => setQueue(result.queue))}
-            onRemove={(id) => void removeJob(id).then((result) => setQueue(result.queue))}
-          />
           {pending.map((item) => (
             <div key={item.stem} className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--line)] px-3 py-2 text-sm">
               <span className="min-w-0">{item.title} deleted. {Math.ceil(item.seconds_left / 60)} min to undo.</span>
@@ -480,19 +513,24 @@ function remixForm(shared: Record<string, unknown>, file: File) {
 }
 
 function Slider({
-  label, hint, control, value, onChange,
+  label, hint, control, value, onChange, wide = false, format,
 }: {
   label: string;
   hint: string;
   control: ModelInfo["duration"];
   value: number;
   onChange: (value: number) => void;
+  wide?: boolean;
+  format?: (value: number) => string;
 }) {
-  const shown = control.integer ? Math.round(value) : value;
+  const shown = format
+    ? format(value)
+    : control.integer ? Math.round(value) : value;
   return (
     <label title={hint}>
       <span className="field-label">{label} {shown}</span>
       <input
+        className={wide ? "full-range" : undefined}
         type="range"
         aria-label={label}
         min={control.minimum}
@@ -531,7 +569,7 @@ function NumberField({
 }
 
 function HistoryDrawer({
-  mode, trackCount, activeCount, focusJob, draggingRef, onSettle, onMove, onRemove, children,
+  mode, trackCount, activeCount, focusJob, draggingRef, onSettle, children,
 }: {
   mode: DrawerMode;
   trackCount: number;
@@ -539,8 +577,6 @@ function HistoryDrawer({
   focusJob: Job | null;
   draggingRef: RefObject<boolean>;
   onSettle: (next: DrawerMode) => void;
-  onMove: (id: string, direction: number) => void;
-  onRemove: (id: string) => void;
   children: ReactNode;
 }) {
   const [dragHeight, setDragHeight] = useState<number | null>(null);
@@ -549,7 +585,7 @@ function HistoryDrawer({
   const resting = mode === "open"
     ? "100dvh"
     : mode === "peek"
-      ? "13.5rem"
+      ? "calc(5.6rem + env(safe-area-inset-bottom))"
       : "calc(3.8rem + env(safe-area-inset-bottom))";
   const shown: DrawerMode = dragHeight == null ? mode : snapDrawer(
     dragHeight,
@@ -614,13 +650,22 @@ function HistoryDrawer({
           {activeCount > 0 ? <QueueBadge count={activeCount} /> : null}
         </span>
       </button>
-      {shown === "peek" && focusJob ? (
-        <div className="drawer-peek">
-          <JobCard job={focusJob} onMove={onMove} onRemove={onRemove} />
-        </div>
-      ) : null}
+      {shown === "peek" && focusJob ? <PeekProgress job={focusJob} /> : null}
       {shown === "open" ? <div className="drawer-body">{children}</div> : null}
     </section>
+  );
+}
+
+function PeekProgress({ job }: { job: Job }) {
+  const queued = job.status === "queued";
+  const width = queued ? "40%" : `${Math.max(0, Math.min(100, job.progress))}%`;
+  return (
+    <div className="drawer-progress" aria-label={job.status_text}>
+      <span
+        className={`drawer-progress-fill${queued ? " is-queued" : ""}`}
+        style={{ width }}
+      />
+    </div>
   );
 }
 
@@ -645,7 +690,7 @@ function QueueList({
 }) {
   if (jobs.length === 0) return null;
   return (
-    <div className="mb-3 flex min-h-0 flex-col gap-2">
+    <div className="mb-2 flex shrink-0 flex-col gap-2">
       {jobs.map((job) => (
         <JobCard key={job.id} job={job} onMove={onMove} onRemove={onRemove} />
       ))}

@@ -316,6 +316,21 @@ expanded vocabulary.
 **Fix:** set Prompt adherence back to `1`. For this model, `1` is the setting
 that follows the prompt. `0` is not a milder version of that.
 
+### Welded description lines stop a preset sounding like itself
+
+**Symptom:** jump-up at prompt adherence `1` still came out like liquid. The
+sidecar was a real jump-up brief, genre tag included, but the lines read
+"a music-box stab sits under the bass drops out for a bar, with the break is
+basic".
+
+**Cause:** half of the description prompts glued the drum, bass and lead
+clauses with "sits under" and "with". Those clauses are already phrases, so
+the join is not English. Jump-up and liquid also share the only genre tag,
+`Genre: Drum and Bass`, which this model often renders as the smoother style.
+
+**Fix:** each chosen line is its own sentence. The comma-fragment form, the
+one closer to Stability's examples, is unchanged.
+
 ### Overloaded prompts produce mush
 
 Stacking many competing directives - "orchestral **and** electronic, medieval **and**

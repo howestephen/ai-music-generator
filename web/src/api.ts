@@ -97,7 +97,7 @@ export function loadBootstrap() {
 
 export function loadOptions(genre: string) {
   const query = new URLSearchParams({ genre });
-  return request<{ moods: string[]; instruments: string[]; bpm: number | null }>(
+  return request<{ moods: string[]; instruments: string[]; bpm: number | null; duration: number | null }>(
     `/api/options?${query}`,
   );
 }

@@ -51,7 +51,9 @@ Tags worth using:
 | `Format: Duo` | For a specific small ensemble |
 
 Then cover genre, instruments, mood and BPM in prose. State the tempo as text
-(`174 BPM`): there is no numeric tempo input.
+(`174 BPM`): there is no numeric tempo input. Extra lines are either comma
+fragments, as in the example above, or each their own sentence. Drum and bass
+genres open the duration control at 4:20.
 
 **What it does not have.** No key or scale conditioning, and no section or bar
 control. Structure reaches it only as description (*"a stripped breakdown halfway,

@@ -78,6 +78,7 @@ def genre_options(genre: str | None) -> dict:
         "moods": [prompting.RANDOM_CHOICE, *prompting.mood_options(genre)],
         "instruments": prompting.instrument_options(genre),
         "bpm": bpm,
+        "duration": prompting.suggested_duration(genre),
     }
 
 

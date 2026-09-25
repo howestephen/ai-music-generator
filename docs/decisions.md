@@ -12,13 +12,30 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-25 - Drum and bass opens at 4:20
+
+**Decided:** choosing a Drum & Bass genre sets the duration control to 260
+seconds and the control shows minutes and seconds, so that length reads 4:20.
+The value is clamped to the selected model's maximum. Steps, seed and guidance
+stay behind the settings control. A running job lifts the history drawer only
+enough to show a progress bar. With the drawer covering the page, running and
+queued jobs sit above the filters.
+
+**Why:** 4:20 is the length wanted for these tracks, and reading raw seconds
+made that length hard to set. The old peek was a full job card, so the drawer
+jumped instead of rising.
+
+**Would revisit if:** a model documents a better length for this material, or
+the settings row no longer fits a phone once it is open.
+
 ## 2026-09-25 - Track history is a bottom drawer
 
 **Decided:** the library, its filters and the render queue live in one bottom
 drawer titled Track history. Closed, the handle shows how many tracks are
-stored. While a job is running or queued, the drawer lifts to that job only,
-then closes when the queue is idle. Pulling it up covers the page. The model
-control sits at the top right and reads Model, then the backend name.
+stored. While a job is running or queued, the drawer lifts to a progress bar,
+then closes when the queue is idle. Pulling it up covers the page, and the
+jobs in flight sit above the filters. The model control sits at the top right
+and reads Model, then the backend name.
 
 **Why:** the generation controls have to fit a phone screen with no page
 scroll, and the list was taking the other half of that screen.
