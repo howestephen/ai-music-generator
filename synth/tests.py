@@ -3,8 +3,8 @@
 Run:  ./.venv/bin/python -m unittest synth.tests -v
 
 No model is loaded. The subprocess runner is stubbed so each test sees exactly what
-`core.generate` hands to a backend and exactly what lands in the sidecar. The in-process
-ACE-Step path is not covered here: it would load 7.7 GB of weights.
+`core.generate` hands to a backend and exactly what lands in the sidecar. ACE-Step 1.5
+weights are not loaded here.
 """
 from __future__ import annotations
 
@@ -116,11 +116,13 @@ class GenerateSeam(unittest.TestCase):
     def test_musicgen_sidecar_records_no_step_count(self):
         self.assertIsNone(self.gen(model="musicgen").infer_step)
 
-    def test_minimax_accepts_duration_beyond_acestep_cap(self):
-        track = self.gen(model="minimax-mlx", duration=270)
-        self.assertEqual(track.duration, 270)
-        self.assertEqual(track.requested_duration, 270)
-        self.assertEqual(self.stub.last_job["duration"], 270)
+    def test_acestep_accepts_a_duration_past_the_minimax_cap(self):
+        track = self.gen(model="acestep", duration=301)
+        self.assertEqual(track.requested_duration, 301)
+        self.assertEqual(self.stub.last_job["duration"], 301.0)
+        self.assertEqual(self.stub.last_job["steps"], 8)
+        self.assertIsNone(self.stub.last_job["guidance"])
+        self.assertEqual(self.stub.last_job["lyrics"], "[Instrumental]")
 
     def test_fractional_duration_matches_runner_request_and_sidecar(self):
         track = self.gen(model="minimax-mlx", duration=1.5)
@@ -306,7 +308,7 @@ class GenerateSeam(unittest.TestCase):
         self.assertIn("Short output retained", str(raised.exception))
 
     def test_each_backend_enforces_its_own_duration_cap(self):
-        for model, duration in (("acestep", 241), ("minimax-mlx", 301), ("musicgen", 31)):
+        for model, duration in (("acestep", 9), ("acestep", 601), ("minimax-mlx", 301), ("musicgen", 31)):
             with self.subTest(model=model), self.assertRaises(ValueError):
                 self.gen(model=model, duration=duration)
 
@@ -314,6 +316,10 @@ class GenerateSeam(unittest.TestCase):
     def test_minimax_refuses_guidance_rather_than_dropping_it(self):
         with self.assertRaises(ValueError):
             self.gen(model="minimax-mlx", guidance_scale=9.0)
+
+    def test_acestep_refuses_guidance_rather_than_dropping_it(self):
+        with self.assertRaises(ValueError):
+            self.gen(model="acestep", duration=30, guidance_scale=7)
 
     def test_minimax_sidecar_records_no_guidance(self):
         self.assertIsNone(self.gen(model="minimax-mlx").guidance_scale)
@@ -824,7 +830,15 @@ class Registry(unittest.TestCase):
         self.assertIn("NON-COMMERCIAL", backends.get("musicgen").licence)
 
     def test_each_backend_owns_its_numeric_control_contract(self):
-        self.assertEqual(backends.get("acestep").duration.maximum, 240)
+        self.assertEqual(backends.get("acestep").duration.minimum, 10)
+        self.assertEqual(backends.get("acestep").duration.maximum, 600)
+        self.assertEqual(backends.get("acestep").default_steps, 8)
+        self.assertIsNone(backends.get("acestep").guidance)
+        self.assertEqual(backends.get("acestep").instrumental_tag, "[Instrumental]")
+        self.assertEqual(
+            backends.get("acestep").runner_options,
+            (("dit", "acestep-v15-turbo"), ("lm", "acestep-5Hz-lm-0.6B"), ("shift", "3.0")),
+        )
         self.assertEqual(backends.get("minimax-mlx").duration.maximum, 300)
         self.assertEqual(backends.get("musicgen").duration.maximum, 30)
         self.assertIsNone(backends.get("musicgen").steps)
@@ -842,7 +856,9 @@ class Registry(unittest.TestCase):
         with self.assertRaises(ValueError):
             backends.get("minimax-mlx").steps.validate(3.5, "steps")
         with self.assertRaises(ValueError):
-            backends.get("acestep").guidance.validate(31, "guidance")
+            backends.get("acestep").steps.validate(21, "steps")
+        with self.assertRaises(ValueError):
+            backends.get("acestep").duration.validate(9, "duration")
 
     def test_manifest_declares_the_default_and_every_registered_backend(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
@@ -930,6 +946,7 @@ class Registry(unittest.TestCase):
     def test_runner_options_are_refused_without_a_runner(self):
         """An in-process backend never sees a job dict, so options there are a lie."""
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        document["backends"]["acestep"]["runner"] = None
         document["backends"]["acestep"]["runtime"]["runner_options"] = {"dit": "medium"}
         path = Path(tempfile.mkdtemp()) / "backends.json"
         self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
@@ -2524,7 +2541,7 @@ print(json.dumps({
             backends.get(backends.DEFAULT_BACKEND).guidance is not None,
             "the guidance control must follow the default backend, not a fixed model",
         )
-        self.assertEqual(config["duration_api_maximum"], 380)
+        self.assertEqual(config["duration_api_maximum"], 600)
         self.assertIn("Generate", config["buttons"])
         self.assertIn("Refresh history", config["buttons"])
         self.assertTrue(config["model_change"])
@@ -2613,13 +2630,14 @@ print(json.dumps({
                 mock.patch.object(app, "_estimate_runtime", return_value=90), \
                 mock.patch.object(app.random, "randint", return_value=123):
             status, seed, snapshot = app._enqueue_generation(
-                "acestep", " probe ", 120, 60, 15, 42, False,
+                "acestep", " probe ", 120, 8, None, 42, False,
             )
         payload, summary, expected = queue.enqueue.call_args.args
         self.assertEqual(payload["model"], "acestep")
         self.assertEqual(payload["prompt"], "probe")
         self.assertEqual(payload["duration"], 120)
-        self.assertEqual(payload["guidance_scale"], 15)
+        self.assertIsNone(payload["guidance_scale"])
+        self.assertEqual(payload["infer_step"], 8)
         self.assertEqual(payload["seed"], 123)
         self.assertEqual(payload["_duration_retries"], 1)
         self.assertTrue(payload["_retry_seed"])
@@ -2719,14 +2737,52 @@ print(json.dumps({
                 )
 
     def test_enqueue_enforces_the_selected_backend_not_the_default_backend(self):
-        for model, duration in (("acestep", 241), ("minimax-mlx", 301), ("musicgen", 31)):
+        for model, duration in (("acestep", 9), ("acestep", 601), ("minimax-mlx", 301), ("musicgen", 31)):
             with self.subTest(model=model), self.assertRaises(app.gr.Error):
-                app._enqueue_generation(model, "probe", duration, 60, 15, 42, True)
+                app._enqueue_generation(model, "probe", duration, 8, None, 42, True)
 
     def test_enqueue_rejects_model_specific_control_values(self):
-        for steps, guidance in ((3.5, 15), (201, 15), (60, 31)):
+        for steps, guidance in ((3.5, None), (21, None)):
             with self.subTest(steps=steps, guidance=guidance), self.assertRaises(app.gr.Error):
                 app._enqueue_generation("acestep", "probe", 60, steps, guidance, 42, True)
+        queue = mock.Mock()
+        queue.enqueue.return_value = {"id": "job-1"}
+        queue.snapshot.return_value = []
+        with mock.patch.object(app, "_get_job_queue", return_value=queue):
+            app._enqueue_generation("acestep", "probe", 60, 8, 1, 42, True)
+        self.assertIsNone(queue.enqueue.call_args.args[0]["guidance_scale"])
+
+    def test_acestep_keeps_the_caption_and_refuses_a_remix_or_guidance(self):
+        path = core.PROJECT_ROOT / "runners" / "acestep_runner.py"
+        spec = importlib.util.spec_from_file_location("acestep_runner", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        job = {
+            "prompt": "liquid drum and bass, 174bpm",
+            "lyrics": "[Instrumental]",
+            "duration": 260,
+            "seed": 7,
+            "steps": 8,
+            "guidance": None,
+            "options": {
+                "dit": "acestep-v15-turbo",
+                "lm": "acestep-5Hz-lm-0.6B",
+                "shift": "3.0",
+            },
+        }
+        request = module.request_from_job(job)
+        self.assertEqual(request["caption"], "liquid drum and bass, 174bpm")
+        self.assertTrue(request["instrumental"])
+        self.assertEqual(request["shift"], 3.0)
+        self.assertNotIn("guidance", request)
+        sung = dict(job, lyrics="[verse]\nline")
+        self.assertFalse(module.request_from_job(sung)["instrumental"])
+        with self.assertRaisesRegex(ValueError, "no guidance"):
+            module.request_from_job(dict(job, guidance=7))
+        with self.assertRaisesRegex(ValueError, "remix"):
+            module.request_from_job(dict(job, init_audio="track.wav"))
+        with self.assertRaisesRegex(ValueError, "shift"):
+            module.request_from_job(dict(job, options={"dit": "acestep-v15-turbo", "lm": "x"}))
 
     def test_runtime_estimate_ignores_non_finite_history_metadata(self):
         corrupt = [{
@@ -2833,6 +2889,7 @@ class DocumentationContract(unittest.TestCase):
         }
         expected = {
             "synth/core.py",
+            "runners/acestep_runner.py",
             "runners/minimax_mlx_runner.py",
             "runners/musicgen_runner.py",
             "runners/stable_audio_runner.py",

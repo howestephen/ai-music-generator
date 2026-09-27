@@ -1,7 +1,7 @@
 """Versioned model-manifest loader and runtime registry.
 
 Each backend declares which Python interpreter runs it. Backends whose dependencies
-conflict (MiniMax needs transformers>=5, ACE-Step pins 4.50) live in separate venvs and
+conflict (MiniMax needs transformers>=5, ACE-Step 1.5 pins >=4.51,<4.58) live in separate venvs and
 are invoked as subprocesses; in-process backends use the current interpreter.
 
 Backends also declare which knobs they actually have. A `None` default means the backend

@@ -3,14 +3,14 @@
   "default_backend": "stable-audio-medium",
   "backends": {
     "acestep": {
-      "model_id": "ACE-Step/ACE-Step-v1-3.5B",
-      "venv": ".venv",
-      "runner": null,
-      "licence": "Apache-2.0 (commercial OK)",
-      "notes": "Song-form model. Weak at orchestral/cinematic: tends toward band instrumentation.",
-      "dtype": "float32",
+      "model_id": "ACE-Step/Ace-Step1.5",
+      "venv": ".venv-ace",
+      "runner": "acestep_runner.py",
+      "licence": "MIT (commercial OK)",
+      "notes": "1.5 turbo on MLX. The planner fills BPM, key and time signature and does not replace the caption. Cover and repaint exist upstream and are not connected to Remix.",
+      "dtype": "MLX",
       "prompt_style": "tags",
-      "instrumental_tag": "[inst]",
+      "instrumental_tag": "[Instrumental]",
       "supports_lyrics": true,
       "supports_editing": false,
       "output_audit": {
@@ -20,38 +20,34 @@
         "duration_contract": "best_effort"
       },
       "runtime": {
-        "probe_modules": ["acestep.pipeline_ace_step"],
-        "timeout_seconds": null,
-        "runner_options": {}
+        "probe_modules": ["acestep.inference"],
+        "timeout_seconds": 7200,
+        "runner_options": {
+          "dit": "acestep-v15-turbo",
+          "lm": "acestep-5Hz-lm-0.6B",
+          "shift": "3.0"
+        }
       },
       "controls": {
         "duration": {
           "default": 120,
-          "minimum": 1,
-          "maximum": 240,
+          "minimum": 10,
+          "maximum": 600,
           "step": 1,
           "label": "Target duration (s)",
-          "info": "ACE-Step supports 1 to 240 seconds. Delivered audio is measured and checked.",
+          "info": "ACE-Step 1.5 supports 10 to 600 seconds. Delivered audio is measured and checked.",
           "integer": false
         },
         "steps": {
-          "default": 60,
+          "default": 8,
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 20,
           "step": 1,
           "label": "Steps",
-          "info": "Lower is faster and rougher. ACE-Step defaults to 60.",
+          "info": "Turbo is distilled to 8 steps. 1 to 20.",
           "integer": true
         },
-        "guidance": {
-          "default": 15,
-          "minimum": 0,
-          "maximum": 30,
-          "step": 0.1,
-          "label": "Prompt adherence",
-          "info": "ACE-Step guidance scale. Default: 15.",
-          "integer": false
-        }
+        "guidance": null
       }
     },
     "minimax-mlx": {

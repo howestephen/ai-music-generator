@@ -1171,6 +1171,7 @@ def _queue_snapshot() -> list[dict]:
 # job crawl against a 95-second estimate and read as hung. Measured on this
 # machine, 2026-09-19, as (overhead seconds, seconds per second of audio).
 FALLBACK_COST = {
+    # acestep is still the v1 measurement. 1.5 has not been timed on this machine.
     "acestep": (20.0, 2.4),
     "minimax-mlx": (30.0, 3.2),
     "musicgen": (25.0, 14.0),

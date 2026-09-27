@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-20
+updated: 2026-09-27
 ---
 
 # AI Music Generator
@@ -57,9 +57,20 @@ printf '%s\n%s\n' "$SA3/optimized/mlx" "$SA3/optimized/mlx/scripts" \
   > .venv-sa3/lib/python3.12/site-packages/stable_audio_3.pth
 ```
 
+ACE-Step 1.5 cannot share that environment. Upstream pins `transformers>=4.51,<4.58`
+and ships its own MLX path. The pin is the macOS launcher's default: 2B turbo and
+the 0.6B planner.
+
+```bash
+ACE=~/.cache/ai-music-generator/ACE-Step-1.5
+git clone https://github.com/ace-step/ACE-Step-1.5.git "$ACE"
+git -C "$ACE" checkout ca1e85fe9430179831e6bc6be790c332190a3866
+UV_PROJECT_ENVIRONMENT="$PWD/.venv-ace" uv sync --directory "$ACE" --python 3.12
+```
+
 Weights download on first use to `~/.cache/`: MiniMax MLX about 13 GB, MusicGen 19 GB,
-ACE-Step 7.7 GB, and both Stable Audio sizes together about 6.1 GB, since they share
-one repository.
+and both Stable Audio sizes together about 6.1 GB, since they share one repository.
+ACE-Step 1.5 downloads into `$ACE/checkpoints` on the first generate.
 
 ## Models
 
@@ -71,7 +82,7 @@ Five backends behind one CLI, each in whatever environment it needs.
 | `stable-audio-medium` | Stable Audio 3 medium (1.4B DiT, default) | 380s | description | Stability Community |
 | `stable-audio-sm` | Stable Audio 3 small (50M DiT) | 120s | description | Stability Community |
 | `minimax-mlx` | MiniMax Music 3 (MLX 8-bit) | 300s | caption | MiniMax Community |
-| `acestep` | ACE-Step v1 3.5B | 240s | tags | Apache-2.0 |
+| `acestep` | ACE-Step 1.5 turbo (MLX) | 600s | tags | MIT |
 | `musicgen` | MusicGen stereo-large | 30s | tags | **CC-BY-NC, non-commercial** |
 
 The `stable-audio` backends are fixed-length latent diffusion at 44.1 kHz stereo, trained
@@ -79,7 +90,9 @@ on licensed data, and the only ones whose delivered length is exact by construct
 than audited against a tolerance. They have no key or scale control: the model conditions
 on text and duration alone. `minimax-mlx` alone has explicit BPM, key and scale, through
 its caption.
-`acestep` is roughly realtime but song-form and weak at orchestral material. `musicgen` is
+`acestep` is the 1.5 turbo on MLX. It takes the same tag prompts, has no guidance
+control, and can run from 10 seconds to 10 minutes. Cover and repaint exist in the
+upstream runtime and are not connected to Remix. `musicgen` is
 capable but slow on Metal and capped at 30 seconds.
 
 ## Usage
@@ -174,8 +187,8 @@ output/             generated audio + sidecars (gitignored)
 
 The full directory map is in [CLAUDE.md](CLAUDE.md).
 
-Backends whose dependencies conflict run as subprocesses in their own venv: ACE-Step pins
-`transformers==4.50` while MiniMax needs `>=5`. Adding a model is a manifest entry plus a
+Backends whose dependencies conflict run as subprocesses in their own venv: ACE-Step 1.5
+pins `transformers>=4.51,<4.58` while MiniMax needs `>=5`. Adding a model is a manifest entry plus a
 runner implementing the JSON job contract, after which it appears automatically in the CLI,
 dropdown, validation and UI controls. A second variant of a model already present needs
 only the manifest entry, through `runner_options`. A runner succeeds only once both its

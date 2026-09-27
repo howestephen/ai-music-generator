@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-19
-updated: 2026-09-25
+updated: 2026-09-27
 generated_by: claude-opus-5
 generated_at: 2026-09-19T14:34Z
 generated_from: conversation
@@ -99,9 +99,11 @@ Comma-separated style tags, not sentences.
 lo-fi hip hop, warm rhodes piano, vinyl crackle, 85bpm, instrumental
 ```
 
-The pipeline supplies ACE-Step's `[inst]` sentinel. ACE-Step is seed-sensitive, so
-compare seeds rather than treating one result as representative, and it is weak at
-orchestral material, drifting toward rock instrumentation.
+The pipeline supplies ACE-Step's `[Instrumental]` sentinel. 1.5 still wants these
+tags. Its planner may fill BPM, key and time signature, and it does not replace
+the caption. Compare seeds rather than treating one result as representative.
+v1 was weak at orchestral material. 1.5's own examples include an orchestral
+cover, which is not a judgement of a render from this machine.
 
 ## Applies to every backend
 

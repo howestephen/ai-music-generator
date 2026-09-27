@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # ROADMAP
@@ -86,10 +86,9 @@ they are never buried in a chat.
 
 ## Deferred ideas
 
-- ACE-Step 1.5 as a backend, replacing v1. MIT code and weights, licensed training data,
-  10s to 600s, explicit BPM, key, scale and time signature, repaint, cover and
-  vocal-to-BGM, with an MLX path. Recommended on 2026-09-19 when the owner asked for
-  every good model, then not built. Needs its own venv: `transformers>=4.51,<4.58`
+- ACE-Step 1.5 replaced v1 on 2026-09-27: MLX turbo plus the 0.6B planner, 10s to
+  600s, in `.venv-ace`. Cover, repaint and vocal-to-BGM stay in the upstream runtime
+  and are not connected here. XL is a manifest change if a render needs it
 - Route heavy renders to Seneca, the 4090 box. Its ComfyUI already has nodes for
   ACE-Step, ACE-Step 1.5, MiniMax Music 3 and Stable Audio, but no audio checkpoints
   yet. Raised 2026-09-19 after a Mac render fought another agent for the GPU. Deferred

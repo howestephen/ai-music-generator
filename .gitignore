@@ -1,6 +1,7 @@
-# Two isolated environments (see README "Environments") and Python junk
+# Isolated environments (see README "Installation") and Python junk
 .venv/
 .venv-mlx/
+.venv-ace/
 __pycache__/
 *.py[cod]
 

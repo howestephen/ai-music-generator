@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Gotchas
@@ -21,12 +21,13 @@ nothing raises an alarm. Prefer failures that are loud.
 ### `numba` resolves to a 2021 version and refuses to install
 
 **Symptom:** `RuntimeError: Cannot install on Python version 3.12.9; only versions
->=3.6,<3.10 are supported` while installing ACE-Step.
+>=3.6,<3.10 are supported` while installing ACE-Step v1.
 
-**Cause:** ACE-Step pins `librosa==0.11.0`; the resolver backtracks to `numba` 0.53.1, which
-predates Python 3.10.
+**Cause:** ACE-Step v1 pins `librosa==0.11.0`; the resolver backtracks to `numba` 0.53.1,
+which predates Python 3.10.
 
-**Fix:** pin it forward explicitly.
+**Fix:** that install is retired. ACE-Step 1.5 is the `uv sync` block in the README.
+If a v1 checkout is forced anyway, pin numba forward:
 
 ```bash
 uv pip install "numba>=0.61" "llvmlite>=0.44" "git+https://github.com/ace-step/ACE-Step.git"
@@ -124,15 +125,16 @@ no progress. Process stays alive looking busy.
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 ```
 
-Already set in `synth/core.py`, `runners/minimax_mlx_runner.py`,
-`runners/musicgen_runner.py` and `runners/stable_audio_runner.py`. Every new runner
-that downloads weights needs it too. **Do not remove it.**
+Already set in `synth/core.py`, `runners/acestep_runner.py`,
+`runners/minimax_mlx_runner.py`, `runners/musicgen_runner.py` and
+`runners/stable_audio_runner.py`. Every new runner that downloads weights needs it
+too. **Do not remove it.**
 
 ### Model dependency conflicts are unresolvable - use separate venvs
 
-ACE-Step pins `transformers==4.50.0`; MiniMax Music 3 needs `>=5`. There is no shared
-resolution. Backends declare their own venv in `synth/backends.py` and run as subprocesses.
-Don't try to unify them.
+ACE-Step 1.5 pins `transformers>=4.51.0,<4.58.0` (v1 pinned `==4.50.0`); MiniMax Music 3
+needs `>=5`. There is no shared resolution. Backends declare their own venv in
+`synth/backends.py` and run as subprocesses. Don't try to unify them.
 
 ---
 
@@ -149,10 +151,25 @@ efficient build had already been found in the first search.
 
 **Search HuggingFace for `<model> MLX` before downloading. Every time.**
 
+### ACE-Step 1.5 will quietly leave MLX
+
+**Symptom:** a generate works, then takes far longer than the turbo model should,
+and the log says PyTorch fallback.
+
+**Cause:** `initialize_service` still returns success when the MLX DiT fails to
+load, and continues on PyTorch. The same is true of the planner if `mlx` is
+unavailable.
+
+**Fix:** `runners/acestep_runner.py` refuses a DiT that did not set `use_mlx_dit`
+and a planner whose backend is not `mlx`. Do not delete those checks.
+
+v1's float32 requirement was the same class of trap: bfloat16 errors on macOS.
+1.5's MLX path is the one this machine uses.
+
 ### ACE-Step needs float32, not bfloat16
 
-bfloat16 errors on macOS. Upstream says pass `--bf16 false`; the equivalent here is
-`dtype="float32"`. Already set.
+bfloat16 errors on macOS for the v1 pipeline. That pipeline is no longer called.
+The note stays because a PyTorch fallback would hit it.
 
 ---
 
@@ -247,7 +264,7 @@ the project boundary. Do not add NumPy or PyTorch conversion to
 
 | Backend | "no vocals" |
 |---|---|
-| `acestep` | `[inst]` |
+| `acestep` | `[Instrumental]` |
 | `minimax-mlx` | `[Instrumental]` |
 | `musicgen` | *(no lyrics channel)* |
 

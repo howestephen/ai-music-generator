@@ -31,18 +31,6 @@ PROMPTS_DIR = PROJECT_ROOT / "prompts"
 
 DEFAULT_MODEL = backends.DEFAULT_BACKEND
 
-_pipeline = None
-
-
-def _load_pipeline():
-    """Load the model once per process. Costs ~30-60s and several GB of RAM."""
-    global _pipeline
-    if _pipeline is None:
-        from acestep.pipeline_ace_step import ACEStepPipeline
-
-        _pipeline = ACEStepPipeline(dtype=backends.get("acestep").dtype, torch_compile=False)
-    return _pipeline
-
 
 @dataclass
 class Track:
@@ -169,7 +157,7 @@ def generate(
 ) -> Track:
     """Generate one track.
 
-    Prompt style depends on the backend. ACE-Step and MusicGen want comma-separated
+    Prompt style depends on the backend. ACE-Step 1.5 and MusicGen want comma-separated
     style tags ("lo-fi hip hop, warm rhodes, 85bpm"). MiniMax wants a Structured
     Caption in prose, which is where its BPM/key/scale control lives:
     "Genre: cinematic orchestral. BPM: 120. Key: D. Scale: Mixolydian. Arrangement: ..."
@@ -288,25 +276,7 @@ def generate(
             elapsed = result.get("elapsed_seconds", time.time() - started)
             audio_audit = result.get("_audio_audit")
         else:
-            if steps is None or guidance is None:
-                raise RuntimeError(
-                    f"{backend.name} runs in-process and needs both default_steps and "
-                    "default_guidance declared in synth/backends.py"
-                )
-            pipe = _load_pipeline()
-            pipe(
-                prompt=prompt,
-                lyrics=lyrics,
-                audio_duration=float(duration),
-                infer_step=int(steps),
-                guidance_scale=float(guidance),
-                manual_seeds=[int(seed)],
-                save_path=str(path),
-                format="wav",
-            )
-            elapsed = time.time() - started
-
-            audio_audit = None
+            raise RuntimeError(f"{backend.name} has no runner")
 
         if not isinstance(audio_audit, backends.AudioAudit):
             audio_audit = backends.audit_audio_file(path, backend.name)

@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Decisions
@@ -11,6 +11,23 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-09-27 - ACE-Step 1.5 replaces v1, on MLX
+
+**Decided:** the `acestep` backend is 1.5 turbo (`acestep-v15-turbo`) with the
+0.6B planner, both on MLX, in `.venv-ace`. The pin is
+`ca1e85fe9430179831e6bc6be790c332190a3866`. Duration is 10 to 600 seconds.
+Turbo has no guidance control. Steps default to 8 and `shift` is 3.0. The
+planner may fill BPM, key and time signature. It does not replace the caption.
+Cover and repaint stay unwired, because Remix's noise slider is Stable Audio's.
+
+**Why:** v1 was in-process, capped at 240 seconds, and pinned an older
+Transformers than MiniMax. Upstream's macOS launcher is this MLX pair, not the
+PyTorch weights and not the XL DiT. This machine has the memory for XL. That
+is a later manifest change if a render shows the 2B turbo is the limit.
+
+**Would revisit if:** a render needs the 4B DiT, or Remix should speak cover
+and repaint instead of Stable Audio's noise level.
 
 ## 2026-09-25 - Desktop is two columns
 
