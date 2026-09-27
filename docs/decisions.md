@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Decisions
@@ -11,6 +11,17 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-09-28 - Separation is HTDemucs, not ACE-Step extract
+
+**Decided:** a mix is split by `demucs` (HTDemucs on MLX) into vocals, drums, bass
+and other. Each stem is a library track. A silent stem is kept.
+
+**Why:** ACE-Step's extract task is the base DiT only, and it regenerates a stem
+rather than lifting it out of the mix. Demucs runs on a track already in the library.
+LALAL.AI would spend paid credit.
+
+**Would revisit if:** a render shows HTDemucs is the wrong separator for this music.
 
 ## 2026-09-27 - ACE-Step 1.5 replaces v1, on MLX
 

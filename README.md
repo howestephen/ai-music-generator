@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # AI Music Generator
@@ -68,14 +68,21 @@ git -C "$ACE" checkout ca1e85fe9430179831e6bc6be790c332190a3866
 UV_PROJECT_ENVIRONMENT="$PWD/.venv-ace" uv sync --directory "$ACE" --python 3.12
 ```
 
+Separation is HTDemucs, not a prompt model. It has its own environment:
+
+```bash
+uv venv --python 3.12 .venv-demucs
+uv pip install --python .venv-demucs/bin/python demucs-mlx soundfile
+```
+
 Weights download on first use to `~/.cache/`: MiniMax MLX about 13 GB, MusicGen 19 GB,
 and both Stable Audio sizes together about 6.1 GB, since they share one repository.
 ACE-Step 1.5 downloads into `$ACE/checkpoints` on the first generate.
 
 ## Models
 
-Five backends behind one CLI, each in whatever environment it needs.
-`./.venv/bin/python -m synth.cli models` probes all five.
+Five prompt models behind one CLI, each in whatever environment it needs, plus
+Demucs for separation. `./.venv/bin/python -m synth.cli models` probes every one.
 
 | Backend | Model | Max | Prompt style | Licence |
 |---|---|---|---|---|
@@ -94,6 +101,8 @@ its caption.
 control, and can run from 10 seconds to 10 minutes. Cover and repaint exist in the
 upstream runtime and are not connected to Remix. `musicgen` is
 capable but slow on Metal and capped at 30 seconds.
+Separate, in the header, splits a library track or an upload into vocals, drums,
+bass and other. Each stem is its own track. A quiet stem is kept.
 
 ## Usage
 

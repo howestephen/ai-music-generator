@@ -122,6 +122,17 @@ export function generate(body: Record<string, unknown>) {
   });
 }
 
+export function separate(body: FormData | Record<string, unknown>) {
+  if (body instanceof FormData) {
+    return request<{ status: string; queue: Job[] }>("/api/separate", { method: "POST", body });
+  }
+  return request<{ status: string; queue: Job[] }>("/api/separate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export function remix(body: FormData | Record<string, unknown>) {
   if (body instanceof FormData) {
     return request<{ status: string; queue: Job[] }>("/api/remix", { method: "POST", body });

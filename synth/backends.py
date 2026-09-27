@@ -33,6 +33,7 @@ DURATION_CONTRACTS = frozenset({"best_effort", "exact"})
 # "tags": comma-separated style tags. "caption": MiniMax's structured prose
 # caption. "description": a plain natural-language sentence.
 PROMPT_STYLES = frozenset({"tags", "caption", "description"})
+TASKS = frozenset({"generate", "separate", "sing"})
 
 
 def _expect_keys(data: dict, required: set[str], location: str) -> None:
@@ -226,6 +227,8 @@ class Backend:
     # Can regenerate part of an existing track (init audio, inpaint range). Asking a
     # backend without it would be a silent no-op, which milestone 0.2 already fixed.
     supports_editing: bool = False
+    # generate is a prompt model. separate and sing are tools and stay out of that list.
+    task: str = "generate"
     instrumental_tag: str = "[inst]"
     supports_lyrics: bool = True
     probe_modules: tuple[str, ...] = ()
@@ -242,7 +245,7 @@ class Backend:
             {
                 "model_id", "venv", "runner", "licence", "notes", "dtype",
                 "prompt_style", "instrumental_tag", "supports_lyrics", "runtime",
-                "controls", "output_audit", "supports_editing",
+                "controls", "output_audit", "supports_editing", "task",
             },
             f"backends.{name}",
         )
@@ -310,6 +313,10 @@ class Backend:
             raise ValueError(f"backends.{name}.controls.duration requires a maximum")
         if not isinstance(data["supports_editing"], bool):
             raise ValueError(f"backends.{name}.supports_editing must be true or false")
+        if data["task"] not in TASKS:
+            raise ValueError(
+                f"backends.{name}.task must be one of {', '.join(sorted(TASKS))}"
+            )
         if data["prompt_style"] not in PROMPT_STYLES:
             raise ValueError(
                 f"backends.{name}.prompt_style must be one of "
@@ -335,6 +342,7 @@ class Backend:
             ),
             prompt_style=data["prompt_style"],
             supports_editing=data["supports_editing"],
+            task=data["task"],
             instrumental_tag=data["instrumental_tag"],
             supports_lyrics=data["supports_lyrics"],
             probe_modules=tuple(probe_modules),
@@ -396,7 +404,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
     if not isinstance(document, dict):
         raise ValueError("backend manifest must contain one JSON object")
     _expect_keys(document, {"schema_version", "default_backend", "backends"}, "manifest")
-    if document["schema_version"] != 6:
+    if document["schema_version"] != 7:
         raise ValueError(f"unsupported backend manifest schema {document['schema_version']!r}")
     raw_backends = document["backends"]
     if not isinstance(raw_backends, dict) or not raw_backends:
@@ -412,6 +420,13 @@ def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
 
 
 DEFAULT_BACKEND, BACKENDS = load_manifest()
+
+
+def generative_backends() -> dict[str, Backend]:
+    """Prompt models. Separation and singing stay registered, off this list."""
+    return {
+        name: backend for name, backend in BACKENDS.items() if backend.task == "generate"
+    }
 
 
 def get(name: str) -> Backend:
@@ -489,7 +504,7 @@ def _run_process(command: list[str], input_text: str, timeout_seconds: int):
     return subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
 
 
-def audit_audio_file(path: Path, backend_name: str) -> AudioAudit:
+def audit_audio_file(path: Path, backend_name: str, *, allow_silence: bool = False) -> AudioAudit:
     """Measure basic output facts and refuse empty, silent or non-finite audio."""
     if not path.is_file() or path.stat().st_size == 0:
         raise RuntimeError(f"{backend_name} runner wrote no audio file: {path}")
@@ -516,7 +531,8 @@ def audit_audio_file(path: Path, backend_name: str) -> AudioAudit:
     if frames <= 0 or sample_rate <= 0 or channels <= 0:
         raise RuntimeError(f"{backend_name} runner wrote empty audio: {path}")
     if peak <= 1e-7:
-        raise RuntimeError(f"{backend_name} runner wrote silent audio: {path}")
+        if not allow_silence:
+            raise RuntimeError(f"{backend_name} runner wrote silent audio: {path}")
     return AudioAudit(
         duration_seconds=frames / sample_rate,
         frames=frames,
@@ -533,8 +549,22 @@ def run_subprocess(backend: Backend, job: dict) -> dict:
         raise RuntimeError(f"{backend.name} has no subprocess runtime configured")
     script = PROJECT_ROOT / "runners" / backend.runner
     expected = Path(job["output_path"])
+    extra_outputs = job.get("outputs")
+    expected_outputs: dict[str, Path] = {}
+    if extra_outputs is not None:
+        if not isinstance(extra_outputs, dict) or not extra_outputs:
+            raise RuntimeError(f"{backend.name} runner outputs must be a non-empty object")
+        for label, raw_path in extra_outputs.items():
+            if not isinstance(label, str) or not label or not isinstance(raw_path, str):
+                raise RuntimeError(f"{backend.name} runner outputs are malformed")
+            expected_outputs[label] = Path(raw_path)
+        if expected.resolve() not in {path.resolve() for path in expected_outputs.values()}:
+            raise RuntimeError(f"{backend.name} primary output is not one of its stems")
     if expected.exists():
         raise RuntimeError(f"refusing to overwrite an existing output: {expected}")
+    for path in expected_outputs.values():
+        if path.resolve() != expected.resolve() and path.exists():
+            raise RuntimeError(f"refusing to overwrite an existing output: {path}")
     try:
         proc = _run_process(
             [str(backend.python), str(script)],
@@ -571,6 +601,20 @@ def run_subprocess(backend: Backend, job: dict) -> dict:
         raise RuntimeError(
             f"{backend.name} runner reported an unexpected output path: {returned_path!r}"
         )
+    if expected_outputs:
+        returned_outputs = result.get("paths")
+        if not isinstance(returned_outputs, dict):
+            raise RuntimeError(f"{backend.name} runner did not report its stem paths")
+        if set(returned_outputs) != set(expected_outputs):
+            raise RuntimeError(
+                f"{backend.name} runner reported stems {sorted(returned_outputs)}, "
+                f"expected {sorted(expected_outputs)}"
+            )
+        for label, raw_path in returned_outputs.items():
+            if not isinstance(raw_path, str) or Path(raw_path).resolve() != expected_outputs[label].resolve():
+                raise RuntimeError(
+                    f"{backend.name} runner reported an unexpected {label} path: {raw_path!r}"
+                )
     elapsed = result.get("elapsed_seconds")
     if (
         isinstance(elapsed, bool)
@@ -581,5 +625,14 @@ def run_subprocess(backend: Backend, job: dict) -> dict:
         raise RuntimeError(
             f"{backend.name} runner reported invalid elapsed_seconds: {elapsed!r}"
         )
-    result["_audio_audit"] = audit_audio_file(expected, backend.name)
+    if expected_outputs:
+        result["_audio_audits"] = {
+            label: audit_audio_file(path, backend.name, allow_silence=True)
+            for label, path in expected_outputs.items()
+        }
+        result["_audio_audit"] = result["_audio_audits"][
+            next(label for label, path in expected_outputs.items() if path.resolve() == expected.resolve())
+        ]
+    else:
+        result["_audio_audit"] = audit_audio_file(expected, backend.name)
     return result

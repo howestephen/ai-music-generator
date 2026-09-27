@@ -52,9 +52,14 @@ class _StubRunner:
 
     def __call__(self, backend: backends.Backend, job: dict) -> dict:
         self.calls.append((backend.name, job))
+        frames = round(float(job["duration"]) * 8000)
         path = Path(job["output_path"])
-        _write_test_wav(path, frames=round(float(job["duration"]) * 8000))
-        return {"path": str(path), "elapsed_seconds": 0.1}
+        _write_test_wav(path, frames=frames)
+        outputs = job.get("outputs")
+        if isinstance(outputs, dict):
+            for extra in outputs.values():
+                _write_test_wav(Path(extra), frames=frames)
+        return {"path": str(path), "paths": outputs, "elapsed_seconds": 0.1}
 
     @property
     def last_job(self) -> dict:
@@ -77,6 +82,20 @@ class GenerateSeam(unittest.TestCase):
         self.addCleanup(available.stop)
         self.out = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.out, ignore_errors=True)
+
+    def test_separation_writes_four_stems_and_generate_refuses_demucs(self):
+        source = self.out / "mix.wav"
+        _write_test_wav(source, frames=8000)
+        tracks = core.separate(source, seed=4, output_dir=self.out)
+        self.assertEqual(
+            [track.title for track in tracks],
+            ["mix vocals", "mix drums", "mix bass", "mix other"],
+        )
+        self.assertTrue(all(track.path.is_file() and track.sidecar_path().is_file() for track in tracks))
+        self.assertEqual(self.stub.last_job["options"]["model"], "htdemucs")
+        self.assertEqual(set(self.stub.last_job["outputs"]), set(core.SEPARATION_STEMS))
+        with self.assertRaisesRegex(ValueError, "not a prompt model"):
+            self.gen(model="demucs")
 
     def gen(self, **kw) -> core.Track:
         duration = kw.pop("duration", 5.0)
@@ -862,7 +881,7 @@ class Registry(unittest.TestCase):
 
     def test_manifest_declares_the_default_and_every_registered_backend(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 6)
+        self.assertEqual(document["schema_version"], 7)
         self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
         self.assertEqual(backends.DEFAULT_BACKEND, "stable-audio-medium")
         self.assertEqual(list(document["backends"]), list(backends.BACKENDS))
@@ -2534,7 +2553,7 @@ print(json.dumps({
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         config = json.loads(result.stdout)
-        self.assertEqual(config["models"], list(backends.BACKENDS))
+        self.assertEqual(config["models"], list(backends.generative_backends()))
         self.assertEqual(config["default_model"], "stable-audio-medium")
         self.assertEqual(
             config["default_guidance_visible"],
@@ -2784,6 +2803,29 @@ print(json.dumps({
         with self.assertRaisesRegex(ValueError, "shift"):
             module.request_from_job(dict(job, options={"dit": "acestep-v15-turbo", "lm": "x"}))
 
+    def test_demucs_asks_for_four_stems_and_keeps_a_silent_one(self):
+        path = core.PROJECT_ROOT / "runners" / "demucs_runner.py"
+        spec = importlib.util.spec_from_file_location("demucs_runner", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.STEMS, core.SEPARATION_STEMS)
+        job = {
+            "init_audio": "mix.wav",
+            "seed": 3,
+            "options": {"model": "htdemucs"},
+            "outputs": {name: f"/tmp/{name}.wav" for name in module.STEMS},
+        }
+        request = module.request_from_job(job)
+        self.assertEqual(request["model"], "htdemucs")
+        self.assertEqual(set(request["outputs"]), set(module.STEMS))
+        import numpy as np
+        frames = module.as_frames(np.zeros((2, 8), dtype=np.float32))
+        self.assertEqual(frames.shape, (8, 2))
+        with self.assertRaisesRegex(ValueError, "init_audio"):
+            module.request_from_job(dict(job, init_audio=None))
+        with self.assertRaisesRegex(ValueError, "outputs"):
+            module.request_from_job(dict(job, outputs={"vocals": "/tmp/v.wav"}))
+
     def test_runtime_estimate_ignores_non_finite_history_metadata(self):
         corrupt = [{
             "backend": "minimax-mlx",
@@ -2890,6 +2932,7 @@ class DocumentationContract(unittest.TestCase):
         expected = {
             "synth/core.py",
             "runners/acestep_runner.py",
+            "runners/demucs_runner.py",
             "runners/minimax_mlx_runner.py",
             "runners/musicgen_runner.py",
             "runners/stable_audio_runner.py",

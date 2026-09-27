@@ -1,8 +1,9 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "default_backend": "stable-audio-medium",
   "backends": {
     "acestep": {
+      "task": "generate",
       "model_id": "ACE-Step/Ace-Step1.5",
       "venv": ".venv-ace",
       "runner": "acestep_runner.py",
@@ -51,6 +52,7 @@
       }
     },
     "minimax-mlx": {
+      "task": "generate",
       "model_id": "vanch007/MiniMax-Music3-MLX-8bit",
       "venv": ".venv-mlx",
       "runner": "minimax_mlx_runner.py",
@@ -95,6 +97,7 @@
       }
     },
     "stable-audio-sm": {
+      "task": "generate",
       "model_id": "stabilityai/stable-audio-3-optimized",
       "venv": ".venv-sa3",
       "runner": "stable_audio_runner.py",
@@ -147,6 +150,7 @@
       }
     },
     "stable-audio-medium": {
+      "task": "generate",
       "model_id": "stabilityai/stable-audio-3-optimized",
       "venv": ".venv-sa3",
       "runner": "stable_audio_runner.py",
@@ -199,6 +203,7 @@
       }
     },
     "musicgen": {
+      "task": "generate",
       "model_id": "facebook/musicgen-stereo-large",
       "venv": ".venv",
       "runner": "musicgen_runner.py",
@@ -240,6 +245,45 @@
           "info": "MusicGen guidance scale. Default: 3.",
           "integer": false
         }
+      }
+    },
+    "demucs": {
+      "task": "separate",
+      "model_id": "mlx-community/demucs-mlx",
+      "venv": ".venv-demucs",
+      "runner": "demucs_runner.py",
+      "licence": "MIT (commercial OK)",
+      "notes": "HTDemucs on MLX. Splits a mix into vocals, drums, bass and other. A quiet stem is kept.",
+      "dtype": "MLX",
+      "prompt_style": "tags",
+      "instrumental_tag": "",
+      "supports_lyrics": false,
+      "supports_editing": false,
+      "output_audit": {
+        "minimum_duration_ratio": 0.98,
+        "duration_tolerance_seconds": 0.0,
+        "random_seed_retries": 0,
+        "duration_contract": "best_effort"
+      },
+      "runtime": {
+        "probe_modules": ["demucs_mlx"],
+        "timeout_seconds": 7200,
+        "runner_options": {
+          "model": "htdemucs"
+        }
+      },
+      "controls": {
+        "duration": {
+          "default": 120,
+          "minimum": 1,
+          "maximum": 600,
+          "step": 1,
+          "label": "Source duration (s)",
+          "info": "The mix must be 1 to 600 seconds. Each stem is measured against that length.",
+          "integer": false
+        },
+        "steps": null,
+        "guidance": null
       }
     }
   }

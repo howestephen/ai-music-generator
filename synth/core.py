@@ -1,4 +1,4 @@
-"""Core generation. Everything else in this project is a thin wrapper over `generate`."""
+"""Core generation. Prompt models go through `generate`. A mix is split by `separate`."""
 from __future__ import annotations
 
 import json
@@ -179,6 +179,8 @@ def generate(
         raise ValueError("prompt is empty")
 
     backend = backends.get(model)
+    if backend.task != "generate":
+        raise ValueError(f"{backend.name} is a {backend.task} tool, not a prompt model")
     # None means "whatever this backend considers a track". Hardcoding a number here
     # gave a 60-second clip from a model that makes six-minute ones, on every caller
     # that did not pass one, which was the whole CLI.
@@ -323,3 +325,147 @@ def generate(
         return track
     finally:
         reservation.unlink(missing_ok=True)
+
+
+SEPARATION_STEMS = ("vocals", "drums", "bass", "other")
+
+
+def _source_label(path: Path) -> tuple[str, str | None]:
+    """Title and genre from a library sidecar, or the file name."""
+    sidecar = path.with_suffix(".json")
+    title = path.stem.replace("_", " ").replace("-", " ")
+    genre = None
+    if sidecar.is_file():
+        try:
+            data = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = None
+        if isinstance(data, dict):
+            recorded = data.get("title")
+            if isinstance(recorded, str) and recorded.strip():
+                title = recorded.strip()
+            recorded_genre = data.get("genre")
+            if isinstance(recorded_genre, str) and recorded_genre.strip():
+                genre = recorded_genre.strip()
+    return title, genre
+
+
+def separate(
+    source: Path | str,
+    seed: int | None = None,
+    output_dir: Path | None = None,
+) -> list[Track]:
+    """Split one mix into vocals, drums, bass and other.
+
+    Each stem is its own library track. A stem that is silent stays, because a
+    mix with no vocal still separated.
+    """
+    backend = backends.get("demucs")
+    if backend.task != "separate":
+        raise RuntimeError("the demucs backend is not registered as separation")
+    if not backend.available:
+        raise RuntimeError(
+            f"Backend {backend.name!r} is not set up: {backend.availability_error}. "
+            "See README for install steps."
+        )
+    source = Path(source)
+    if not source.is_file():
+        raise ValueError(f"mix is not a file: {source}")
+    source_audit = backends.audit_audio_file(source, "mix")
+    duration = backend.duration.validate(
+        source_audit.duration_seconds, f"{backend.name} duration",
+    )
+    if seed is None:
+        seed = random.randint(0, 2**31 - 1)
+    output_dir = Path(output_dir) if output_dir else OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+    base_title, source_genre = _source_label(source)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    reserved: list[tuple[str, Path, Path]] = []
+    try:
+        outputs: dict[str, Path] = {}
+        for label in SEPARATION_STEMS:
+            path, reservation = _reserve_output_path(
+                output_dir, _slug(f"{base_title} {label}", max_len=80),
+            )
+            reserved.append((label, path, reservation))
+            outputs[label] = path
+        result = backends.run_subprocess(backend, {
+            "prompt": f"separate {source.name}",
+            "lyrics": "",
+            "duration": float(duration),
+            "seed": int(seed),
+            "steps": None,
+            "guidance": None,
+            "output_path": str(outputs["vocals"]),
+            "outputs": {label: str(path) for label, path in outputs.items()},
+            "options": dict(backend.runner_options),
+            "init_audio": str(source),
+            "init_noise_level": None,
+            "inpaint_range": None,
+        })
+        audits = result.get("_audio_audits")
+        if not isinstance(audits, dict):
+            audits = {
+                label: backends.audit_audio_file(path, backend.name, allow_silence=True)
+                for label, path in outputs.items()
+            }
+        if set(audits) != set(SEPARATION_STEMS):
+            raise RuntimeError("separation did not audit every stem")
+        elapsed = result.get("elapsed_seconds", 0.0)
+        tracks: list[Track] = []
+        failure: OutputAuditError | None = None
+        separation_name = backend.name
+        separation_dtype = backend.dtype
+        for label in SEPARATION_STEMS:
+            stem_audit = audits[label]
+            if not isinstance(stem_audit, backends.AudioAudit):
+                raise RuntimeError(f"{label} was not audited")
+            audio_audit = stem_audit
+            delivered = audio_audit.duration_seconds
+            ratio = delivered / float(duration)
+            minimum = backend.output_audit.minimum_duration(float(duration))
+            maximum = backend.output_audit.maximum_duration(float(duration))
+            if delivered < minimum:
+                status = "short"
+            elif delivered > maximum:
+                status = "long"
+            else:
+                status = "passed"
+            track = Track(
+                path=outputs[label],
+                prompt=f"separated {label} from {source.name}",
+                duration=round(delivered, 3),
+                requested_duration=float(duration),
+                duration_ratio=round(ratio, 4),
+                audit_status=status,
+                audio_frames=audio_audit.frames,
+                sample_rate=audio_audit.sample_rate,
+                channels=audio_audit.channels,
+                file_bytes=audio_audit.file_bytes,
+                peak_amplitude=round(audio_audit.peak_amplitude, 8),
+                seed=int(seed),
+                infer_step=None,
+                guidance_scale=None,
+                lyrics="",
+                backend=separation_name,
+                model=backend.model_id,
+                dtype=separation_dtype,
+                generated_at=stamp,
+                elapsed_seconds=round(float(elapsed), 1),
+                title=f"{base_title} {label}",
+                rating=None,
+                genre=source_genre,
+            )
+            track.write_sidecar()
+            tracks.append(track)
+            if status != "passed" and failure is None:
+                failure = OutputAuditError(track, minimum, maximum)
+        if failure is not None:
+            raise failure
+        return tracks
+    finally:
+        for _label, path, reservation in reserved:
+            reservation.unlink(missing_ok=True)
+            if not path.with_suffix(".json").is_file():
+                path.unlink(missing_ok=True)

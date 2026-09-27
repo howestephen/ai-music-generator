@@ -67,6 +67,7 @@ body {
 .tool-tabs {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   gap: 0.15rem;
 }
 

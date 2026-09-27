@@ -2,6 +2,7 @@
 .venv/
 .venv-mlx/
 .venv-ace/
+.venv-demucs/
 __pycache__/
 *.py[cod]
 

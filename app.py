@@ -524,7 +524,7 @@ def _control_update(
 def _control_envelope(attribute: str) -> tuple[float, float | None, float]:
     controls = [
         control
-        for backend in backends.BACKENDS.values()
+        for backend in backends.generative_backends().values()
         if (control := getattr(backend, attribute)) is not None
     ]
     minimum = min(control.minimum for control in controls)
@@ -1130,6 +1130,10 @@ _JOB_QUEUE_LOCK = threading.Lock()
 
 def _run_queued_job(payload: dict) -> core.Track:
     request = dict(payload)
+    operation = request.pop("operation", "generate")
+    if operation == "separate":
+        tracks = core.separate(request["source"], seed=request.get("seed"))
+        return tracks[0]
     retries = int(request.pop("_duration_retries", 0))
     retry_seed = bool(request.pop("_retry_seed", False))
     for attempt in range(retries + 1):
@@ -1175,6 +1179,8 @@ FALLBACK_COST = {
     "acestep": (20.0, 2.4),
     "minimax-mlx": (30.0, 3.2),
     "musicgen": (25.0, 14.0),
+    # demucs has not been timed on this machine. This is the generic stand-in.
+    "demucs": (20.0, 3.0),
     "stable-audio-sm": (3.0, 0.03),
     "stable-audio-medium": (12.0, 0.05),
 }
@@ -1337,6 +1343,44 @@ def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps
             f"{start_bar + bars - 1:g} ({start:.1f}s to {end:.1f}s) · "
             f"seed `{chosen_seed}`{detail}"
         )
+    return headline, queue.snapshot()
+
+
+def _enqueue_separate(track_path, upload):
+    """Queue a split of one mix into vocals, drums, bass and other."""
+    track_path = upload or track_path
+    if not track_path:
+        raise gr.Error("Pick a track from the history, or upload one.")
+    try:
+        prepared, note = _prepare_edit_source(str(track_path))
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise gr.Error(f"Could not read that audio: {exc}") from exc
+    chosen_seed = random.randint(0, 2**31 - 1)
+    payload = {
+        "operation": "separate",
+        "source": str(prepared),
+        "seed": chosen_seed,
+    }
+    summary = {
+        "model": "demucs",
+        "model_id": backends.get("demucs").model_id,
+        "prompt": f"separate {Path(track_path).name}",
+        "duration": 0,
+        "seed": chosen_seed,
+    }
+    try:
+        audit = backends.audit_audio_file(prepared, "mix")
+    except (OSError, RuntimeError) as exc:
+        raise gr.Error(f"Could not read that audio: {exc}") from exc
+    summary["duration"] = audit.duration_seconds
+    try:
+        backends.get("demucs").duration.validate(audit.duration_seconds, "demucs duration")
+    except ValueError as exc:
+        raise gr.Error(str(exc)) from exc
+    queue = _get_job_queue()
+    queue.enqueue(payload, summary, _estimate_runtime("demucs", audit.duration_seconds))
+    detail = f" · {note}" if note else ""
+    headline = f"**Queued a separation of {Path(track_path).name[:40]}**{detail}"
     return headline, queue.snapshot()
 
 
@@ -1538,7 +1582,7 @@ def build_ui() -> gr.Blocks:
     )
     model_choices = [
         (f"{name} · {backend.model_id}", name)
-        for name, backend in backends.BACKENDS.items()
+        for name, backend in backends.generative_backends().items()
     ]
     with gr.Blocks(title="Background Music Generator") as demo:
         gr.Markdown("# Background Music Generator\nLocal instrumental music, generated on this machine.")

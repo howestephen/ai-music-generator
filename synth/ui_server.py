@@ -282,6 +282,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._generate(_json_body(self))
             elif path == "/api/remix" and self.command == "POST":
                 self._remix()
+            elif path == "/api/separate" and self.command == "POST":
+                self._separate()
             elif path == "/api/state" and self.command == "GET":
                 signature = (query.get("signature") or [None])[0]
                 self._send_json(library_state(signature))
@@ -362,6 +364,23 @@ class Handler(BaseHTTPRequestHandler):
             app.REMIX_MODE,
             noise,
         )
+        self._send_json({
+            "status": headline,
+            "queue": [public_job(job) for job in snapshot],
+        })
+
+    def _separate(self) -> None:
+        content_type = self.headers.get("Content-Type") or ""
+        upload = None
+        if content_type.startswith("multipart/"):
+            fields, upload = _parse_upload(self)
+        else:
+            fields = {key: "" if value is None else str(value) for key, value in _json_body(self).items()}
+        track_name = fields.get("track") or ""
+        track_path = str(library_wav(track_name)) if track_name else None
+        if track_path and not Path(track_path).is_file():
+            raise FileNotFoundError("track not found")
+        headline, snapshot = app._enqueue_separate(track_path, str(upload) if upload else None)
         self._send_json({
             "status": headline,
             "queue": [public_job(job) for job in snapshot],

@@ -9,6 +9,7 @@ import {
   moveJob,
   remix,
   removeJob,
+  separate,
   undoDelete,
   type Bootstrap,
   type Job,
@@ -95,7 +96,9 @@ export function App() {
   const [remixNoise, setRemixNoise] = useState(0.6);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [libraryView, setLibraryView] = useState<"tracks" | "history" | "trash">("tracks");
-  const [tool, setTool] = useState<"generate" | "remix">("generate");
+  const [tool, setTool] = useState<"generate" | "remix" | "separate">("generate");
+  const [separateTrack, setSeparateTrack] = useState("");
+  const [separateFile, setSeparateFile] = useState<File | null>(null);
   const [drawer, setDrawer] = useState<DrawerMode>("closed");
   const desktop = useDesktopLayout();
   const followQueue = useRef(true);
@@ -309,6 +312,24 @@ export function App() {
     setNotice({ tone: "ok", text: "Settings restored." });
   }
 
+  async function onSeparate(trackName?: string) {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const chosen = trackName || separateTrack;
+      const result = !trackName && separateFile
+        ? await separate(remixForm({}, separateFile))
+        : await separate({ track: chosen });
+      followQueue.current = true;
+      setQueue(result.queue);
+      setNotice({ tone: "ok", text: "Separation queued. Vocals, drums, bass and other land in the library." });
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "Could not separate" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function remixTrackFromLibrary(track: Track) {
     setRemixTrack(track.name);
     setRemixPrompt(track.prompt === "Prompt unavailable" ? "" : track.prompt);
@@ -327,6 +348,7 @@ export function App() {
         <div className="tool-tabs" role="tablist" aria-label="Tools">
           <button type="button" role="tab" aria-selected={tool === "generate"} className={tool === "generate" ? "is-selected" : ""} onClick={() => setTool("generate")}>Generate</button>
           <button type="button" role="tab" aria-selected={tool === "remix"} className={tool === "remix" ? "is-selected" : ""} onClick={() => setTool("remix")}>Remix</button>
+          <button type="button" role="tab" aria-selected={tool === "separate"} className={tool === "separate" ? "is-selected" : ""} onClick={() => setTool("separate")}>Separate</button>
         </div>
         <label className="model-picker" title={`${model.model_id}. ${model.available ? "Ready" : "Setup missing"}. ${model.licence}. Max ${Math.round(model.max_duration)}s. ${model.notes}`}>
           <span className="model-picker-word">Model</span>
@@ -457,6 +479,25 @@ export function App() {
           </div>
         </details>
         </>
+        ) : tool === "separate" ? (
+        <div className="remix-tool">
+          <p className="text-xs">Vocals, drums, bass and other, each kept as its own track.</p>
+          <select aria-label="Mix from history" value={separateTrack} onChange={(event) => setSeparateTrack(event.target.value)}>
+            <option value="">Mix from history</option>
+            {tracks.map((track) => (
+              <option key={track.name} value={track.name}>{track.title}</option>
+            ))}
+          </select>
+          <input
+            aria-label="Upload a mix"
+            type="file"
+            accept="audio/*,.wav,.mp3,.flac,.aiff,.aif,.ogg"
+            onChange={(event) => setSeparateFile(event.target.files?.[0] ?? null)}
+          />
+          <button type="button" disabled={busy} className="tool-submit" onClick={() => void onSeparate()}>
+            Separate mix
+          </button>
+        </div>
         ) : (
         <div className="remix-tool">
           {model.supports_editing ? null : (
@@ -546,6 +587,7 @@ export function App() {
                     key={track.name}
                     track={track}
                     onRemix={() => remixTrackFromLibrary(track)}
+                    onSeparate={() => void onSeparate(track.name)}
                     onDelete={() => void deleteTrack(track.name).then(applyLibrary)}
                   />
                 ))}
@@ -820,10 +862,11 @@ function JobCard({
 }
 
 function TrackCard({
-  track, onRemix, onDelete,
+  track, onRemix, onSeparate, onDelete,
 }: {
   track: Track;
   onRemix: () => void;
+  onSeparate: () => void;
   onDelete: () => void;
 }) {
   const peakMax = Math.max(...track.peaks, 0) || 1;
@@ -873,6 +916,7 @@ function TrackCard({
       />
       <div className="card-actions">
         <button type="button" onClick={onRemix}>Remix</button>
+        <button type="button" onClick={onSeparate}>Separate</button>
         <button type="button" onClick={onDelete}>Delete</button>
       </div>
     </article>

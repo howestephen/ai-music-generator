@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # ROADMAP
@@ -103,11 +103,9 @@ they are never buried in a chat.
   for Stable Audio on 2026-09-25. Do it with the next prompting change
 - Research further local music models. Compare Apple Silicon support, licence, duration,
   controllability, genre evidence, runtime and integration cost before proposing any
-- Deliver vocals and instruments as separate audio files. Compare the routes rather than
-  assuming one: ACE-Step 1.5 lists Track Separation and Vocal2BGM natively (MIT); Demucs
-  runs locally on any audio, including tracks already in `output/`; LALAL.AI is installed
-  with paid credit, so it costs no install. Whichever wins, a stem is a generated asset
-  and needs its own sidecar and audit. Trigger: the first track that needs one
+- Stem separation shipped 2026-09-28 as HTDemucs on MLX (`demucs`). A mix becomes
+  vocals, drums, bass and other, each with its own sidecar. ACE-Step extract is
+  base-model only and generative, so it was not the separator. LALAL.AI was left unused
 - Vocal-specific synthesis, so a written topline can be sung. SoulX-Singer takes a
   melody as F0 or MIDI plus lyrics rather than a text prompt, so it needs an input
   surface no backend here has. Open: no Apple Silicon build found, and its training-data

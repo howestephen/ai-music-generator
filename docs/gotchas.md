@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Gotchas
@@ -126,9 +126,9 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 ```
 
 Already set in `synth/core.py`, `runners/acestep_runner.py`,
-`runners/minimax_mlx_runner.py`, `runners/musicgen_runner.py` and
-`runners/stable_audio_runner.py`. Every new runner that downloads weights needs it
-too. **Do not remove it.**
+`runners/demucs_runner.py`, `runners/minimax_mlx_runner.py`,
+`runners/musicgen_runner.py` and `runners/stable_audio_runner.py`. Every new runner
+that downloads weights needs it too. **Do not remove it.**
 
 ### Model dependency conflicts are unresolvable - use separate venvs
 
