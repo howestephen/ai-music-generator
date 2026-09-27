@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-19
-updated: 2026-09-27
+updated: 2026-09-28
 generated_by: claude-opus-5
 generated_at: 2026-09-19T14:34Z
 generated_from: conversation
@@ -104,6 +104,22 @@ tags. Its planner may fill BPM, key and time signature, and it does not replace
 the caption. Compare seeds rather than treating one result as representative.
 v1 was weak at orchestral material. 1.5's own examples include an orchestral
 cover, which is not a judgement of a render from this machine.
+
+## Sung line
+
+Sing is not a prompt. The words are the lyric. The melody is one line per note:
+
+```
+C4 0.5
+rest 0.25
+D4 0.5
+```
+
+`C4` is MIDI 60. A MIDI number works too. `rest`, `r` or `0` is a silence and
+does not take a word. Each other note takes the next word. A note is longer
+than 0 seconds and at most 30. The whole line is 0.2 to 600 seconds. The
+voice is the English example. Mandarin, and a reference recording of your
+own, are not wired.
 
 ## Applies to every backend
 

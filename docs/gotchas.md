@@ -127,8 +127,22 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 Already set in `synth/core.py`, `runners/acestep_runner.py`,
 `runners/demucs_runner.py`, `runners/minimax_mlx_runner.py`,
-`runners/musicgen_runner.py` and `runners/stable_audio_runner.py`. Every new runner
+`runners/musicgen_runner.py`, `runners/soulx_runner.py` and
+`runners/stable_audio_runner.py`. Every new runner
 that downloads weights needs it too. **Do not remove it.**
+
+### SoulX upstream requirements are a CUDA pin
+
+**Symptom:** installing the bridge `requirements.txt` fails on sageattention,
+nemo or torchcodec.
+
+**Cause:** the official Soul-AILab pins are CUDA packages. This Mac does not
+use them. `soulxsinger` also imports librosa, which that file's pins do not
+make obvious until the import fails.
+
+**Fix:** use the short install in the README, including `librosa==0.11.0`,
+and the `.pth` that points at the clone. Do not install that requirements
+file. The first sing downloads `mlx-community/SoulX-Singer` into the clone.
 
 ### Model dependency conflicts are unresolvable - use separate venvs
 

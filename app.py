@@ -23,6 +23,7 @@ import gradio as gr
 import soundfile as sf
 
 from synth import backends, core, jobs, prompting
+from synth.sing import count_mismatch, parse_score, pitched_count
 
 # Deleted tracks sit here for one hour, then the WAV and sidecar are removed for good.
 PENDING_DELETE_DIR = ".pending-delete"
@@ -1134,6 +1135,8 @@ def _run_queued_job(payload: dict) -> core.Track:
     if operation == "separate":
         tracks = core.separate(request["source"], seed=request.get("seed"))
         return tracks[0]
+    if operation == "sing":
+        return core.sing(request["lyrics"], request["score"], seed=request.get("seed"))
     retries = int(request.pop("_duration_retries", 0))
     retry_seed = bool(request.pop("_retry_seed", False))
     for attempt in range(retries + 1):
@@ -1181,6 +1184,8 @@ FALLBACK_COST = {
     "musicgen": (25.0, 14.0),
     # demucs has not been timed on this machine. This is the generic stand-in.
     "demucs": (20.0, 3.0),
+    # soulx has not been timed on this machine. This is the generic stand-in.
+    "soulx": (20.0, 3.0),
     "stable-audio-sm": (3.0, 0.03),
     "stable-audio-medium": (12.0, 0.05),
 }
@@ -1381,6 +1386,45 @@ def _enqueue_separate(track_path, upload):
     queue.enqueue(payload, summary, _estimate_runtime("demucs", audit.duration_seconds))
     detail = f" · {note}" if note else ""
     headline = f"**Queued a separation of {Path(track_path).name[:40]}**{detail}"
+    return headline, queue.snapshot()
+
+
+def _enqueue_sing(lyrics, score):
+    """Queue English words on a written melody. A bad score fails here."""
+    words = str(lyrics or "").strip()
+    if not words:
+        raise gr.Error("Enter the words to sing.")
+    melody = str(score or "")
+    try:
+        notes = parse_score(melody)
+    except ValueError as exc:
+        raise gr.Error(str(exc)) from exc
+    pitched = pitched_count(notes)
+    word_count = len(words.split())
+    if pitched != word_count:
+        raise gr.Error(count_mismatch(word_count, pitched))
+    duration = sum(float(note["seconds"]) for note in notes)
+    try:
+        duration = backends.get("soulx").duration.validate(duration, "soulx duration")
+    except ValueError as exc:
+        raise gr.Error(str(exc)) from exc
+    chosen_seed = random.randint(0, 2**31 - 1)
+    payload = {
+        "operation": "sing",
+        "lyrics": words,
+        "score": melody.strip(),
+        "seed": chosen_seed,
+    }
+    summary = {
+        "model": "soulx",
+        "model_id": backends.get("soulx").model_id,
+        "prompt": words,
+        "duration": duration,
+        "seed": chosen_seed,
+    }
+    queue = _get_job_queue()
+    queue.enqueue(payload, summary, _estimate_runtime("soulx", duration))
+    headline = f"**Queued a sung line** · seed `{chosen_seed}`"
     return headline, queue.snapshot()
 
 

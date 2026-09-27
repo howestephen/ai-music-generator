@@ -122,6 +122,14 @@ export function generate(body: Record<string, unknown>) {
   });
 }
 
+export function sing(body: { lyrics: string; score: string }) {
+  return request<{ status: string; queue: Job[] }>("/api/sing", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export function separate(body: FormData | Record<string, unknown>) {
   if (body instanceof FormData) {
     return request<{ status: string; queue: Job[] }>("/api/separate", { method: "POST", body });

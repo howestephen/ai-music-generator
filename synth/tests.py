@@ -33,7 +33,7 @@ import urllib.request
 
 import app
 import soundfile as sf
-from synth import analyze, backends, cli, core, jobs, prompting, ui_server
+from synth import analyze, backends, cli, core, jobs, prompting, sing, ui_server
 
 
 def _write_test_wav(path: Path, frames: int = 1) -> None:
@@ -96,6 +96,50 @@ class GenerateSeam(unittest.TestCase):
         self.assertEqual(set(self.stub.last_job["outputs"]), set(core.SEPARATION_STEMS))
         with self.assertRaisesRegex(ValueError, "not a prompt model"):
             self.gen(model="demucs")
+
+    def test_sing_writes_one_track_and_generate_refuses_soulx(self):
+        score = "C4 0.5\nrest 0.25\nD4 0.5\n"
+        track = core.sing("wish here", score, seed=7, output_dir=self.out)
+        self.assertEqual(track.lyrics, "wish here")
+        self.assertEqual(track.prompt, "C4 0.5\nrest 0.25\nD4 0.5")
+        self.assertEqual(track.requested_duration, 1.25)
+        self.assertEqual(track.backend, "soulx")
+        self.assertIsNone(track.infer_step)
+        self.assertIsNone(track.guidance_scale)
+        self.assertIsNone(track.genre)
+        self.assertTrue(track.path.is_file() and track.sidecar_path().is_file())
+        job = self.stub.last_job
+        self.assertEqual(job["lyrics"], "wish here")
+        self.assertEqual([note["pitch"] for note in job["notes"]], [60, 0, 62])
+        self.assertEqual(job["duration"], 1.25)
+        self.assertIsNone(job.get("outputs"))
+        with self.assertRaisesRegex(ValueError, "not a prompt model"):
+            self.gen(model="soulx")
+        calls = len(self.stub.calls)
+        with self.assertRaisesRegex(ValueError, "2 words and 1 pitched"):
+            core.sing("only one", "C4 0.5", seed=1, output_dir=self.out)
+        self.assertEqual(len(self.stub.calls), calls)
+
+    def test_a_short_sung_line_is_kept_and_still_fails_the_audit(self):
+        def short(_backend, job):
+            path = Path(job["output_path"])
+            _write_test_wav(path, frames=800)
+            return {"path": str(path), "elapsed_seconds": 0.2}
+
+        with mock.patch.object(backends, "run_subprocess", short):
+            with self.assertRaises(core.OutputAuditError) as raised:
+                core.sing("wish here", "C4 0.5\nD4 0.5", seed=3, output_dir=self.out)
+        self.assertEqual(raised.exception.track.audit_status, "short")
+        self.assertTrue(raised.exception.track.path.is_file())
+        self.assertTrue(raised.exception.track.sidecar_path().is_file())
+
+    def test_sing_refuses_when_soulx_is_not_installed(self):
+        with mock.patch.object(
+            backends.Backend, "available", new_callable=mock.PropertyMock, return_value=False,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "not set up"):
+                core.sing("wish here", "C4 0.5\nD4 0.5", seed=1, output_dir=self.out)
+        self.assertEqual(self.stub.calls, [])
 
     def gen(self, **kw) -> core.Track:
         duration = kw.pop("duration", 5.0)
@@ -826,6 +870,43 @@ class MinimaxMinimumDurationWrapper(unittest.TestCase):
         for call in sampled_vocabularies[:3]:
             self.assertFalse(call[4])
         self.assertTrue(sampled_vocabularies[3][4])
+
+
+class SungMelody(unittest.TestCase):
+    def test_c4_is_midi_60_and_a_rest_is_zero(self):
+        self.assertEqual(sing.parse_pitch("C4"), 60)
+        self.assertEqual(sing.parse_pitch("c#4"), 61)
+        self.assertEqual(sing.parse_pitch("Db4"), 61)
+        self.assertEqual(sing.parse_pitch("60"), 60)
+        self.assertEqual(sing.parse_pitch("rest"), 0)
+        self.assertEqual(sing.parse_pitch("R"), 0)
+        self.assertEqual(sing.count_mismatch(2, 1), "2 words and 1 pitched note")
+        self.assertEqual(sing.count_mismatch(1, 2), "1 word and 2 pitched notes")
+        edge = sing.parse_score("C4 30\n# skipped\n\nr 0.5\nE4 0.2")
+        self.assertEqual(edge[0], {"pitch": 60, "seconds": 30.0})
+        self.assertEqual(sing.pitched_count(edge), 2)
+        for token in ("H4", "C", "C10", "128", "", "C4.5", "0b"):
+            with self.subTest(token=token):
+                with self.assertRaises(ValueError):
+                    sing.parse_pitch(token)
+
+    def test_a_score_rejects_empty_unpitched_and_non_finite_time(self):
+        for text, message in (
+            ("", "empty"),
+            ("# only\n", "empty"),
+            ("rest 1\nr 1\n0 1\n", "no pitched"),
+            ("C4", "pitch and seconds"),
+            ("C4 0", "between 0 and 30"),
+            ("C4 -1", "between 0 and 30"),
+            ("C4 30.1", "between 0 and 30"),
+            ("C4 nan", "between 0 and 30"),
+            ("C4 inf", "between 0 and 30"),
+            ("C4 1e309", "between 0 and 30"),
+            ("C4 0.5 extra", "pitch and seconds"),
+        ):
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(ValueError, message):
+                    sing.parse_score(text)
 
 
 class CliDefaults(unittest.TestCase):
@@ -2826,6 +2907,92 @@ print(json.dumps({
         with self.assertRaisesRegex(ValueError, "outputs"):
             module.request_from_job(dict(job, outputs={"vocals": "/tmp/v.wav"}))
 
+    def test_soulx_score_matches_words_and_a_bad_line_never_queues(self):
+        path = core.PROJECT_ROOT / "runners" / "soulx_runner.py"
+        spec = importlib.util.spec_from_file_location("soulx_runner_under_test", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        notes = sing.parse_score("rest 0.5\nC4 0.5\nD4 0.25")
+        target = module.build_target(
+            "hello world",
+            notes,
+            [["HH", "AH0"], ["W", "ER1"]],
+            {"en_HH", "en_AH0", "en_W", "en_ER1", "<SP>"},
+        )
+        self.assertEqual(target["phoneme"], "<SP> en_HH-AH0 en_W-ER1")
+        self.assertEqual(target["note_pitch"], "0 60 62")
+        self.assertEqual(target["note_type"], "1 2 2")
+        self.assertEqual(target["language"], "English")
+        self.assertEqual(target["f0"], "")
+        self.assertEqual(target["time"], [0, 1250])
+        with self.assertRaisesRegex(ValueError, "1 word and 2 pitched notes"):
+            module.build_target("only", notes, [["HH"]], None)
+        with self.assertRaisesRegex(ValueError, "does not have"):
+            module.build_target(
+                "hello world", notes, [["HH", "AH0"], ["W"]], {"en_HH", "en_AH0"},
+            )
+        self.assertEqual(
+            module.phones_for("Hi!", lambda _word: ["HH", "AY1", ",", "."]),
+            ["HH", "AY1"],
+        )
+        with self.assertRaisesRegex(ValueError, "no pronunciation"):
+            module.phones_for("...", lambda _word: [",", "."])
+        job = {
+            "lyrics": "hello",
+            "notes": [{"pitch": 60, "seconds": 0.5}],
+            "seed": 4,
+            "output_path": "/tmp/out.wav",
+        }
+        self.assertEqual(module.request_from_job(job)["seed"], 4)
+        with self.assertRaisesRegex(ValueError, "lyrics"):
+            module.request_from_job(dict(job, lyrics="  "))
+        with self.assertRaisesRegex(ValueError, "melody"):
+            module.request_from_job(dict(job, notes=[]))
+        with self.assertRaisesRegex(ValueError, "seed"):
+            module.request_from_job({key: value for key, value in job.items() if key != "seed"})
+        with self.assertRaisesRegex(ValueError, "pitch"):
+            module.request_from_job(dict(job, notes=[{"seconds": 1}]))
+
+        queue = mock.Mock()
+        queue.enqueue.return_value = {"id": "job-sing"}
+        queue.snapshot.return_value = [{"id": "job-sing", "status": "queued"}]
+        with mock.patch.object(app, "_get_job_queue", return_value=queue), \
+                mock.patch.object(app.random, "randint", return_value=9):
+            with self.assertRaisesRegex(app.gr.Error, "words to sing"):
+                app._enqueue_sing("  ", "C4 0.5")
+            with self.assertRaisesRegex(app.gr.Error, "2 words and 1 pitched"):
+                app._enqueue_sing("one two", "C4 0.5")
+            with self.assertRaisesRegex(app.gr.Error, "30"):
+                app._enqueue_sing("one", "C4 31")
+            with self.assertRaisesRegex(app.gr.Error, "at least 0.2"):
+                app._enqueue_sing("one", "C4 0.1")
+            with self.assertRaisesRegex(app.gr.Error, "caps at 600"):
+                app._enqueue_sing(" ".join(["la"] * 21), "\n".join(["C4 30"] * 21))
+            _status, snapshot = app._enqueue_sing("one two", "C4 0.4\nrest 0.2\nD4 0.4")
+        self.assertEqual(queue.enqueue.call_count, 1)
+        payload, summary, _expected = queue.enqueue.call_args.args
+        self.assertEqual(payload["operation"], "sing")
+        self.assertEqual(payload["lyrics"], "one two")
+        self.assertEqual(payload["score"], "C4 0.4\nrest 0.2\nD4 0.4")
+        self.assertEqual(payload["seed"], 9)
+        self.assertEqual(summary["duration"], 1.0)
+        self.assertEqual(summary["model"], "soulx")
+        self.assertEqual(snapshot[0]["status"], "queued")
+        track = SimpleNamespace()
+        with mock.patch.object(core, "sing", return_value=track) as sung, \
+                mock.patch.object(core, "generate") as generate:
+            self.assertIs(
+                app._run_queued_job({
+                    "operation": "sing",
+                    "lyrics": "la",
+                    "score": "C4 0.5",
+                    "seed": 1,
+                }),
+                track,
+            )
+        sung.assert_called_once_with("la", "C4 0.5", seed=1)
+        generate.assert_not_called()
+
     def test_runtime_estimate_ignores_non_finite_history_metadata(self):
         corrupt = [{
             "backend": "minimax-mlx",
@@ -2935,6 +3102,7 @@ class DocumentationContract(unittest.TestCase):
             "runners/demucs_runner.py",
             "runners/minimax_mlx_runner.py",
             "runners/musicgen_runner.py",
+            "runners/soulx_runner.py",
             "runners/stable_audio_runner.py",
         }
         self.assertEqual(actual, expected)
@@ -2968,6 +3136,23 @@ class ServedUi(unittest.TestCase):
         self.assertEqual(caps["musicgen"], 30)
         self.assertEqual(caps["stable-audio-medium"], 380)
         self.assertEqual(ui_server.bootstrap()["default_model"], "stable-audio-medium")
+        self.assertEqual(set(caps), set(backends.generative_backends()))
+
+    def test_sing_refuses_an_empty_line_before_a_job_exists(self):
+        status, body, _headers = self._open(
+            "/api/sing",
+            data=json.dumps({"lyrics": "", "score": "C4 0.5"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("words", json.loads(body)["error"].lower())
+        status, body, _headers = self._open(
+            "/api/sing",
+            data=json.dumps({"lyrics": "one two", "score": "C4 0.5"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("pitched", json.loads(body)["error"])
 
     def test_library_audio_is_served_from_output_with_ranges(self):
         path = self.out / "probe.wav"

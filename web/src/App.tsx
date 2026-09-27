@@ -10,6 +10,7 @@ import {
   remix,
   removeJob,
   separate,
+  sing,
   undoDelete,
   type Bootstrap,
   type Job,
@@ -96,9 +97,11 @@ export function App() {
   const [remixNoise, setRemixNoise] = useState(0.6);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [libraryView, setLibraryView] = useState<"tracks" | "history" | "trash">("tracks");
-  const [tool, setTool] = useState<"generate" | "remix" | "separate">("generate");
+  const [tool, setTool] = useState<"generate" | "remix" | "separate" | "sing">("generate");
   const [separateTrack, setSeparateTrack] = useState("");
   const [separateFile, setSeparateFile] = useState<File | null>(null);
+  const [sungWords, setSungWords] = useState("");
+  const [sungScore, setSungScore] = useState("");
   const [drawer, setDrawer] = useState<DrawerMode>("closed");
   const desktop = useDesktopLayout();
   const followQueue = useRef(true);
@@ -312,6 +315,21 @@ export function App() {
     setNotice({ tone: "ok", text: "Settings restored." });
   }
 
+  async function onSing() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await sing({ lyrics: sungWords, score: sungScore });
+      followQueue.current = true;
+      setQueue(result.queue);
+      setNotice({ tone: "ok", text: "Sung line queued. It uses the English example voice." });
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "Could not sing" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onSeparate(trackName?: string) {
     setBusy(true);
     setNotice(null);
@@ -349,6 +367,7 @@ export function App() {
           <button type="button" role="tab" aria-selected={tool === "generate"} className={tool === "generate" ? "is-selected" : ""} onClick={() => setTool("generate")}>Generate</button>
           <button type="button" role="tab" aria-selected={tool === "remix"} className={tool === "remix" ? "is-selected" : ""} onClick={() => setTool("remix")}>Remix</button>
           <button type="button" role="tab" aria-selected={tool === "separate"} className={tool === "separate" ? "is-selected" : ""} onClick={() => setTool("separate")}>Separate</button>
+          <button type="button" role="tab" aria-selected={tool === "sing"} className={tool === "sing" ? "is-selected" : ""} onClick={() => setTool("sing")}>Sing</button>
         </div>
         <label className="model-picker" title={`${model.model_id}. ${model.available ? "Ready" : "Setup missing"}. ${model.licence}. Max ${Math.round(model.max_duration)}s. ${model.notes}`}>
           <span className="model-picker-word">Model</span>
@@ -496,6 +515,20 @@ export function App() {
           />
           <button type="button" disabled={busy} className="tool-submit" onClick={() => void onSeparate()}>
             Separate mix
+          </button>
+        </div>
+        ) : tool === "sing" ? (
+        <div className="remix-tool">
+          <p className="text-xs">English words on a written melody, in the example voice. One pitched note per word. A rest does not take a word.</p>
+          <textarea aria-label="Words to sing" value={sungWords} placeholder="Words to sing" onChange={(event) => setSungWords(event.target.value)} />
+          <textarea
+            aria-label="Melody"
+            value={sungScore}
+            placeholder={"C4 0.5\nD4 0.5\nrest 0.25\nE4 1"}
+            onChange={(event) => setSungScore(event.target.value)}
+          />
+          <button type="button" disabled={busy} className="tool-submit" onClick={() => void onSing()}>
+            Sing line
           </button>
         </div>
         ) : (

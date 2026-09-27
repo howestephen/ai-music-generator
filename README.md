@@ -75,14 +75,31 @@ uv venv --python 3.12 .venv-demucs
 uv pip install --python .venv-demucs/bin/python demucs-mlx soundfile
 ```
 
+A sung line is SoulX, not a prompt model. Do not install the bridge
+`requirements.txt`: those pins are CUDA packages. The short list below is the
+one that imports here. `librosa==0.11.0` is required.
+
+```bash
+SOULX=~/.cache/ai-music-generator/SoulX-Singer-MLX
+git clone https://github.com/ailuntx/SoulX-Singer-MLX.git "$SOULX"
+git -C "$SOULX" checkout cc5b3054188e8f0d1cab13c07a3e7b6f339bd871
+uv venv --python 3.10 .venv-soulx
+uv pip install --python .venv-soulx/bin/python \
+  torch==2.2.0 torchaudio==2.2.0 "transformers==4.41.2" "numpy==1.26.4" \
+  omegaconf einops accelerate soundfile tqdm huggingface_hub mlx safetensors \
+  g2p_en nltk scipy "librosa==0.11.0"
+printf '%s\n' "$SOULX" > .venv-soulx/lib/python3.10/site-packages/soulx.pth
+```
+
 Weights download on first use to `~/.cache/`: MiniMax MLX about 13 GB, MusicGen 19 GB,
 and both Stable Audio sizes together about 6.1 GB, since they share one repository.
-ACE-Step 1.5 downloads into `$ACE/checkpoints` on the first generate.
+ACE-Step 1.5 downloads into `$ACE/checkpoints` on the first generate. SoulX
+downloads into `$SOULX/models` on the first sing.
 
 ## Models
 
 Five prompt models behind one CLI, each in whatever environment it needs, plus
-Demucs for separation. `./.venv/bin/python -m synth.cli models` probes every one.
+Demucs for separation and SoulX for a sung line. `./.venv/bin/python -m synth.cli models` probes every one.
 
 | Backend | Model | Max | Prompt style | Licence |
 |---|---|---|---|---|
@@ -103,6 +120,8 @@ upstream runtime and are not connected to Remix. `musicgen` is
 capable but slow on Metal and capped at 30 seconds.
 Separate, in the header, splits a library track or an upload into vocals, drums,
 bass and other. Each stem is its own track. A quiet stem is kept.
+Sing takes English words and a melody of `C4 0.5` lines, one pitched note per
+word, in the English example voice. A reference singer of your own is not wired.
 
 ## Usage
 

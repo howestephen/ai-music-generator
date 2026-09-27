@@ -12,6 +12,21 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-28 - A sung line is SoulX score control, example voice
+
+**Decided:** `soulx` sings English words on a written melody. A line is `C4 0.5`.
+One pitched note per word. A rest does not take a word. The voice is the
+English example shipped with the bridge. Weights are
+`mlx-community/SoulX-Singer`, loaded into the official module through the
+ailuntx bridge at `cc5b3054188e8f0d1cab13c07a3e7b6f339bd871`.
+
+**Why:** SoulX takes MIDI notes and lyrics, which is a topline, not a text
+prompt. The Apple Silicon build is those MLX weights plus the bridge. A
+reference singer of your own needs the preprocess stack, which is not
+installed. Mandarin is the same gap.
+
+**Would revisit if:** a sung line needs another voice, or Mandarin lyrics.
+
 ## 2026-09-28 - Separation is HTDemucs, not ACE-Step extract
 
 **Decided:** a mix is split by `demucs` (HTDemucs on MLX) into vocals, drums, bass

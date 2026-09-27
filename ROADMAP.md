@@ -106,10 +106,10 @@ they are never buried in a chat.
 - Stem separation shipped 2026-09-28 as HTDemucs on MLX (`demucs`). A mix becomes
   vocals, drums, bass and other, each with its own sidecar. ACE-Step extract is
   base-model only and generative, so it was not the separator. LALAL.AI was left unused
-- Vocal-specific synthesis, so a written topline can be sung. SoulX-Singer takes a
-  melody as F0 or MIDI plus lyrics rather than a text prompt, so it needs an input
-  surface no backend here has. Open: no Apple Silicon build found, and its training-data
-  provenance is less clearly stated than Stability's
+- A sung line shipped 2026-09-28 as SoulX-Singer (`soulx`). English words and a
+  melody of `C4 0.5` lines, one pitched note per word, in the English example
+  voice. The weights are MLX, loaded into the PyTorch module. A reference
+  singer of your own is not wired
 
 ## Owner decisions open
 

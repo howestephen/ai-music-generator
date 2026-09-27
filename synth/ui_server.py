@@ -42,7 +42,7 @@ def _control_payload(control) -> dict | None:
 
 def bootstrap() -> dict:
     models = []
-    for name, backend in backends.BACKENDS.items():
+    for name, backend in backends.generative_backends().items():
         choices, info = app._voice_choice_labels(name)
         models.append({
             "name": name,
@@ -284,6 +284,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._remix()
             elif path == "/api/separate" and self.command == "POST":
                 self._separate()
+            elif path == "/api/sing" and self.command == "POST":
+                self._sing()
             elif path == "/api/state" and self.command == "GET":
                 signature = (query.get("signature") or [None])[0]
                 self._send_json(library_state(signature))
@@ -381,6 +383,14 @@ class Handler(BaseHTTPRequestHandler):
         if track_path and not Path(track_path).is_file():
             raise FileNotFoundError("track not found")
         headline, snapshot = app._enqueue_separate(track_path, str(upload) if upload else None)
+        self._send_json({
+            "status": headline,
+            "queue": [public_job(job) for job in snapshot],
+        })
+
+    def _sing(self) -> None:
+        body = _json_body(self)
+        headline, snapshot = app._enqueue_sing(body.get("lyrics"), body.get("score"))
         self._send_json({
             "status": headline,
             "queue": [public_job(job) for job in snapshot],

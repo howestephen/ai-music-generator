@@ -1,4 +1,4 @@
-"""Core generation. Prompt models go through `generate`. A mix is split by `separate`."""
+"""Core generation. Prompt models go through `generate`. A mix is split by `separate`. A line is sung by `sing`."""
 from __future__ import annotations
 
 import json
@@ -10,6 +10,7 @@ import time
 import warnings
 
 from . import backends, prompting
+from . import sing as melody
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -469,3 +470,107 @@ def separate(
             reservation.unlink(missing_ok=True)
             if not path.with_suffix(".json").is_file():
                 path.unlink(missing_ok=True)
+
+
+def sing(
+    lyrics: str,
+    score: str,
+    seed: int | None = None,
+    output_dir: Path | None = None,
+) -> Track:
+    """Sing English words on a written melody, in the example voice.
+
+    `score` is lines of `C4 0.5`. One pitched note per word. A rest does not
+    take a word. The sidecar prompt is that score, and `lyrics` is the words.
+    """
+    backend = backends.get("soulx")
+    if backend.task != "sing":
+        raise RuntimeError("the soulx backend is not registered as singing")
+    if not backend.available:
+        raise RuntimeError(
+            f"Backend {backend.name!r} is not set up: {backend.availability_error}. "
+            "See README for install steps."
+        )
+    words = str(lyrics or "").strip()
+    if not words:
+        raise ValueError("lyrics are empty")
+    notes = melody.parse_score(score)
+    pitched = melody.pitched_count(notes)
+    word_count = len(words.split())
+    if pitched != word_count:
+        raise ValueError(melody.count_mismatch(word_count, pitched))
+    sung_length = sum(float(note["seconds"]) for note in notes)
+    sung_length = backend.duration.validate(sung_length, "soulx duration")
+    if seed is None:
+        seed = random.randint(0, 2**31 - 1)
+    output_dir = Path(output_dir) if output_dir else OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    title = prompting.track_title(words, None, int(seed))
+    path, reservation = _reserve_output_path(output_dir, _slug(title, max_len=80))
+    try:
+        started = time.time()
+        result = backends.run_subprocess(backend, {
+            "prompt": words,
+            "lyrics": words,
+            "notes": notes,
+            "duration": float(sung_length),
+            "seed": int(seed),
+            "steps": None,
+            "guidance": None,
+            "output_path": str(path),
+            "options": dict(backend.runner_options),
+            "init_audio": None,
+            "init_noise_level": None,
+            "inpaint_range": None,
+        })
+        elapsed = result.get("elapsed_seconds", time.time() - started)
+        sung_audit = result.get("_audio_audit")
+        if not isinstance(sung_audit, backends.AudioAudit):
+            sung_audit = backends.audit_audio_file(path, backend.name)
+        audio_audit = sung_audit
+        delivered = audio_audit.duration_seconds
+        ratio = delivered / float(sung_length)
+        minimum = backend.output_audit.minimum_duration(float(sung_length))
+        maximum = backend.output_audit.maximum_duration(float(sung_length))
+        if delivered < minimum:
+            status = "short"
+        elif delivered > maximum:
+            status = "long"
+        else:
+            status = "passed"
+        sung_name = backend.name
+        sung_dtype = backend.dtype
+        track = Track(
+            path=path,
+            prompt=str(score).strip(),
+            duration=round(delivered, 3),
+            requested_duration=float(sung_length),
+            duration_ratio=round(ratio, 4),
+            audit_status=status,
+            audio_frames=audio_audit.frames,
+            sample_rate=audio_audit.sample_rate,
+            channels=audio_audit.channels,
+            file_bytes=audio_audit.file_bytes,
+            peak_amplitude=round(audio_audit.peak_amplitude, 8),
+            seed=int(seed),
+            infer_step=None,
+            guidance_scale=None,
+            lyrics=words,
+            backend=sung_name,
+            model=backend.model_id,
+            dtype=sung_dtype,
+            generated_at=stamp,
+            elapsed_seconds=round(float(elapsed), 1),
+            title=title,
+            rating=None,
+            genre=None,
+        )
+        track.write_sidecar()
+        if status != "passed":
+            raise OutputAuditError(track, minimum, maximum)
+        return track
+    finally:
+        reservation.unlink(missing_ok=True)
+        if not path.with_suffix(".json").is_file():
+            path.unlink(missing_ok=True)

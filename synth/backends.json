@@ -285,6 +285,43 @@
         "steps": null,
         "guidance": null
       }
+    },
+    "soulx": {
+      "task": "sing",
+      "model_id": "mlx-community/SoulX-Singer",
+      "venv": ".venv-soulx",
+      "runner": "soulx_runner.py",
+      "licence": "Apache-2.0 (commercial OK)",
+      "notes": "Sings English words on a written melody, in the example voice. One pitched note per word. Score control, MLX weights on the PyTorch module.",
+      "dtype": "MLX",
+      "prompt_style": "tags",
+      "instrumental_tag": "",
+      "supports_lyrics": true,
+      "supports_editing": false,
+      "output_audit": {
+        "minimum_duration_ratio": 0.98,
+        "duration_tolerance_seconds": 0.0,
+        "random_seed_retries": 0,
+        "duration_contract": "best_effort"
+      },
+      "runtime": {
+        "probe_modules": ["soulxsinger.models.soulxsinger"],
+        "timeout_seconds": 7200,
+        "runner_options": {}
+      },
+      "controls": {
+        "duration": {
+          "default": 120,
+          "minimum": 0.2,
+          "maximum": 600,
+          "step": 0.1,
+          "label": "Melody length (s)",
+          "info": "The written melody must last 0.2 to 600 seconds.",
+          "integer": false
+        },
+        "steps": null,
+        "guidance": null
+      }
     }
   }
 }
