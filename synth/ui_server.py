@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import app
 from synth import backends, core, prompting
+from synth import sing as melody
 
 WEB_DIST = core.PROJECT_ROOT / "web" / "dist"
 MAX_JSON_BYTES = 1_000_000
@@ -46,6 +47,9 @@ def bootstrap() -> dict:
         choices, info = app._voice_choice_labels(name)
         models.append({
             "name": name,
+            "label": backend.label,
+            "version": backend.version,
+            "display": backend.display_name,
             "model_id": backend.model_id,
             "licence": backend.licence,
             "notes": backend.notes,
@@ -67,7 +71,21 @@ def bootstrap() -> dict:
         "genres": prompting.genre_names(),
         "characters": prompting.character_options(),
         "mood_default": prompting.RANDOM_CHOICE,
+        "labels": {
+            name: backend.display_name for name, backend in backends.BACKENDS.items()
+        },
+        "melodies": list(melody.pattern_names()),
+        "melody_default": melody.DEFAULT_PATTERN,
     }
+
+
+def melody_score(body: dict) -> str:
+    """Write a SoulX score from a named pattern. Empty words yield an empty score."""
+    name = str(body.get("pattern") or melody.DEFAULT_PATTERN).strip()
+    words = str(body.get("lyrics") or "").strip()
+    if not words:
+        return ""
+    return melody.score_for(name, len(words.split()))
 
 
 def genre_options(genre: str | None) -> dict:
@@ -278,6 +296,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(genre_options(genre))
             elif path == "/api/prompt" and self.command == "POST":
                 self._send_json({"prompt": compose_prompt(_json_body(self))})
+            elif path == "/api/melody" and self.command == "POST":
+                self._send_json({"score": melody_score(_json_body(self))})
             elif path == "/api/generate" and self.command == "POST":
                 self._generate(_json_body(self))
             elif path == "/api/remix" and self.command == "POST":

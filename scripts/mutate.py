@@ -46,11 +46,15 @@ MUTATIONS = [
      '            raise ValueError(f"{backend.name} has no {knob} control (got {value!r})")', "            pass"),
     ("musicgen accepts lyrics", "synth/backends.json",
      '      "notes": "Strong instrumental model, but 30s per generation.",\n'
+     '      "label": "MusicGen (Large)",\n'
+     '      "version": "stereo-large",\n'
      '      "dtype": "float32",\n'
      '      "prompt_style": "tags",\n'
      '      "instrumental_tag": "",\n'
      '      "supports_lyrics": false,',
      '      "notes": "Strong instrumental model, but 30s per generation.",\n'
+     '      "label": "MusicGen (Large)",\n'
+     '      "version": "stereo-large",\n'
      '      "dtype": "float32",\n'
      '      "prompt_style": "tags",\n'
      '      "instrumental_tag": "",\n'

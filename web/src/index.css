@@ -89,13 +89,15 @@ body {
 .model-picker {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  max-width: min(46vw, 12rem);
+  gap: 0.35rem;
+  width: max-content;
+  max-width: 100%;
   margin-left: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--panel);
   padding: 0.15rem 0.55rem 0.15rem 0.7rem;
+  white-space: nowrap;
 }
 
 .model-picker-word {
@@ -106,12 +108,29 @@ body {
 
 .model-picker select {
   width: auto;
-  max-width: 12rem;
+  max-width: none;
+  min-width: 0;
+  field-sizing: content;
   appearance: none;
   border: 0;
   background: transparent;
-  padding: 0.15rem 0;
-  text-overflow: ellipsis;
+  padding: 0.15rem 0.15rem 0.15rem 0;
+  text-overflow: clip;
+}
+
+.melody-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.melody-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.melody-row button {
+  flex: none;
 }
 
 .model-chevron {

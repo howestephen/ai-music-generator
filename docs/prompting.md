@@ -27,7 +27,7 @@ Which tool uses which model:
 | Generate, MusicGen | `musicgen` | Tags. No lyrics channel. Non-commercial |
 | Remix | Stable Audio only | The same description, plus an existing track |
 | Separate | `demucs` | A mix. No prompt |
-| Sing | `soulx` | English words and a written melody. Not the generate model |
+| Sing | `soulx` | English words. A scale or pattern writes the notes. Not the generate model |
 
 MiniMax and MusicGen stay installed. The models used for new tracks are Stable
 Audio and ACE-Step 1.5.
@@ -132,7 +132,12 @@ It stays installed. It is not one of the two models used for new tracks.
 
 ## Sung line
 
-Sing is not a prompt. The words are the lyric. The melody is one line per note:
+Sing is not a prompt, and SoulX does not invent a tune from the words. The
+downloaded model notes describe two controls only: an F0 contour, or a MIDI
+score. The score is what this app sends. One pitched note still has to exist
+for each word. The Sing tab writes that score from a named scale or contour
+(major, minor, pentatonic, blues, and a few short shapes). Random picks one
+of those. You can still edit the notes.
 
 ```
 C4 0.5
@@ -142,9 +147,10 @@ D4 0.5
 
 `C4` is MIDI 60. A MIDI number works too. `rest`, `r` or `0` is a silence and
 does not take a word. Each other note takes the next word. A note is longer
-than 0 seconds and at most 30. The whole line is 0.2 to 600 seconds. The
-voice is the English example. Mandarin, and a reference recording of your
-own, are not wired.
+than 0 seconds and at most 30. The whole line is 0.2 to 600 seconds. A long
+line is shortened so it stays inside that. The voice is the English example.
+Mandarin, and a reference recording of your own, are not wired. SoulX-Singer-SVC
+can follow a recording you have already sung, and that model is not connected.
 
 ## Applies to every backend
 

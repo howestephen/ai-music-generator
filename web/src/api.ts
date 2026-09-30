@@ -10,6 +10,9 @@ export type Control = {
 
 export type ModelInfo = {
   name: string;
+  label: string;
+  version: string;
+  display: string;
   model_id: string;
   licence: string;
   notes: string;
@@ -32,6 +35,9 @@ export type Bootstrap = {
   genres: string[];
   characters: string[];
   mood_default: string;
+  labels: Record<string, string>;
+  melodies: string[];
+  melody_default: string;
 };
 
 export type Track = {
@@ -119,6 +125,14 @@ export function generate(body: Record<string, unknown>) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+export function melodyScore(pattern: string, lyrics: string) {
+  return request<{ score: string }>("/api/melody", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pattern, lyrics }),
   });
 }
 

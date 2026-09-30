@@ -218,6 +218,8 @@ class Backend:
     runner: str | None          # script under runners/, for subprocess backends
     licence: str
     notes: str
+    label: str                  # short name shown in the picker
+    version: str                # bumped when the weights actually change
     dtype: str                  # what the weights really run as; recorded in the sidecar
     duration: NumericControl
     steps: NumericControl | None
@@ -243,8 +245,8 @@ class Backend:
         _expect_keys(
             data,
             {
-                "model_id", "venv", "runner", "licence", "notes", "dtype",
-                "prompt_style", "instrumental_tag", "supports_lyrics", "runtime",
+                "model_id", "venv", "runner", "licence", "notes", "label", "version",
+                "dtype", "prompt_style", "instrumental_tag", "supports_lyrics", "runtime",
                 "controls", "output_audit", "supports_editing", "task",
             },
             f"backends.{name}",
@@ -322,6 +324,12 @@ class Backend:
                 f"backends.{name}.prompt_style must be one of "
                 f"{', '.join(sorted(PROMPT_STYLES))}"
             )
+        label = data["label"]
+        version = data["version"]
+        if not isinstance(label, str) or not label.strip() or "\n" in label:
+            raise ValueError(f"backends.{name}.label must be one non-empty line")
+        if not isinstance(version, str) or not version.strip() or "\n" in version:
+            raise ValueError(f"backends.{name}.version must be one non-empty line")
         return cls(
             name=name,
             model_id=data["model_id"],
@@ -329,6 +337,8 @@ class Backend:
             runner=data["runner"],
             licence=data["licence"],
             notes=data["notes"],
+            label=label.strip(),
+            version=version.strip(),
             dtype=data["dtype"],
             duration=duration,
             steps=NumericControl.from_manifest(
@@ -395,6 +405,11 @@ class Backend:
     def available(self) -> bool:
         return self.availability_error is None
 
+    @property
+    def display_name(self) -> str:
+        """Picker text. The version changes only when the weights do."""
+        return f"{self.label} {self.version}"
+
 
 def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
     try:
@@ -404,7 +419,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
     if not isinstance(document, dict):
         raise ValueError("backend manifest must contain one JSON object")
     _expect_keys(document, {"schema_version", "default_backend", "backends"}, "manifest")
-    if document["schema_version"] != 7:
+    if document["schema_version"] != 8:
         raise ValueError(f"unsupported backend manifest schema {document['schema_version']!r}")
     raw_backends = document["backends"]
     if not isinstance(raw_backends, dict) or not raw_backends:

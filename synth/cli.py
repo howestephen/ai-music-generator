@@ -91,7 +91,7 @@ def cmd_models(args: argparse.Namespace) -> int:
     for name, b in sorted(backends.BACKENDS.items()):
         mark = "ok " if b.available else "MISSING"
         star = " *" if name == core.DEFAULT_MODEL else "  "
-        print(f"{star}{name:12} [{mark}] {b.model_id}")
+        print(f"{star}{name:22} [{mark}] {b.display_name}")
         print(f"              max {b.max_duration:.0f}s | steps {_knob(b.default_steps)} | "
               f"guidance {_knob(b.default_guidance)} | prompt: {b.prompt_style} | {b.dtype}")
         print(f"              {b.licence}")

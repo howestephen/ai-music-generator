@@ -6,6 +6,7 @@ import {
   loadBootstrap,
   loadOptions,
   loadState,
+  melodyScore,
   moveJob,
   remix,
   removeJob,
@@ -102,6 +103,9 @@ export function App() {
   const [separateFile, setSeparateFile] = useState<File | null>(null);
   const [sungWords, setSungWords] = useState("");
   const [sungScore, setSungScore] = useState("");
+  const [melody, setMelody] = useState("");
+  const [melodyEdited, setMelodyEdited] = useState(false);
+  const [melodyToken, setMelodyToken] = useState(0);
   const [drawer, setDrawer] = useState<DrawerMode>("closed");
   const desktop = useDesktopLayout();
   const followQueue = useRef(true);
@@ -124,6 +128,7 @@ export function App() {
       if (initial.steps) setSteps(initial.steps.default);
       if (initial.guidance) setGuidance(initial.guidance.default);
       setVocals(initial.voice_choices[0] ?? "Instrumental");
+      setMelody(data.melody_default);
     }).catch((error: Error) => setNotice({ tone: "error", text: error.message }));
   }, []);
 
@@ -315,6 +320,28 @@ export function App() {
     setNotice({ tone: "ok", text: "Settings restored." });
   }
 
+  useEffect(() => {
+    if (melodyEdited || !melody) return undefined;
+    const words = sungWords.trim();
+    if (!words) {
+      setSungScore("");
+      return undefined;
+    }
+    const handle = window.setTimeout(() => {
+      void melodyScore(melody, sungWords).then((result) => setSungScore(result.score)).catch(() => undefined);
+    }, 180);
+    return () => window.clearTimeout(handle);
+  }, [melody, sungWords, melodyEdited, melodyToken]);
+
+  function onRandomMelody() {
+    const names = bootstrap?.melodies ?? [];
+    if (names.length === 0) return;
+    const next = names[Math.floor(Math.random() * names.length)];
+    setMelodyEdited(false);
+    setMelody(next);
+    setMelodyToken((value) => value + 1);
+  }
+
   async function onSing() {
     setBusy(true);
     setNotice(null);
@@ -372,15 +399,15 @@ export function App() {
         {tool === "sing" || tool === "separate" ? (
           <p className="model-picker" title={tool === "sing" ? "SoulX sings the written line. The generate model is not used." : "Demucs splits the mix. The generate model is not used."}>
             <span className="model-picker-word">Model</span>
-            <span>{tool === "sing" ? "soulx" : "demucs"}</span>
+            <span>{bootstrap.labels[tool === "sing" ? "soulx" : "demucs"]}</span>
           </p>
         ) : (
-        <label className="model-picker" title={`${model.model_id}. ${model.available ? "Ready" : "Setup missing"}. ${model.licence}. Max ${Math.round(model.max_duration)}s. ${model.notes}`}>
+        <label className="model-picker" title={`${model.display}. ${model.model_id}. ${model.available ? "Ready" : "Setup missing"}. ${model.licence}. Max ${Math.round(model.max_duration)}s. ${model.notes}`}>
           <span className="model-picker-word">Model</span>
           <select aria-label="Model" value={tool === "remix" && !model.supports_editing ? "" : modelName} onChange={(event) => { if (event.target.value) applyModel(event.target.value); }}>
             {tool === "remix" && !model.supports_editing ? <option value="">Stable Audio</option> : null}
             {(tool === "remix" ? bootstrap.models.filter((item) => item.supports_editing) : bootstrap.models).map((item) => (
-              <option key={item.name} value={item.name}>{item.name}</option>
+              <option key={item.name} value={item.name}>{item.display}</option>
             ))}
           </select>
           <svg className="model-chevron" viewBox="0 0 12 12" aria-hidden="true">
@@ -527,13 +554,30 @@ export function App() {
         </div>
         ) : tool === "sing" ? (
         <div className="remix-tool">
-          <p className="text-xs">English words on a written melody, in the example voice. One pitched note per word. A rest does not take a word.</p>
+          <p className="text-xs">SoulX needs a pitch on every word. It does not make up a tune. Pick a scale, or hit Random, then edit the notes if you want. A rest does not take a word.</p>
           <textarea aria-label="Words to sing" value={sungWords} placeholder="Words to sing" onChange={(event) => setSungWords(event.target.value)} />
+          <div className="melody-row">
+            <select
+              aria-label="Melody"
+              value={melody}
+              onChange={(event) => {
+                setMelodyEdited(false);
+                setMelody(event.target.value);
+                setMelodyToken((value) => value + 1);
+              }}
+            >
+              {(bootstrap.melodies ?? []).map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+            <button type="button" onClick={onRandomMelody}>Random</button>
+          </div>
           <textarea
-            aria-label="Melody"
+            aria-label="Notes"
             value={sungScore}
             placeholder={"C4 0.5\nD4 0.5\nrest 0.25\nE4 1"}
-            onChange={(event) => setSungScore(event.target.value)}
+            onChange={(event) => {
+              setMelodyEdited(true);
+              setSungScore(event.target.value);
+            }}
           />
           <button type="button" disabled={busy} className="tool-submit" onClick={() => void onSing()}>
             Sing line
@@ -616,7 +660,7 @@ export function App() {
             />
           ) : null}
           {libraryView === "history" ? (
-            <SettingsHistory tracks={tracks} onRestore={restoreSettings} />
+            <SettingsHistory tracks={tracks} labels={bootstrap.labels} onRestore={restoreSettings} />
           ) : null}
           {libraryView === "tracks" ? (
             visibleTracks.length === 0 ? (
@@ -988,9 +1032,10 @@ function TrashList({
 }
 
 function SettingsHistory({
-  tracks, onRestore,
+  tracks, labels, onRestore,
 }: {
   tracks: Track[];
+  labels: Record<string, string>;
   onRestore: (track: Track) => void;
 }) {
   if (tracks.length === 0) {
@@ -1004,7 +1049,7 @@ function SettingsHistory({
           : formatSeconds(track.duration);
         const rows = [
           ["File", track.name],
-          ["Model", track.backend],
+          ["Model", labels[track.backend] ?? track.backend],
           ["Genre", track.genre || ""],
           ["Length", length || ""],
           ["Steps", track.steps == null ? "" : String(track.steps)],

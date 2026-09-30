@@ -14,6 +14,9 @@ import json
 import math
 import os
 import re
+
+# Seneca is a real machine. Unit tests must not probe it.
+os.environ["AI_MUSIC_COMFY"] = "0"
 import signal
 import shutil
 import subprocess
@@ -908,6 +911,41 @@ class SungMelody(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     sing.parse_score(text)
 
+    def test_patterns_write_one_pitch_per_word_and_keep_rests(self):
+        names = sing.pattern_names()
+        self.assertGreaterEqual(len(names), 8)
+        self.assertEqual(len(names), len(set(names)))
+        self.assertIn(sing.DEFAULT_PATTERN, names)
+        for name in names:
+            for count in (1, 2, 5, 40):
+                with self.subTest(name=name, count=count):
+                    text = sing.score_for(name, count)
+                    notes = sing.parse_score(text)
+                    self.assertEqual(sing.pitched_count(notes), count)
+                    self.assertLessEqual(sum(note["seconds"] for note in notes), 600)
+                    for note in notes:
+                        self.assertGreater(note["seconds"], 0)
+                        self.assertLessEqual(note["seconds"], 30)
+                        self.assertGreaterEqual(note["pitch"], 0)
+                        self.assertLessEqual(note["pitch"], 84)
+        breaths = sing.score_for("Scale with breaths", 5)
+        self.assertIn("rest", breaths)
+        self.assertEqual(sing.pitched_count(sing.parse_score(breaths)), 5)
+        self.assertEqual(sing.score_for("C major up", 3), sing.score_for("C major up", 3))
+        with self.assertRaisesRegex(ValueError, "unknown melody"):
+            sing.score_for("not a scale", 2)
+        with self.assertRaisesRegex(ValueError, "at least one word"):
+            sing.score_for("C major up", 0)
+        with self.assertRaisesRegex(ValueError, "at least one word"):
+            sing.score_for("C major up", True)
+        huge = sing.score_for("C major up", 2000)
+        huge_notes = sing.parse_score(huge)
+        self.assertEqual(sing.pitched_count(huge_notes), 2000)
+        self.assertLessEqual(sum(note["seconds"] for note in huge_notes), 600)
+        self.assertGreater(min(note["seconds"] for note in huge_notes), 0)
+        with self.assertRaisesRegex(ValueError, "do not fit"):
+            sing.score_for("C major up", 20000)
+
 
 class CliDefaults(unittest.TestCase):
     def test_steps_and_guidance_default_to_none_so_backend_defaults_win(self):
@@ -962,8 +1000,16 @@ class Registry(unittest.TestCase):
 
     def test_manifest_declares_the_default_and_every_registered_backend(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 7)
+        self.assertEqual(document["schema_version"], 8)
         self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
+        shown = {backend.name: backend.display_name for backend in backends.BACKENDS.values()}
+        self.assertEqual(shown["stable-audio-medium"], "Stable Audio (Med) 3")
+        self.assertEqual(shown["stable-audio-sm"], "Stable Audio (Small) 3")
+        self.assertEqual(shown["acestep"], "ACE-Step 1.5")
+        self.assertEqual(shown["soulx"], "SoulX-Singer 2026.02")
+        self.assertEqual(len(set(shown.values())), len(shown))
+        for backend in backends.BACKENDS.values():
+            self.assertNotIn(backend.name, backend.display_name)
         self.assertEqual(backends.DEFAULT_BACKEND, "stable-audio-medium")
         self.assertEqual(list(document["backends"]), list(backends.BACKENDS))
 
@@ -1950,6 +1996,15 @@ class Registry(unittest.TestCase):
         self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
         path.write_text(json.dumps(document), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "unknown fields: mystery_setting"):
+            backends.load_manifest(path)
+
+    def test_manifest_rejects_a_blank_version(self):
+        document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
+        document["backends"]["acestep"]["version"] = "  "
+        path = Path(tempfile.mkdtemp()) / "backends.json"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "version"):
             backends.load_manifest(path)
 
     def test_manifest_rejects_non_finite_numeric_control_fields(self):
@@ -3137,6 +3192,29 @@ class ServedUi(unittest.TestCase):
         self.assertEqual(caps["stable-audio-medium"], 380)
         self.assertEqual(ui_server.bootstrap()["default_model"], "stable-audio-medium")
         self.assertEqual(set(caps), set(backends.generative_backends()))
+
+    def test_melody_route_writes_one_pitch_per_word(self):
+        status, body, _headers = self._open(
+            "/api/melody",
+            data=json.dumps({"pattern": "C major up", "lyrics": "la la la"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 200)
+        score = json.loads(body)["score"]
+        self.assertEqual(sing.pitched_count(sing.parse_score(score)), 3)
+        status, body, _headers = self._open(
+            "/api/melody",
+            data=json.dumps({"pattern": "no such scale", "lyrics": "la"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 400)
+        status, body, _headers = self._open(
+            "/api/melody",
+            data=json.dumps({"pattern": "C major up", "lyrics": "   "}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["score"], "")
 
     def test_sing_refuses_an_empty_line_before_a_job_exists(self):
         status, body, _headers = self._open(

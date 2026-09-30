@@ -12,6 +12,36 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-30 - A sung line can start from a scale
+
+**Decided:** SoulX still receives a MIDI score, one pitched note per word.
+The Sing tab fills that score from a fixed list of scales and short contours.
+Random picks one of those names. The notes stay editable.
+
+**Why:** the downloaded SoulX notes describe melody (F0) or score (MIDI)
+control only. It does not invent a tune from lyrics. SoulX-Singer-SVC can
+follow a recording you have already sung, and that model is not connected.
+Typing every note was the whole job, so the app writes an ordinary scale
+instead.
+
+**Would revisit if:** a connected model can sing from lyrics alone.
+
+## 2026-09-30 - The picker shows a name and a version
+
+**Decided:** each backend has a `label` and a `version`. The picker shows both,
+for example `Stable Audio (Med) 3`. The registry key stays `stable-audio-medium`
+so old sidecars and `--model` still match. Versions in use: Stable Audio `3`,
+ACE-Step `1.5`, MiniMax Music `3`, MusicGen `stereo-large` (the checkpoint,
+which has no later public revision here), HTDemucs `4`, SoulX-Singer `2026.02`
+(the February 2026 singing model, not the March SVC release).
+
+**Why:** the key is a filename, and a weight swap was invisible. The version
+is the thing to bump when the weights change. The pill grows to the name
+instead of clipping it.
+
+**Would revisit if:** a model publishes a real revision that this version
+string does not show.
+
 ## 2026-09-30 - New tracks are Stable Audio and ACE-Step 1.5
 
 **Decided:** the models used for new tracks are Stable Audio and ACE-Step 1.5.
