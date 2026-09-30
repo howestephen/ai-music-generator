@@ -369,10 +369,17 @@ export function App() {
           <button type="button" role="tab" aria-selected={tool === "separate"} className={tool === "separate" ? "is-selected" : ""} onClick={() => setTool("separate")}>Separate</button>
           <button type="button" role="tab" aria-selected={tool === "sing"} className={tool === "sing" ? "is-selected" : ""} onClick={() => setTool("sing")}>Sing</button>
         </div>
+        {tool === "sing" || tool === "separate" ? (
+          <p className="model-picker" title={tool === "sing" ? "SoulX sings the written line. The generate model is not used." : "Demucs splits the mix. The generate model is not used."}>
+            <span className="model-picker-word">Model</span>
+            <span>{tool === "sing" ? "soulx" : "demucs"}</span>
+          </p>
+        ) : (
         <label className="model-picker" title={`${model.model_id}. ${model.available ? "Ready" : "Setup missing"}. ${model.licence}. Max ${Math.round(model.max_duration)}s. ${model.notes}`}>
           <span className="model-picker-word">Model</span>
-          <select aria-label="Model" value={modelName} onChange={(event) => applyModel(event.target.value)}>
-            {bootstrap.models.map((item) => (
+          <select aria-label="Model" value={tool === "remix" && !model.supports_editing ? "" : modelName} onChange={(event) => { if (event.target.value) applyModel(event.target.value); }}>
+            {tool === "remix" && !model.supports_editing ? <option value="">Stable Audio</option> : null}
+            {(tool === "remix" ? bootstrap.models.filter((item) => item.supports_editing) : bootstrap.models).map((item) => (
               <option key={item.name} value={item.name}>{item.name}</option>
             ))}
           </select>
@@ -380,6 +387,7 @@ export function App() {
             <path d="M2.2 4.4 6 8l3.8-3.6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </label>
+        )}
       </header>
 
       <div className="workspace">

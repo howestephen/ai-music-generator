@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-28
+updated: 2026-09-30
 ---
 
 # Decisions
@@ -11,6 +11,21 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-09-30 - New tracks are Stable Audio and ACE-Step 1.5
+
+**Decided:** the models used for new tracks are Stable Audio and ACE-Step 1.5.
+MiniMax and MusicGen stay installed. A sung line is SoulX, on the Sing tab,
+and does not use the generate model. Separation is Demucs. Remix stays
+Stable Audio. The 4090 box is available. Renders stay on this Mac until a
+routing change is asked for.
+
+**Why:** the other prompt models are not the ones being used, and removing
+them would throw away working installs. SoulX and Demucs do one job each.
+The React menus already read the genre catalogue in `synth/prompting.py`.
+
+**Would revisit if:** a new track needs MiniMax or MusicGen, or renders
+should move to the 4090.
 
 ## 2026-09-28 - A sung line is SoulX score control, example voice
 

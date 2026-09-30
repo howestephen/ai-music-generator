@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-28
+updated: 2026-09-30
 ---
 
 # ROADMAP
@@ -89,18 +89,19 @@ they are never buried in a chat.
 - ACE-Step 1.5 replaced v1 on 2026-09-27: MLX turbo plus the 0.6B planner, 10s to
   600s, in `.venv-ace`. Cover, repaint and vocal-to-BGM stay in the upstream runtime
   and are not connected here. XL is a manifest change if a render needs it
-- Route heavy renders to Seneca, the 4090 box. Its ComfyUI already has nodes for
-  ACE-Step, ACE-Step 1.5, MiniMax Music 3 and Stable Audio, but no audio checkpoints
-  yet. Raised 2026-09-19 after a Mac render fought another agent for the GPU. Deferred
-  2026-09-24: stay on this Mac until the output is good enough that time, not quality,
-  is the limit
+- Route heavy renders to Seneca, the 4090 box. The box is available as of
+  2026-09-30. Routing has not started, and renders stay on this Mac until that
+  move is asked for. Its ComfyUI already has nodes for ACE-Step, ACE-Step 1.5,
+  MiniMax Music 3 and Stable Audio, but no audio checkpoints yet
 
 - Runner diagnostics (`device`, `sampling_rate`, `load_seconds`) into the sidecar. Do it
   with the Phase 3 sidecar change or not at all
 - Runtime notice on the CC-BY-NC MusicGen backend. Trigger: any output leaving personal
   use
-- Copy the MiniMax, ACE-Step and MusicGen prompt guides into `docs/`, as done
-  for Stable Audio on 2026-09-25. Do it with the next prompting change
+- Prompt shapes per model are in [docs/prompting.md](docs/prompting.md), updated
+  2026-09-30. Stable Audio's full upstream guide is already copied. ACE-Step's
+  musician guide describes modes this app does not connect, so it is not copied
+  as the working guide
 - Research further local music models. Compare Apple Silicon support, licence, duration,
   controllability, genre evidence, runtime and integration cost before proposing any
 - Stem separation shipped 2026-09-28 as HTDemucs on MLX (`demucs`). A mix becomes

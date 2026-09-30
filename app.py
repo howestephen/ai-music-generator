@@ -432,7 +432,7 @@ def _voice_choice_labels(model: str) -> tuple[list[str], str]:
     if backend.supports_lyrics:
         return (
             ["Instrumental", "With vocals"],
-            "Models with a lyrics channel can sing words when lyrics are provided.",
+            "This model has a lyrics channel. The Sing tab is SoulX and does not use this model.",
         )
     return (
         ["Instrumental", "Vocal texture"],

@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-19
-updated: 2026-09-28
+updated: 2026-09-30
 generated_by: claude-opus-5
 generated_at: 2026-09-19T14:34Z
 generated_from: conversation
@@ -12,8 +12,25 @@ generated_from: conversation
 
 Each backend wants a different shape of prompt, and the wrong shape degrades output
 badly. The UI's **Genre** dropdown writes the right shape automatically, using the
-vocabulary in `synth/prompting.py`; this file is the reference behind it and the
-place to look when hand-writing a prompt.
+vocabulary in `synth/prompting.py`. That same catalogue feeds the React menus:
+genre, mood, tempo, instruments, character and extra keywords. Regenerate samples
+the longer phrase pools (drums, bass, lead, texture, production) and writes them
+in the selected model's style. Those pools are not their own menus.
+
+Which tool uses which model:
+
+| Tool | Model | What you give it |
+|---|---|---|
+| Generate, Stable Audio | `stable-audio-medium` or `stable-audio-sm` | A description. Vocal texture is wordless. No lyrics channel |
+| Generate, ACE-Step 1.5 | `acestep` | Comma-separated tags. A lyrics box when With vocals is on |
+| Generate, MiniMax | `minimax-mlx` | A structured caption, including a lyrics channel |
+| Generate, MusicGen | `musicgen` | Tags. No lyrics channel. Non-commercial |
+| Remix | Stable Audio only | The same description, plus an existing track |
+| Separate | `demucs` | A mix. No prompt |
+| Sing | `soulx` | English words and a written melody. Not the generate model |
+
+MiniMax and MusicGen stay installed. The models used for new tracks are Stable
+Audio and ACE-Step 1.5.
 
 `synth.cli models` prints each backend's `prompt_style`.
 
@@ -65,10 +82,10 @@ accepts an init audio file with a mask range in seconds, regenerating only that 
 and keeping the rest. Stability's guidance: mask a large region first and reduce it,
 and keep the prompt plausible against the surrounding audio.
 
-This is the UI's **Rework a section** tab. It takes a track from the history or a file
-you upload, converting an odd sample rate or an MP3 on the way in, and offers two
-modes: rework one span selected in bars, or remix the whole track with an
-amount-of-change control. Continuation past the end of a track is not wired up.
+This is the UI's **Remix** tab, and only Stable Audio can run it. It takes a track
+from the history or a file you upload, converting an odd sample rate or an MP3
+on the way in, and remixes the whole track with an amount-of-change control.
+Continuation past the end of a track is not wired up.
 
 ## `caption`: MiniMax Music 3
 
@@ -91,19 +108,27 @@ Sources: the
 [caption rewriter](https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/skills/music-caption-rewriter/SKILL.md)
 and [prompt guide](https://github.com/MiniMax-AI/skills/blob/main/skills/minimax-music-gen/references/prompt_guide.md).
 
-## `tags`: ACE-Step and MusicGen
+## `tags`: ACE-Step 1.5
 
-Comma-separated style tags, not sentences.
+Comma-separated style tags, not sentences. The genre menu writes this shape
+from the same catalogue as Stable Audio, then you can edit it.
 
 ```
 lo-fi hip hop, warm rhodes piano, vinyl crackle, 85bpm, instrumental
 ```
 
-The pipeline supplies ACE-Step's `[Instrumental]` sentinel. 1.5 still wants these
-tags. Its planner may fill BPM, key and time signature, and it does not replace
-the caption. Compare seeds rather than treating one result as representative.
-v1 was weak at orchestral material. 1.5's own examples include an orchestral
-cover, which is not a judgement of a render from this machine.
+With vocals off, the runner sends `[Instrumental]` on the lyrics channel.
+With vocals on, the lyrics box is the words and the tags stay the style.
+The planner may fill BPM, key and time signature. It does not replace the
+caption. Cover, repaint and vocal-to-BGM exist in ACE-Step's own musician
+guide and are not connected here. Compare seeds rather than treating one
+result as representative.
+
+## `tags`: MusicGen
+
+The same comma-separated tags. MusicGen has no lyrics channel, so With vocals
+is not offered. It is capped at 30 seconds and the licence is non-commercial.
+It stays installed. It is not one of the two models used for new tracks.
 
 ## Sung line
 
