@@ -8,7 +8,7 @@
       "venv": ".venv-ace",
       "runner": "acestep_runner.py",
       "licence": "MIT (commercial OK)",
-      "notes": "1.5 turbo on MLX. The planner fills BPM, key and time signature and does not replace the caption. Cover and repaint exist upstream and are not connected to Remix.",
+      "notes": "1.5 turbo. Seneca's 4090 runs it when ComfyUI answers, otherwise MLX on this Mac. Cover and repaint are not connected.",
       "label": "ACE-Step",
       "version": "1.5",
       "dtype": "MLX",

@@ -119,10 +119,12 @@ lo-fi hip hop, warm rhodes piano, vinyl crackle, 85bpm, instrumental
 
 With vocals off, the runner sends `[Instrumental]` on the lyrics channel.
 With vocals on, the lyrics box is the words and the tags stay the style.
-The planner may fill BPM, key and time signature. It does not replace the
-caption. Cover, repaint and vocal-to-BGM exist in ACE-Step's own musician
-guide and are not connected here. Compare seeds rather than treating one
-result as representative.
+On this Mac the planner may fill BPM, key and time signature. It does not
+replace the caption. When Seneca's ComfyUI answers, the same tags go to the
+4090. BPM is read from a `174bpm` tag, and a named key such as `E minor` is
+sent when the tags contain one. Otherwise the 4090 node gets C major. Cover,
+repaint and vocal-to-BGM exist in ACE-Step's own musician guide and are not
+connected here. Compare seeds rather than treating one result as representative.
 
 ## `tags`: MusicGen
 

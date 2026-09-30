@@ -12,6 +12,23 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-30 - ACE-Step generate can run on the 4090
+
+**Decided:** an ACE-Step generate goes to Seneca's ComfyUI when that process
+answers on Tailscale port 8000 and the turbo DiT, both Qwen text encoders and
+the 1.5 VAE are installed. The graph is the official 4B split (8 steps, euler,
+simple, sampler cfg 1, AuraFlow shift 3). Anything else, including a box that
+does not answer, stays on the MLX runner. A ComfyUI error does not then run
+again on the Mac. Stable Audio has nodes on that machine and no weights, so
+it stays here. MiniMax Music 3 weights are present and are not routed.
+
+**Why:** the 4090 is the machine asked for, and those ACE files are the ones
+actually installed. The 1.7B text encoder from the other official template is
+not. Routing every model would send jobs at checkpoints that are not there.
+
+**Would revisit if:** Stable Audio weights land on Seneca, or ComfyUI moves
+off port 8000.
+
 ## 2026-09-30 - A sung line can start from a scale
 
 **Decided:** SoulX still receives a MIDI score, one pitched note per word.

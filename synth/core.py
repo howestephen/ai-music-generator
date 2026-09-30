@@ -9,7 +9,7 @@ import re
 import time
 import warnings
 
-from . import backends, prompting
+from . import backends, comfy_ace, prompting
 from . import sing as melody
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -263,7 +263,7 @@ def generate(
     try:
         started = time.time()
         if backend.runner:
-            result = backends.run_subprocess(backend, {
+            job = {
                 "prompt": prompt,
                 "lyrics": lyrics,
                 "duration": float(duration),
@@ -275,7 +275,11 @@ def generate(
                 "init_audio": str(init_audio) if init_audio else None,
                 "init_noise_level": init_noise_level,
                 "inpaint_range": list(inpaint_range) if inpaint_range else None,
-            })
+            }
+            try:
+                result = comfy_ace.render(backend.name, job)
+            except comfy_ace.Offline:
+                result = backends.run_subprocess(backend, job)
             elapsed = result.get("elapsed_seconds", time.time() - started)
             audio_audit = result.get("_audio_audit")
         else:

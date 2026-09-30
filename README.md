@@ -106,7 +106,7 @@ Demucs for separation and SoulX for a sung line. `./.venv/bin/python -m synth.cl
 | `stable-audio-medium` | Stable Audio 3 medium (1.4B DiT, default) | 380s | description | Stability Community |
 | `stable-audio-sm` | Stable Audio 3 small (50M DiT) | 120s | description | Stability Community |
 | `minimax-mlx` | MiniMax Music 3 (MLX 8-bit) | 300s | caption | MiniMax Community |
-| `acestep` | ACE-Step 1.5 turbo (MLX) | 600s | tags | MIT |
+| `acestep` | ACE-Step 1.5 turbo (4090, else MLX) | 600s | tags | MIT |
 | `musicgen` | MusicGen stereo-large | 30s | tags | **CC-BY-NC, non-commercial** |
 
 The `stable-audio` backends are fixed-length latent diffusion at 44.1 kHz stereo, trained
@@ -114,9 +114,12 @@ on licensed data, and the only ones whose delivered length is exact by construct
 than audited against a tolerance. They have no key or scale control: the model conditions
 on text and duration alone. `minimax-mlx` alone has explicit BPM, key and scale, through
 its caption.
-`acestep` is the 1.5 turbo on MLX. It takes the same tag prompts, has no guidance
-control, and can run from 10 seconds to 10 minutes. Cover and repaint exist in the
-upstream runtime and are not connected to Remix. `musicgen` is
+`acestep` is the 1.5 turbo. A generate goes to Seneca's 4090 when ComfyUI on
+port 8000 answers with the turbo DiT and the 0.6B and 4B text encoders, and
+stays on MLX here when it does not. It takes the same tag prompts, has no
+guidance control, and can run from 10 seconds to 10 minutes. Cover and repaint
+exist in the upstream runtime and are not connected to Remix. Stable Audio,
+MiniMax, MusicGen, Demucs and SoulX stay on this Mac. `musicgen` is
 capable but slow on Metal and capped at 30 seconds.
 Separate, in the header, splits a library track or an upload into vocals, drums,
 bass and other. Each stem is its own track. A quiet stem is kept.

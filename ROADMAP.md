@@ -89,10 +89,11 @@ they are never buried in a chat.
 - ACE-Step 1.5 replaced v1 on 2026-09-27: MLX turbo plus the 0.6B planner, 10s to
   600s, in `.venv-ace`. Cover, repaint and vocal-to-BGM stay in the upstream runtime
   and are not connected here. XL is a manifest change if a render needs it
-- Route heavy renders to Seneca, the 4090 box. The box is available as of
-  2026-09-30. Routing has not started, and renders stay on this Mac until that
-  move is asked for. Its ComfyUI already has nodes for ACE-Step, ACE-Step 1.5,
-  MiniMax Music 3 and Stable Audio, but no audio checkpoints yet
+- ACE-Step 1.5 generate routes to Seneca's 4090 when ComfyUI answers on
+  port 8000 over Tailscale. The installed weights are the turbo DiT, the 0.6B
+  and 4B text encoders, and the 1.5 VAE. Stable Audio nodes are present and
+  the weights are not, so Stable Audio stays on this Mac. MiniMax Music 3
+  weights are on the box and are not routed. SoulX and Demucs stay on this Mac
 
 - Runner diagnostics (`device`, `sampling_rate`, `load_seconds`) into the sidecar. Do it
   with the Phase 3 sidecar change or not at all
@@ -116,8 +117,9 @@ they are never buried in a chat.
 
 None.
 
-Resolved: renders stay on this Mac until the output is good enough to move
-(2026-09-24); the next UI is React and Tailwind, not a Gradio skin (2026-09-24);
+Resolved: ACE-Step generate uses Seneca's 4090 when ComfyUI answers, and every
+other model stays on this Mac (2026-09-30), superseding the 2026-09-24 choice
+to keep all renders here; the next UI is React and Tailwind, not a Gradio skin (2026-09-24);
 Stable Audio's voice control is a texture and the owner has heard it add occasional
 vague voice noises (2026-09-24); a library Delete removes at once, is restorable for
 an hour, then is permanent, with no archived copy (2026-09-20); `stable-audio-medium` is the default

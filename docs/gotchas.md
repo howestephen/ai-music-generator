@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-28
+updated: 2026-09-30
 ---
 
 # Gotchas
@@ -13,6 +13,26 @@ already paid for.
 
 The nastiest share a shape: **the thing appears to work and produces plausible output**, so
 nothing raises an alarm. Prefer failures that are loud.
+
+---
+
+## Seneca
+
+### ComfyUI is on port 8000, and the LAN address does not answer
+
+**Symptom:** port 8188 times out, and `http://192.168.4.46` is "No route to host",
+while `seneca.local` still pings.
+
+**Cause:** the desktop app was started with `--listen 0.0.0.0 --port 8000`.
+HTTP from this Mac reaches it on Tailscale (`seneca.tail37ad60.ts.net`), not
+on the LAN address. Port 1234 on that same Tailscale address is LM Link, an
+OpenAI-compatible text server, not a music model.
+
+**Fix:** ACE-Step jobs use `http://seneca.tail37ad60.ts.net:8000`. Set
+`AI_MUSIC_COMFY=0` to keep ACE-Step on this Mac. Set `AI_MUSIC_COMFY_URL` if
+the port moves. A failed graph is an error. A box that does not answer falls
+back to MLX. Do not call ComfyUI's global interrupt: that cancels whatever
+else is running on the 4090.
 
 ---
 

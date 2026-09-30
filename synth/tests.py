@@ -36,7 +36,7 @@ import urllib.request
 
 import app
 import soundfile as sf
-from synth import analyze, backends, cli, core, jobs, prompting, sing, ui_server
+from synth import analyze, backends, cli, comfy_ace, core, jobs, prompting, sing, ui_server
 
 
 def _write_test_wav(path: Path, frames: int = 1) -> None:
@@ -122,6 +122,25 @@ class GenerateSeam(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "2 words and 1 pitched"):
             core.sing("only one", "C4 0.5", seed=1, output_dir=self.out)
         self.assertEqual(len(self.stub.calls), calls)
+
+    def test_acestep_uses_seneca_when_the_4090_accepts_the_job(self):
+        def fake(name, job):
+            self.assertEqual(name, "acestep")
+            frames = round(float(job["duration"]) * 8000)
+            _write_test_wav(Path(job["output_path"]), frames=frames)
+            return {"path": job["output_path"], "elapsed_seconds": 2}
+
+        with mock.patch.object(comfy_ace, "render", fake):
+            track = self.gen(model="acestep", duration=30)
+        self.assertEqual(self.stub.calls, [])
+        self.assertEqual(track.backend, "acestep")
+        self.assertTrue(track.path.is_file())
+
+    def test_a_comfy_failure_does_not_silently_render_on_the_mac(self):
+        with mock.patch.object(comfy_ace, "render", side_effect=RuntimeError("node exploded")):
+            with self.assertRaisesRegex(RuntimeError, "node exploded"):
+                self.gen(model="acestep", duration=20)
+        self.assertEqual(self.stub.calls, [])
 
     def test_a_short_sung_line_is_kept_and_still_fails_the_audit(self):
         def short(_backend, job):
@@ -945,6 +964,77 @@ class SungMelody(unittest.TestCase):
         self.assertGreater(min(note["seconds"] for note in huge_notes), 0)
         with self.assertRaisesRegex(ValueError, "do not fit"):
             sing.score_for("C major up", 20000)
+
+
+class SenecaAce(unittest.TestCase):
+    def test_the_graph_matches_the_installed_4b_split(self):
+        job = {
+            "prompt": "liquid drum and bass, 174bpm, E minor",
+            "lyrics": "[Instrumental]",
+            "duration": 30,
+            "seed": 7,
+            "steps": 8,
+            "guidance": None,
+            "options": {"dit": "acestep-v15-turbo", "lm": "acestep-5Hz-lm-0.6B", "shift": "3.0"},
+        }
+        graph = comfy_ace.build_graph(job)
+        self.assertEqual(graph["104"]["inputs"]["unet_name"], "acestep_v1.5_turbo.safetensors")
+        self.assertEqual(graph["105"]["inputs"]["clip_name1"], "qwen_0.6b_ace15.safetensors")
+        self.assertEqual(graph["105"]["inputs"]["clip_name2"], "qwen_4b_ace15.safetensors")
+        self.assertEqual(graph["105"]["inputs"]["type"], "ace")
+        self.assertNotIn("qwen_1.7b", json.dumps(graph))
+        self.assertEqual(graph["106"]["inputs"]["vae_name"], "ace_1.5_vae.safetensors")
+        self.assertEqual(graph["78"]["inputs"]["shift"], 3.0)
+        encode = graph["94"]["inputs"]
+        self.assertEqual(encode["bpm"], 174)
+        self.assertEqual(encode["keyscale"], "E minor")
+        self.assertEqual(encode["duration"], 30)
+        self.assertTrue(encode["generate_audio_codes"])
+        self.assertEqual(graph["3"]["inputs"]["cfg"], 1.0)
+        self.assertEqual(graph["3"]["inputs"]["steps"], 8)
+        self.assertEqual(graph["3"]["inputs"]["sampler_name"], "euler")
+        self.assertEqual(graph["3"]["inputs"]["scheduler"], "simple")
+        self.assertEqual(graph["3"]["inputs"]["positive"], ["94", 0])
+        self.assertEqual(graph["3"]["inputs"]["negative"], ["47", 0])
+        self.assertEqual(comfy_ace.key_from_caption("C# major and also C major"), "C# major")
+        self.assertEqual(comfy_ace.bpm_from_caption("no tempo here"), 120)
+        self.assertEqual(comfy_ace.bpm_from_caption("301bpm"), 300)
+        self.assertEqual(comfy_ace.key_from_caption("no key"), "C major")
+        with self.assertRaisesRegex(ValueError, "remix"):
+            comfy_ace.build_graph(dict(job, init_audio="track.wav"))
+        with self.assertRaisesRegex(ValueError, "guidance"):
+            comfy_ace.build_graph(dict(job, guidance=2))
+        with self.assertRaisesRegex(ValueError, "shift"):
+            comfy_ace.build_graph(dict(job, options={}))
+
+    def test_flac_bytes_are_rewritten_as_wav_and_a_wav_is_kept(self):
+        dest = Path(tempfile.mkdtemp()) / "taken.wav"
+        self.addCleanup(shutil.rmtree, dest.parent, ignore_errors=True)
+        flac = io.BytesIO()
+        sf.write(flac, [0.1, -0.2, 0.3], 8000, format="FLAC")
+        comfy_ace._write_wav(flac.getvalue(), str(dest))
+        audio, rate = sf.read(dest)
+        self.assertEqual(rate, 8000)
+        self.assertEqual(len(audio), 3)
+        wav = dest.read_bytes()
+        other = dest.with_name("kept.wav")
+        comfy_ace._write_wav(wav, str(other))
+        self.assertEqual(other.read_bytes()[:4], b"RIFF")
+
+    def test_routing_stays_off_unless_asked_and_a_dead_box_is_offline(self):
+        job = {"prompt": "x", "duration": 30, "seed": 1, "steps": 8, "options": {"shift": "3"}}
+        with self.assertRaises(comfy_ace.Offline):
+            comfy_ace.render("acestep", job)
+        with self.assertRaises(comfy_ace.Offline):
+            comfy_ace.render("stable-audio-medium", job)
+        previous = os.environ["AI_MUSIC_COMFY"]
+        os.environ["AI_MUSIC_COMFY"] = "1"
+        self.addCleanup(os.environ.__setitem__, "AI_MUSIC_COMFY", previous)
+        comfy_ace.clear_probe_cache()
+        with mock.patch.object(comfy_ace, "_probe_now", return_value=False):
+            with self.assertRaises(comfy_ace.Offline):
+                comfy_ace.render("acestep", job)
+        comfy_ace.clear_probe_cache()
 
 
 class CliDefaults(unittest.TestCase):
