@@ -29,6 +29,12 @@ export type ModelInfo = {
   guidance: Control | null;
 };
 
+export type SingerInfo = {
+  name: string;
+  display: string;
+  notes: string;
+};
+
 export type Bootstrap = {
   default_model: string;
   models: ModelInfo[];
@@ -38,6 +44,7 @@ export type Bootstrap = {
   labels: Record<string, string>;
   melodies: string[];
   melody_default: string;
+  singers: SingerInfo[];
 };
 
 export type Track = {
@@ -141,6 +148,17 @@ export function sing(body: { lyrics: string; score: string }) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+export function convertVoice(body: FormData | Record<string, unknown>) {
+  if (body instanceof FormData) {
+    return request<{ status: string; queue: Job[] }>("/api/sing", { method: "POST", body });
+  }
+  return request<{ status: string; queue: Job[] }>("/api/sing", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "soulx-svc", ...body }),
   });
 }
 

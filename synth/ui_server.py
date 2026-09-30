@@ -76,6 +76,15 @@ def bootstrap() -> dict:
         },
         "melodies": list(melody.pattern_names()),
         "melody_default": melody.DEFAULT_PATTERN,
+        "singers": [
+            {
+                "name": name,
+                "display": backend.display_name,
+                "notes": backend.notes,
+            }
+            for name, backend in backends.BACKENDS.items()
+            if backend.task == "sing"
+        ],
     }
 
 
@@ -222,7 +231,8 @@ def _json_body(handler: BaseHTTPRequestHandler) -> dict:
     return body
 
 
-def _parse_upload(handler: BaseHTTPRequestHandler) -> tuple[dict, Path | None]:
+def _parse_multipart(handler: BaseHTTPRequestHandler) -> tuple[dict, dict[str, Path]]:
+    """Form fields plus every uploaded audio part, keyed by field name."""
     length = int(handler.headers.get("Content-Length") or 0)
     if length < 0 or length > MAX_UPLOAD_BYTES:
         raise ValueError("that file is too large")
@@ -235,7 +245,7 @@ def _parse_upload(handler: BaseHTTPRequestHandler) -> tuple[dict, Path | None]:
     if not message.is_multipart():
         raise ValueError("upload required")
     fields: dict[str, str] = {}
-    upload: Path | None = None
+    uploads: dict[str, Path] = {}
     for part in message.iter_parts():
         name = part.get_param("name", header="content-disposition")
         if not name:
@@ -248,10 +258,28 @@ def _parse_upload(handler: BaseHTTPRequestHandler) -> tuple[dict, Path | None]:
                 raise ValueError("upload a wav, mp3, flac, aiff or ogg file")
             target = Path(tempfile.gettempdir()) / f"ui-upload-{time.time_ns()}{suffix}"
             target.write_bytes(payload)
-            upload = target
+            uploads[name] = target
         else:
             fields[name] = payload.decode("utf-8", errors="replace")
+    return fields, uploads
+
+
+def _parse_upload(handler: BaseHTTPRequestHandler) -> tuple[dict, Path | None]:
+    fields, uploads = _parse_multipart(handler)
+    upload = None
+    for path in uploads.values():
+        upload = path
     return fields, upload
+
+
+def _named_library_track(name: str | None) -> str | None:
+    text = str(name or "").strip()
+    if not text:
+        return None
+    path = library_wav(text)
+    if not path.is_file():
+        raise FileNotFoundError("track not found")
+    return str(path)
 
 
 def _static_file(url_path: str) -> Path | None:
@@ -409,8 +437,31 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def _sing(self) -> None:
-        body = _json_body(self)
-        headline, snapshot = app._enqueue_sing(body.get("lyrics"), body.get("score"))
+        content_type = self.headers.get("Content-Type") or ""
+        if content_type.startswith("multipart/"):
+            fields, uploads = _parse_multipart(self)
+            if (fields.get("model") or "") != "soulx-svc":
+                raise ValueError("that upload is for voice conversion")
+            headline, snapshot = app._enqueue_convert(
+                _named_library_track(fields.get("track")),
+                uploads.get("file"),
+                _named_library_track(fields.get("prompt_track")),
+                uploads.get("prompt"),
+            )
+        else:
+            body = _json_body(self)
+            model = str(body.get("model") or "soulx")
+            if model == "soulx":
+                headline, snapshot = app._enqueue_sing(body.get("lyrics"), body.get("score"))
+            elif model == "soulx-svc":
+                headline, snapshot = app._enqueue_convert(
+                    _named_library_track(body.get("track")),
+                    None,
+                    _named_library_track(body.get("prompt_track")),
+                    None,
+                )
+            else:
+                raise ValueError(f"unknown singing model {model}")
         self._send_json({
             "status": headline,
             "queue": [public_job(job) for job in snapshot],

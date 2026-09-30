@@ -147,7 +147,8 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 Already set in `synth/core.py`, `runners/acestep_runner.py`,
 `runners/demucs_runner.py`, `runners/minimax_mlx_runner.py`,
-`runners/musicgen_runner.py`, `runners/soulx_runner.py` and
+`runners/musicgen_runner.py`, `runners/soulx_runner.py`,
+`runners/soulx_svc_runner.py` and
 `runners/stable_audio_runner.py`. Every new runner
 that downloads weights needs it too. **Do not remove it.**
 
@@ -163,6 +164,20 @@ make obvious until the import fails.
 **Fix:** use the short install in the README, including `librosa==0.11.0`,
 and the `.pth` that points at the clone. Do not install that requirements
 file. The first sing downloads `mlx-community/SoulX-Singer` into the clone.
+
+### SoulX on Python 3.10 cannot load its pitch extractor
+
+**Symptom:** importing `soulxsinger` dies in `scipy.sparse.linalg` with
+`__DATA/__thread_bss` has a zero-fill section type.
+
+**Cause:** the SciPy 1.15 wheel does not load on this OS. SciPy 1.16 does,
+and 1.16 no longer publishes a Python 3.10 build. The official pitch
+extractor also caps a contour at 300 seconds unless told otherwise, which
+would clip a recording the backend accepts up to 600.
+
+**Fix:** the SoulX environment is Python 3.12 with `scipy==1.16.2`, as in
+the README. The conversion runner passes a 600 second cap into that
+extractor. Do not put the environment back on Python 3.10.
 
 ### Model dependency conflicts are unresolvable - use separate venvs
 

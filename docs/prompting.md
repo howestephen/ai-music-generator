@@ -151,8 +151,14 @@ D4 0.5
 does not take a word. Each other note takes the next word. A note is longer
 than 0 seconds and at most 30. The whole line is 0.2 to 600 seconds. A long
 line is shortened so it stays inside that. The voice is the English example.
-Mandarin, and a reference recording of your own, are not wired. SoulX-Singer-SVC
-can follow a recording you have already sung, and that model is not connected.
+Mandarin is not wired.
+
+SoulX-Singer SVC is the other Sing model. It does not take those notes. You
+give it a recording you have already sung, and optionally another recording
+as the voice. An empty voice is the English example. The melody and the words
+come from the performance. A full mix should be separated first, then the
+vocal used here. The first conversion also downloads the official RMVPE pitch
+file and `openai/whisper-base`, which the model loads itself.
 
 ## Applies to every backend
 

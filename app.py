@@ -1137,6 +1137,12 @@ def _run_queued_job(payload: dict) -> core.Track:
         return tracks[0]
     if operation == "sing":
         return core.sing(request["lyrics"], request["score"], seed=request.get("seed"))
+    if operation == "convert":
+        return core.convert(
+            request["source"],
+            prompt_audio=request.get("prompt_audio"),
+            seed=request.get("seed"),
+        )
     retries = int(request.pop("_duration_retries", 0))
     retry_seed = bool(request.pop("_retry_seed", False))
     for attempt in range(retries + 1):
@@ -1186,6 +1192,8 @@ FALLBACK_COST = {
     "demucs": (20.0, 3.0),
     # soulx has not been timed on this machine. This is the generic stand-in.
     "soulx": (20.0, 3.0),
+    # soulx-svc has not been timed on this machine. This is the generic stand-in.
+    "soulx-svc": (20.0, 3.0),
     "stable-audio-sm": (3.0, 0.03),
     "stable-audio-medium": (12.0, 0.05),
 }
@@ -1425,6 +1433,54 @@ def _enqueue_sing(lyrics, score):
     queue = _get_job_queue()
     queue.enqueue(payload, summary, _estimate_runtime("soulx", duration))
     headline = f"**Queued a sung line** · seed `{chosen_seed}`"
+    return headline, queue.snapshot()
+
+
+def _enqueue_convert(track_path, upload, prompt_path, prompt_upload):
+    """Queue a conversion of one sung recording. A missing file fails here."""
+    performance = upload or track_path
+    if not performance:
+        raise gr.Error("Pick a sung recording, or upload one.")
+    performance = Path(performance)
+    try:
+        audit = backends.audit_audio_file(performance, "performance")
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise gr.Error(f"Could not read that recording: {exc}") from exc
+    try:
+        taken = backends.get("soulx-svc").duration.validate(
+            audit.duration_seconds, "soulx-svc duration",
+        )
+    except ValueError as exc:
+        raise gr.Error(str(exc)) from exc
+    voice = prompt_upload or prompt_path
+    if voice:
+        try:
+            voice_audit = backends.audit_audio_file(Path(voice), "voice")
+            backends.get("soulx-svc").duration.validate(
+                voice_audit.duration_seconds, "soulx-svc voice",
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise gr.Error(f"Could not read that voice: {exc}") from exc
+    chosen_seed = random.randint(0, 2**31 - 1)
+    payload = {
+        "operation": "convert",
+        "source": str(performance),
+        "prompt_audio": str(voice) if voice else None,
+        "seed": chosen_seed,
+    }
+    summary = {
+        "model": "soulx-svc",
+        "model_id": backends.get("soulx-svc").model_id,
+        "prompt": performance.name,
+        "duration": taken,
+        "seed": chosen_seed,
+    }
+    queue = _get_job_queue()
+    queue.enqueue(payload, summary, _estimate_runtime("soulx-svc", taken))
+    headline = (
+        f"**Queued a voice conversion of {performance.name[:40]}** · "
+        f"seed `{chosen_seed}`"
+    )
     return headline, queue.snapshot()
 
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import {
   composePrompt,
+  convertVoice,
   deleteTrack,
   generate,
   loadBootstrap,
@@ -103,6 +104,11 @@ export function App() {
   const [separateFile, setSeparateFile] = useState<File | null>(null);
   const [sungWords, setSungWords] = useState("");
   const [sungScore, setSungScore] = useState("");
+  const [singer, setSinger] = useState("soulx");
+  const [convertTrack, setConvertTrack] = useState("");
+  const [convertFile, setConvertFile] = useState<File | null>(null);
+  const [voiceTrack, setVoiceTrack] = useState("");
+  const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [melody, setMelody] = useState("");
   const [melodyEdited, setMelodyEdited] = useState(false);
   const [melodyToken, setMelodyToken] = useState(0);
@@ -357,6 +363,29 @@ export function App() {
     }
   }
 
+  async function onConvert() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const shared = {
+        model: "soulx-svc",
+        track: convertFile ? "" : convertTrack,
+        prompt_track: voiceFile ? "" : voiceTrack,
+      };
+      const result = convertFile || voiceFile
+        ? await convertVoice(convertForm(shared, convertFile, voiceFile))
+        : await convertVoice(shared);
+      followQueue.current = true;
+      setQueue(result.queue);
+      const voice = voiceFile || voiceTrack ? "the voice you picked" : "the English example voice";
+      setNotice({ tone: "ok", text: `Voice conversion queued. It uses ${voice}.` });
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "Could not convert" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onSeparate(trackName?: string) {
     setBusy(true);
     setNotice(null);
@@ -396,11 +425,23 @@ export function App() {
           <button type="button" role="tab" aria-selected={tool === "separate"} className={tool === "separate" ? "is-selected" : ""} onClick={() => setTool("separate")}>Separate</button>
           <button type="button" role="tab" aria-selected={tool === "sing"} className={tool === "sing" ? "is-selected" : ""} onClick={() => setTool("sing")}>Sing</button>
         </div>
-        {tool === "sing" || tool === "separate" ? (
-          <p className="model-picker" title={tool === "sing" ? "SoulX sings the written line. The generate model is not used." : "Demucs splits the mix. The generate model is not used."}>
+        {tool === "separate" ? (
+          <p className="model-picker" title="Demucs splits the mix. The generate model is not used.">
             <span className="model-picker-word">Model</span>
-            <span>{bootstrap.labels[tool === "sing" ? "soulx" : "demucs"]}</span>
+            <span>{bootstrap.labels.demucs}</span>
           </p>
+        ) : tool === "sing" ? (
+          <label className="model-picker" title={(bootstrap.singers.find((item) => item.name === singer) ?? bootstrap.singers[0])?.notes}>
+            <span className="model-picker-word">Model</span>
+            <select aria-label="Singing model" value={singer} onChange={(event) => setSinger(event.target.value)}>
+              {bootstrap.singers.map((item) => (
+                <option key={item.name} value={item.name}>{item.display}</option>
+              ))}
+            </select>
+            <svg className="model-chevron" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2.2 4.4 6 8l3.8-3.6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </label>
         ) : (
         <label className="model-picker" title={`${model.display}. ${model.model_id}. ${model.available ? "Ready" : "Setup missing"}. ${model.licence}. Max ${Math.round(model.max_duration)}s. ${model.notes}`}>
           <span className="model-picker-word">Model</span>
@@ -550,6 +591,37 @@ export function App() {
           />
           <button type="button" disabled={busy} className="tool-submit" onClick={() => void onSeparate()}>
             Separate mix
+          </button>
+        </div>
+        ) : tool === "sing" && singer === "soulx-svc" ? (
+        <div className="remix-tool">
+          <p className="text-xs">This follows a recording you have already sung. It keeps the melody and the words, and sings them in the voice below. Leave the voice empty for the English example. A full mix should be separated first.</p>
+          <select aria-label="Recording from history" value={convertTrack} onChange={(event) => setConvertTrack(event.target.value)}>
+            <option value="">Recording from history</option>
+            {tracks.map((track) => (
+              <option key={track.name} value={track.name}>{track.title}</option>
+            ))}
+          </select>
+          <input
+            aria-label="Upload a recording"
+            type="file"
+            accept="audio/*,.wav,.mp3,.flac,.aiff,.aif,.ogg"
+            onChange={(event) => setConvertFile(event.target.files?.[0] ?? null)}
+          />
+          <select aria-label="Voice from history" value={voiceTrack} onChange={(event) => setVoiceTrack(event.target.value)}>
+            <option value="">English example voice</option>
+            {tracks.map((track) => (
+              <option key={track.name} value={track.name}>{track.title}</option>
+            ))}
+          </select>
+          <input
+            aria-label="Upload a voice"
+            type="file"
+            accept="audio/*,.wav,.mp3,.flac,.aiff,.aif,.ogg"
+            onChange={(event) => setVoiceFile(event.target.files?.[0] ?? null)}
+          />
+          <button type="button" disabled={busy} className="tool-submit" onClick={() => void onConvert()}>
+            Convert recording
           </button>
         </div>
         ) : tool === "sing" ? (
@@ -706,6 +778,16 @@ function remixForm(shared: Record<string, unknown>, file: File) {
     if (value != null) form.set(key, String(value));
   }
   form.set("file", file);
+  return form;
+}
+
+function convertForm(shared: Record<string, unknown>, performance: File | null, voice: File | null) {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(shared)) {
+    if (value != null) form.set(key, String(value));
+  }
+  if (performance) form.set("file", performance);
+  if (voice) form.set("prompt", voice);
   return form;
 }
 

@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-28
+updated: 2026-09-30
 ---
 
 # AI Music Generator
@@ -83,18 +83,20 @@ one that imports here. `librosa==0.11.0` is required.
 SOULX=~/.cache/ai-music-generator/SoulX-Singer-MLX
 git clone https://github.com/ailuntx/SoulX-Singer-MLX.git "$SOULX"
 git -C "$SOULX" checkout cc5b3054188e8f0d1cab13c07a3e7b6f339bd871
-uv venv --python 3.10 .venv-soulx
+uv venv --python 3.12 .venv-soulx
 uv pip install --python .venv-soulx/bin/python \
   torch==2.2.0 torchaudio==2.2.0 "transformers==4.41.2" "numpy==1.26.4" \
   omegaconf einops accelerate soundfile tqdm huggingface_hub mlx safetensors \
-  g2p_en nltk scipy "librosa==0.11.0"
-printf '%s\n' "$SOULX" > .venv-soulx/lib/python3.10/site-packages/soulx.pth
+  g2p_en nltk "scipy==1.16.2" "librosa==0.11.0"
+printf '%s\n' "$SOULX" > .venv-soulx/lib/python3.12/site-packages/soulx.pth
 ```
 
 Weights download on first use to `~/.cache/`: MiniMax MLX about 13 GB, MusicGen 19 GB,
 and both Stable Audio sizes together about 6.1 GB, since they share one repository.
 ACE-Step 1.5 downloads into `$ACE/checkpoints` on the first generate. SoulX
-downloads into `$SOULX/models` on the first sing.
+downloads into `$SOULX/models` on the first sing. A conversion also downloads
+the official RMVPE pitch file into that same models folder, and
+`openai/whisper-base`, which the conversion model loads itself.
 
 ## Models
 
@@ -123,8 +125,10 @@ MiniMax, MusicGen, Demucs and SoulX stay on this Mac. `musicgen` is
 capable but slow on Metal and capped at 30 seconds.
 Separate, in the header, splits a library track or an upload into vocals, drums,
 bass and other. Each stem is its own track. A quiet stem is kept.
-Sing takes English words and a melody of `C4 0.5` lines, one pitched note per
-word, in the English example voice. A reference singer of your own is not wired.
+Sing has two models. SoulX-Singer takes English words and a melody of `C4 0.5`
+lines, one pitched note per word, in the English example voice. SoulX-Singer
+SVC follows a recording you have already sung, in that same example voice or
+in a voice you upload. A full mix should be separated first.
 
 ## Usage
 

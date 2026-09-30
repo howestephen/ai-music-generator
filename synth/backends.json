@@ -336,6 +336,47 @@
         "steps": null,
         "guidance": null
       }
+    },
+    "soulx-svc": {
+      "task": "sing",
+      "model_id": "mlx-community/SoulX-Singer",
+      "venv": ".venv-soulx",
+      "runner": "soulx_svc_runner.py",
+      "licence": "Apache-2.0 (commercial OK)",
+      "notes": "Converts a sung recording into the example voice, or a voice you upload. The melody and the words come from the recording. MLX svc weights on the PyTorch module. Pitch is the official RMVPE file, downloaded on first use.",
+      "label": "SoulX-Singer SVC",
+      "version": "2026.03",
+      "dtype": "MLX",
+      "prompt_style": "tags",
+      "instrumental_tag": "",
+      "supports_lyrics": false,
+      "supports_editing": false,
+      "output_audit": {
+        "minimum_duration_ratio": 0.98,
+        "duration_tolerance_seconds": 0.0,
+        "random_seed_retries": 0,
+        "duration_contract": "best_effort"
+      },
+      "runtime": {
+        "probe_modules": ["soulxsinger.models.soulxsinger_svc"],
+        "timeout_seconds": 7200,
+        "runner_options": {
+          "component": "svc"
+        }
+      },
+      "controls": {
+        "duration": {
+          "default": 120,
+          "minimum": 0.2,
+          "maximum": 600,
+          "step": 0.1,
+          "label": "Recording length (s)",
+          "info": "The sung recording must last 0.2 to 600 seconds.",
+          "integer": false
+        },
+        "steps": null,
+        "guidance": null
+      }
     }
   }
 }

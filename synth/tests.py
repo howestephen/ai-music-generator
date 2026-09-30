@@ -163,6 +163,62 @@ class GenerateSeam(unittest.TestCase):
                 core.sing("wish here", "C4 0.5\nD4 0.5", seed=1, output_dir=self.out)
         self.assertEqual(self.stub.calls, [])
 
+    def test_convert_follows_a_recording_and_generate_refuses_it(self):
+        source = self.out / "sung.wav"
+        _write_test_wav(source, frames=8000)
+        voice = self.out / "voice.wav"
+        _write_test_wav(voice, frames=4000)
+        track = core.convert(source, seed=11, output_dir=self.out)
+        self.assertEqual(track.backend, "soulx-svc")
+        self.assertEqual(track.lyrics, "")
+        self.assertEqual(track.requested_duration, 1.0)
+        self.assertIn("English example", track.prompt)
+        self.assertIsNone(track.infer_step)
+        self.assertTrue(track.path.is_file() and track.sidecar_path().is_file())
+        job = self.stub.last_job
+        self.assertEqual(job["target_audio"], str(source))
+        self.assertIsNone(job["prompt_audio"])
+        self.assertEqual(job["options"]["component"], "svc")
+        self.assertNotIn("notes", job)
+        self.assertNotIn("lyrics", job)
+        with self.assertRaisesRegex(ValueError, "not a prompt model"):
+            self.gen(model="soulx-svc")
+        calls = len(self.stub.calls)
+        with self.assertRaisesRegex(ValueError, "not a file"):
+            core.convert(self.out / "missing.wav", seed=1, output_dir=self.out)
+        self.assertEqual(len(self.stub.calls), calls)
+        tiny = self.out / "tiny.wav"
+        _write_test_wav(tiny, frames=1)
+        with self.assertRaisesRegex(ValueError, "0.2"):
+            core.convert(tiny, seed=1, output_dir=self.out)
+        with self.assertRaisesRegex(ValueError, "voice"):
+            core.convert(source, prompt_audio=tiny, seed=1, output_dir=self.out)
+        self.assertEqual(len(self.stub.calls), calls)
+        voiced = core.convert(source, prompt_audio=voice, seed=12, output_dir=self.out)
+        self.assertIn("voice.wav", voiced.prompt)
+        self.assertEqual(self.stub.last_job["prompt_audio"], str(voice))
+        self.assertEqual(voiced.genre, None)
+
+        def short(_backend, job):
+            _write_test_wav(Path(job["output_path"]), frames=800)
+            return {"path": job["output_path"], "elapsed_seconds": 0.2}
+
+        with mock.patch.object(backends, "run_subprocess", short):
+            with self.assertRaises(core.OutputAuditError) as raised:
+                core.convert(source, seed=3, output_dir=self.out)
+        self.assertEqual(raised.exception.track.audit_status, "short")
+        self.assertTrue(raised.exception.track.path.is_file())
+
+    def test_convert_refuses_when_the_svc_backend_is_not_installed(self):
+        source = self.out / "sung.wav"
+        _write_test_wav(source, frames=8000)
+        with mock.patch.object(
+            backends.Backend, "available", new_callable=mock.PropertyMock, return_value=False,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "not set up"):
+                core.convert(source, seed=1, output_dir=self.out)
+        self.assertEqual(self.stub.calls, [])
+
     def gen(self, **kw) -> core.Track:
         duration = kw.pop("duration", 5.0)
         return core.generate(prompt="probe", duration=duration, seed=1, output_dir=self.out, **kw)
@@ -1097,6 +1153,13 @@ class Registry(unittest.TestCase):
         self.assertEqual(shown["stable-audio-sm"], "Stable Audio (Small) 3")
         self.assertEqual(shown["acestep"], "ACE-Step 1.5")
         self.assertEqual(shown["soulx"], "SoulX-Singer 2026.02")
+        self.assertEqual(shown["soulx-svc"], "SoulX-Singer SVC 2026.03")
+        singers = {
+            item["name"]: item["display"] for item in ui_server.bootstrap()["singers"]
+        }
+        self.assertEqual(singers["soulx"], "SoulX-Singer 2026.02")
+        self.assertEqual(singers["soulx-svc"], "SoulX-Singer SVC 2026.03")
+        self.assertNotIn("soulx-svc", {item["name"] for item in ui_server.bootstrap()["models"]})
         self.assertEqual(len(set(shown.values())), len(shown))
         for backend in backends.BACKENDS.values():
             self.assertNotIn(backend.name, backend.display_name)
@@ -3138,6 +3201,94 @@ print(json.dumps({
         sung.assert_called_once_with("la", "C4 0.5", seed=1)
         generate.assert_not_called()
 
+    def test_soulx_svc_refuses_a_melody_and_queues_a_recording(self):
+        path = core.PROJECT_ROOT / "runners" / "soulx_svc_runner.py"
+        spec = importlib.util.spec_from_file_location("soulx_svc_runner_under_test", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.RMVPE_REPO, "Soul-AILab/SoulX-Singer-Preprocess")
+        self.assertEqual(module.RMVPE_FILE, "rmvpe/rmvpe.pt")
+        self.assertNotIn("mlx", module.RMVPE_REPO)
+        self.assertEqual(module.F0_RATE, 24000)
+        self.assertEqual(module.F0_HOP, 480)
+        self.assertEqual(module.F0_MAX_SECONDS, backends.get("soulx-svc").duration.maximum)
+        self.assertGreater(module.F0_MAX_SECONDS, 300)
+        self.assertEqual(module.N_STEPS, 32)
+        self.assertEqual(module.CFG, 3.0)
+        config = Path.home() / ".cache/ai-music-generator/SoulX-Singer-MLX/soulxsinger/config/soulxsinger.yaml"
+        if config.is_file():
+            text = config.read_text(encoding="utf-8")
+            self.assertIn("\n  hop_size: 480\n", text)
+            self.assertIn("\n  sample_rate: 24000\n", text)
+            self.assertIn("\n  n_steps: 32\n", text)
+        job = {
+            "target_audio": "/tmp/sung.wav",
+            "prompt_audio": None,
+            "seed": 4,
+            "output_path": "/tmp/out.wav",
+            "options": {"component": "svc"},
+        }
+        request = module.request_from_job(job)
+        self.assertEqual(request["target_audio"], "/tmp/sung.wav")
+        self.assertIsNone(request["prompt_audio"])
+        self.assertEqual(
+            module.request_from_job(dict(job, prompt_audio="/tmp/voice.wav"))["prompt_audio"],
+            "/tmp/voice.wav",
+        )
+        with self.assertRaisesRegex(ValueError, "melody"):
+            module.request_from_job(dict(job, notes=[{"pitch": 60, "seconds": 0.5}]))
+        with self.assertRaisesRegex(ValueError, "lyrics"):
+            module.request_from_job(dict(job, lyrics="la la"))
+        with self.assertRaisesRegex(ValueError, "sung recording"):
+            module.request_from_job(dict(job, target_audio="  "))
+        with self.assertRaisesRegex(ValueError, "svc component"):
+            module.request_from_job(dict(job, options={}))
+        with self.assertRaisesRegex(ValueError, "seed"):
+            module.request_from_job({key: value for key, value in job.items() if key != "seed"})
+
+        queue = mock.Mock()
+        queue.enqueue.return_value = {"id": "job-svc"}
+        queue.snapshot.return_value = [{"id": "job-svc", "status": "queued"}]
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+        take = folder / "take.wav"
+        _write_test_wav(take, frames=16000)
+        blip = folder / "blip.wav"
+        _write_test_wav(blip, frames=1)
+        with mock.patch.object(app, "_get_job_queue", return_value=queue), \
+                mock.patch.object(app.random, "randint", return_value=9):
+            with self.assertRaisesRegex(app.gr.Error, "sung recording"):
+                app._enqueue_convert(None, None, None, None)
+            with self.assertRaisesRegex(app.gr.Error, "0.2"):
+                app._enqueue_convert(None, blip, None, None)
+            with self.assertRaisesRegex(app.gr.Error, "voice"):
+                app._enqueue_convert(None, take, None, blip)
+            _status, snapshot = app._enqueue_convert(None, take, None, None)
+        payload, summary, _expected = queue.enqueue.call_args.args
+        self.assertEqual(payload["operation"], "convert")
+        self.assertEqual(payload["source"], str(take))
+        self.assertIsNone(payload["prompt_audio"])
+        self.assertEqual(payload["seed"], 9)
+        self.assertEqual(summary["model"], "soulx-svc")
+        self.assertEqual(summary["duration"], 2.0)
+        self.assertEqual(snapshot[0]["status"], "queued")
+        track = SimpleNamespace()
+        with mock.patch.object(core, "convert", return_value=track) as converted, \
+                mock.patch.object(core, "sing") as sung, \
+                mock.patch.object(core, "generate") as generate:
+            self.assertIs(
+                app._run_queued_job({
+                    "operation": "convert",
+                    "source": str(take),
+                    "prompt_audio": None,
+                    "seed": 3,
+                }),
+                track,
+            )
+        converted.assert_called_once_with(str(take), prompt_audio=None, seed=3)
+        sung.assert_not_called()
+        generate.assert_not_called()
+
     def test_runtime_estimate_ignores_non_finite_history_metadata(self):
         corrupt = [{
             "backend": "minimax-mlx",
@@ -3248,6 +3399,7 @@ class DocumentationContract(unittest.TestCase):
             "runners/minimax_mlx_runner.py",
             "runners/musicgen_runner.py",
             "runners/soulx_runner.py",
+            "runners/soulx_svc_runner.py",
             "runners/stable_audio_runner.py",
         }
         self.assertEqual(actual, expected)
@@ -3321,6 +3473,20 @@ class ServedUi(unittest.TestCase):
         )
         self.assertEqual(status, 400)
         self.assertIn("pitched", json.loads(body)["error"])
+        status, body, _headers = self._open(
+            "/api/sing",
+            data=json.dumps({"model": "soulx-svc"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("recording", json.loads(body)["error"].lower())
+        status, body, _headers = self._open(
+            "/api/sing",
+            data=json.dumps({"model": "not-a-singer", "lyrics": "la", "score": "C4 0.5"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("unknown", json.loads(body)["error"].lower())
 
     def test_library_audio_is_served_from_output_with_ranges(self):
         path = self.out / "probe.wav"

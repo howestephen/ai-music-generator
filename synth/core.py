@@ -1,4 +1,4 @@
-"""Core generation. Prompt models go through `generate`. A mix is split by `separate`. A line is sung by `sing`."""
+"""Core generation. Prompt models go through `generate`. A mix is split by `separate`. A line is sung by `sing`. A recording is resung by `convert`."""
 from __future__ import annotations
 
 import json
@@ -569,6 +569,117 @@ def sing(
             title=title,
             rating=None,
             genre=None,
+        )
+        track.write_sidecar()
+        if status != "passed":
+            raise OutputAuditError(track, minimum, maximum)
+        return track
+    finally:
+        reservation.unlink(missing_ok=True)
+        if not path.with_suffix(".json").is_file():
+            path.unlink(missing_ok=True)
+
+
+def convert(
+    source: Path | str,
+    prompt_audio: Path | str | None = None,
+    seed: int | None = None,
+    output_dir: Path | None = None,
+) -> Track:
+    """Resing a recording in another voice.
+
+    The melody and the words come from `source`. The voice is `prompt_audio`,
+    or the English example when that is left empty. There is no lyric and no
+    note grid.
+    """
+    backend = backends.get("soulx-svc")
+    if backend.task != "sing":
+        raise RuntimeError("the soulx-svc backend is not registered as singing")
+    if not backend.available:
+        raise RuntimeError(
+            f"Backend {backend.name!r} is not set up: {backend.availability_error}. "
+            "See README for install steps."
+        )
+    source = Path(source)
+    if not source.is_file():
+        raise ValueError(f"recording is not a file: {source}")
+    voice = Path(prompt_audio) if prompt_audio else None
+    if voice is not None and not voice.is_file():
+        raise ValueError(f"voice is not a file: {voice}")
+    source_audit = backends.audit_audio_file(source, "performance")
+    taken = backend.duration.validate(source_audit.duration_seconds, "soulx-svc duration")
+    if voice is not None:
+        voice_audit = backends.audit_audio_file(voice, "voice")
+        backend.duration.validate(voice_audit.duration_seconds, "soulx-svc voice")
+    if seed is None:
+        seed = random.randint(0, 2**31 - 1)
+    output_dir = Path(output_dir) if output_dir else OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+    base_title, source_genre = _source_label(source)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    title = f"{base_title} vocal"
+    path, reservation = _reserve_output_path(output_dir, _slug(title, max_len=80))
+    if voice is None:
+        described = f"convert {source.name} in the English example voice"
+    else:
+        described = f"convert {source.name} in the voice of {voice.name}"
+    try:
+        started = time.time()
+        result = backends.run_subprocess(backend, {
+            "prompt": described,
+            "target_audio": str(source),
+            "prompt_audio": None if voice is None else str(voice),
+            "duration": float(taken),
+            "seed": int(seed),
+            "steps": None,
+            "guidance": None,
+            "output_path": str(path),
+            "options": dict(backend.runner_options),
+            "init_audio": None,
+            "init_noise_level": None,
+            "inpaint_range": None,
+        })
+        elapsed = result.get("elapsed_seconds", time.time() - started)
+        convert_audit = result.get("_audio_audit")
+        if not isinstance(convert_audit, backends.AudioAudit):
+            convert_audit = backends.audit_audio_file(path, backend.name)
+        audio_audit = convert_audit
+        delivered = audio_audit.duration_seconds
+        ratio = delivered / float(taken)
+        minimum = backend.output_audit.minimum_duration(float(taken))
+        maximum = backend.output_audit.maximum_duration(float(taken))
+        if delivered < minimum:
+            status = "short"
+        elif delivered > maximum:
+            status = "long"
+        else:
+            status = "passed"
+        convert_name = backend.name
+        convert_dtype = backend.dtype
+        track = Track(
+            path=path,
+            prompt=described,
+            duration=round(delivered, 3),
+            requested_duration=float(taken),
+            duration_ratio=round(ratio, 4),
+            audit_status=status,
+            audio_frames=audio_audit.frames,
+            sample_rate=audio_audit.sample_rate,
+            channels=audio_audit.channels,
+            file_bytes=audio_audit.file_bytes,
+            peak_amplitude=round(audio_audit.peak_amplitude, 8),
+            seed=int(seed),
+            infer_step=None,
+            guidance_scale=None,
+            lyrics="",
+            backend=convert_name,
+            model=backend.model_id,
+            dtype=convert_dtype,
+            generated_at=stamp,
+            elapsed_seconds=round(float(elapsed), 1),
+            title=title,
+            rating=None,
+            genre=source_genre,
         )
         track.write_sidecar()
         if status != "passed":

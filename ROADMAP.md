@@ -111,7 +111,8 @@ they are never buried in a chat.
 - A sung line shipped 2026-09-28 as SoulX-Singer (`soulx`). English words, one
   pitched note per word, in the English example voice. The Sing tab writes
   that score from a scale or a short pattern. SoulX does not invent a tune
-  from the lyric. A reference singer of your own is not wired
+  from the lyric. SoulX-Singer SVC (`soulx-svc`, 2026.03) is the other Sing
+  model: it follows a recording, in the example voice or a voice you upload
 
 ## Owner decisions open
 

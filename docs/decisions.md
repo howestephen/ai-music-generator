@@ -12,6 +12,25 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-09-30 - Voice conversion is the March SoulX model
+
+**Decided:** Sing can use SoulX-Singer SVC `2026.03` as well as the February
+score model. Conversion follows a recording you have already sung. The voice
+is one you upload, or the English example. Weights stay
+`mlx-community/SoulX-Singer`, the `svc` component, on the same bridge. Pitch
+is the official RMVPE file from `Soul-AILab/SoulX-Singer-Preprocess`, on MPS.
+A full mix is not separated inside this path. Steps stay 32 and guidance 3,
+with auto shift on, which is what that model's own screen defaults to.
+
+**Why:** the score model cannot follow a performance, and the conversion
+model cannot take a typed melody. An MLX RMVPE port exists and is not the
+checkpoint this preprocess calls. Vocal separation and accompaniment mix need
+a second set of weights, and Demucs already splits a mix.
+
+**Would revisit if:** the official pitch file is published as MLX weights
+that match this contour, or a conversion needs to lift a vocal out of a mix
+itself.
+
 ## 2026-09-30 - ACE-Step generate can run on the 4090
 
 **Decided:** an ACE-Step generate goes to Seneca's ComfyUI when that process
@@ -37,7 +56,7 @@ Random picks one of those names. The notes stay editable.
 
 **Why:** the downloaded SoulX notes describe melody (F0) or score (MIDI)
 control only. It does not invent a tune from lyrics. SoulX-Singer-SVC can
-follow a recording you have already sung, and that model is not connected.
+follow a recording you have already sung, which is the decision above.
 Typing every note was the whole job, so the app writes an ordinary scale
 instead.
 
@@ -50,7 +69,7 @@ for example `Stable Audio (Med) 3`. The registry key stays `stable-audio-medium`
 so old sidecars and `--model` still match. Versions in use: Stable Audio `3`,
 ACE-Step `1.5`, MiniMax Music `3`, MusicGen `stereo-large` (the checkpoint,
 which has no later public revision here), HTDemucs `4`, SoulX-Singer `2026.02`
-(the February 2026 singing model, not the March SVC release).
+(the February 2026 score model) and SoulX-Singer SVC `2026.03`.
 
 **Why:** the key is a filename, and a weight swap was invisible. The version
 is the thing to bump when the weights change. The pill grows to the name
