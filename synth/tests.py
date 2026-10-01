@@ -3407,6 +3407,19 @@ class DocumentationContract(unittest.TestCase):
         for location in expected:
             self.assertIn(f"`{location}`", gotchas)
 
+    def test_demucs_install_includes_the_weight_converter(self):
+        readme = (core.PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("'demucs-mlx[convert]'", readme)
+        self.assertNotIn("demucs-mlx soundfile", readme)
+        python = core.PROJECT_ROOT / ".venv-demucs" / "bin" / "python"
+        proc = subprocess.run(
+            [str(python), "-c", "from demucs.apply import BagOfModels"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
 
 class ServedUi(unittest.TestCase):
     def setUp(self):

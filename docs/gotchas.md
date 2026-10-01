@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-30
+updated: 2026-10-01
 ---
 
 # Gotchas
@@ -178,6 +178,14 @@ would clip a recording the backend accepts up to 600.
 **Fix:** the SoulX environment is Python 3.12 with `scipy==1.16.2`, as in
 the README. The conversion runner passes a 600 second cap into that
 extractor. Do not put the environment back on Python 3.10.
+
+### HTDemucs will not load without the convert extra
+
+**Symptom:** Separate fails at once with `Model conversion requires the [convert] extras` from `demucs_mlx.mlx_convert`.
+
+**Cause:** `demucs-mlx` is the MLX runtime, and the first load builds its cache from the official PyTorch checkpoint. A plain `demucs-mlx` install does not include `demucs` or `torch`, which that conversion imports. `~/.cache/demucs-mlx` was empty, so every split tried to convert and stopped.
+
+**Fix:** install `demucs-mlx[convert]` in `.venv-demucs`, as the README says. That extra is `demucs>=4.0` and `torch>=2.6`. The first successful load writes `~/.cache/demucs-mlx/htdemucs.safetensors`. Later splits read that file.
 
 ### Model dependency conflicts are unresolvable - use separate venvs
 

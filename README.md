@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-30
+updated: 2026-10-01
 ---
 
 # AI Music Generator
@@ -72,7 +72,7 @@ Separation is HTDemucs, not a prompt model. It has its own environment:
 
 ```bash
 uv venv --python 3.12 .venv-demucs
-uv pip install --python .venv-demucs/bin/python demucs-mlx soundfile
+uv pip install --python .venv-demucs/bin/python 'demucs-mlx[convert]' soundfile
 ```
 
 A sung line is SoulX, not a prompt model. Do not install the bridge
