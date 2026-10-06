@@ -18,6 +18,11 @@ PROMPT_META = CLONE / "example" / "audio" / "en_prompt.json"
 MODEL_ID = "mlx-community/SoulX-Singer"
 
 
+def seed_inference(seed: int) -> None:
+    import torch
+    torch.manual_seed(seed)
+
+
 def build_target(lyrics: str, notes: list[dict], word_phones: list[list[str]], allowed: set[str] | None = None) -> dict:
     """Metadata SoulX reads. Pitched notes and words must be the same length."""
     words = lyrics.split()
@@ -133,7 +138,7 @@ def main() -> int:
     from scripts.mlx_bridge import load_component_state
     from soulxsinger.models.soulxsinger import SoulXSinger
     from soulxsinger.utils.file_utils import load_config
-
+    seed_inference(request["seed"])
     started = time.time()
     config = load_config(str(CLONE / "soulxsinger/config/soulxsinger.yaml"))
     model = SoulXSinger(config).to("mps")

@@ -246,6 +246,8 @@ Cleanup never includes user originals.
 
 Restoring vocal settings must restore both the words and vocal mode. Otherwise
 Generate submits no lyrics even though the restored words appear on screen.
+SoulX must seed PyTorch before model construction; recording a seed in its
+sidecar alone does not control the sampler's noise.
 
 ### Regenerate keeps saying Rhodes, plate reverb, or a polished finish
 

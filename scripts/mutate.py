@@ -32,6 +32,8 @@ MUTATIONS = [
     ("history rejects silent separation stems", "app.py",
      'allow_silence=backend_spec is not None and backend_spec.task == "separate",',
      'allow_silence=False,'),
+    ("SoulX ignores its seed", "runners/soulx_runner.py",
+     '    torch.manual_seed(seed)', '    pass'),
     ("restored vocal settings drop lyrics", "web/src/App.tsx",
      'setVocals(next.voice_choices[hasLyrics ? 1 : 0] ?? next.voice_choices[0]);',
      'setVocals(next.voice_choices[0]);'),

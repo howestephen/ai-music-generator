@@ -3515,6 +3515,17 @@ class AuditRegressions(unittest.TestCase):
         self.assertFalse(path.exists())
         self.assertTrue(source.exists())
 
+    def test_soulx_applies_seed_before_constructing_the_model(self):
+        spec = importlib.util.spec_from_file_location("seed_runner", core.PROJECT_ROOT / "runners/soulx_runner.py")
+        runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
+        torch = SimpleNamespace(manual_seed=mock.Mock())
+        with mock.patch.dict(sys.modules, torch=torch):
+            runner.seed_inference(123)
+        torch.manual_seed.assert_called_once_with(123)
+        import inspect
+        source = inspect.getsource(runner.main)
+        self.assertLess(source.index('seed_inference(request["seed"])'), source.index("model = SoulXSinger"))
+
     def test_restoring_vocal_settings_submits_the_restored_words(self):
         # Run the actual React component with controlled hooks and a stub API.
         script = r'''
