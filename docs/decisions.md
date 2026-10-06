@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 # Decisions
@@ -11,6 +11,21 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-10-07 - Audio serves correct single byte ranges
+
+**Changed:** the HTTP audio handler interprets suffix ranges from EOF and clips
+oversized range ends. Invalid and unsatisfiable ranges return an empty 416 with
+`Content-Range` giving the file size. Multiple ranges remain unsupported.
+Numerals are bounded before conversion, so very large decimal ranges cannot hit
+Python's integer-string limit.
+
+**Why:** the existing handler returned the head for a suffix and rejected valid
+oversized ends, breaking the requested byte contract. Tests exercise the installed
+HTTP server, not a replacement parser. The source is
+[RFC 9110 section 14.1.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-14.1.2).
+
+**Would revisit if:** a client requires multipart byte ranges.
 
 ## 2026-10-06 - Audit repairs: owned working audio and reliable deletion
 

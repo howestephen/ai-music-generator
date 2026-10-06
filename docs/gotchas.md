@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 # Gotchas
@@ -105,6 +105,20 @@ Gradio used to copy into its temp cache is refused.
 
 **Fix:** keep the player `src` on `/audio/<filename>`. Verify with a range request:
 it should return 206 and `audio/wav`.
+
+### A suffix byte range is the end of the WAV, not its beginning
+
+**Symptom:** an audio request for `bytes=-4` returns five bytes from the WAV
+header; a valid range ending past the file returns 416.
+
+**Cause:** the HTTP handler treated a missing start as zero and rejected an end
+beyond the file instead of clipping it.
+
+**Fix:** suffix ranges return the last requested bytes, oversized ends clip to
+EOF, and invalid or unsatisfiable single ranges return an empty 416 with the
+file size. Served-HTTP tests assert exact bytes and headers, including empty files.
+Decimal numerals are clamped before integer conversion, including long leading-zero values.
+Multiple ranges are not supported.
 
 ### Gradio serves no file you have not allowed
 

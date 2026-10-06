@@ -3704,7 +3704,7 @@ class ServedUi(unittest.TestCase):
     def _open(self, path: str, data: bytes | None = None, headers: dict | None = None):
         request = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=data, headers=headers or {})
         try:
-            with urllib.request.urlopen(request) as response:
+            with urllib.request.urlopen(request, timeout=5) as response:
                 return response.status, response.read(), response.headers
         except urllib.error.HTTPError as exc:
             return exc.code, exc.read(), exc.headers
@@ -3797,6 +3797,52 @@ class ServedUi(unittest.TestCase):
         self.assertEqual(status, 206)
         self.assertEqual(ranged, path.read_bytes()[:4])
         self.assertTrue(headers["Content-Range"].startswith("bytes 0-3/"))
+
+    def test_audio_suffix_open_and_oversized_ranges_return_exact_bytes(self):
+        path = self.out / "probe.wav"
+        _write_test_wav(path, frames=8)
+        audio = path.read_bytes()
+        size = len(audio)
+        cases = (
+            ("bytes=-4", size - 4, size - 1),
+            (f"bytes=-{size + 10}", 0, size - 1),
+            ("bytes=4-", 4, size - 1),
+            (f"bytes=4-{size + 10}", 4, size - 1),
+            ("bytes=-" + "9" * 5000, 0, size - 1),
+            ("bytes=4-" + "9" * 5000, 4, size - 1),
+            ("bytes=-" + "0" * 5000 + "4", size - 4, size - 1),
+            ("bytes=" + "0" * 5000 + "4-", 4, size - 1),
+        )
+        for value, start, end in cases:
+            with self.subTest(range=value):
+                status, body, headers = self._open("/audio/probe.wav", headers={"Range": value})
+                self.assertEqual(status, 206)
+                self.assertEqual(body, audio[start:end + 1])
+                self.assertEqual(headers["Content-Length"], str(end - start + 1))
+                self.assertEqual(headers["Content-Range"], f"bytes {start}-{end}/{size}")
+
+    def test_audio_invalid_and_empty_ranges_have_no_partial_body(self):
+        path = self.out / "probe.wav"
+        _write_test_wav(path, frames=8)
+        size = path.stat().st_size
+        for value in ("bytes=-0", f"bytes={size}-", "bytes=4-3", "bytes=-",
+                      "bytes=0-1,4-5", "bytes=+1-3", "bytes=1", "bytes=a-b",
+                      "bytes=" + "9" * 5000 + "-", "bytes=-" + "0" * 5000):
+            with self.subTest(range=value):
+                status, body, headers = self._open("/audio/probe.wav", headers={"Range": value})
+                self.assertEqual(status, 416)
+                self.assertEqual(body, b"")
+                self.assertEqual(headers["Content-Range"], f"bytes */{size}")
+                self.assertEqual(headers["Content-Length"], "0")
+        path.write_bytes(b"")
+        status, body, headers = self._open("/audio/probe.wav", headers={"Range": "bytes=0-"})
+        self.assertEqual(status, 416)
+        self.assertEqual(body, b"")
+        self.assertEqual(headers["Content-Range"], "bytes */0")
+        status, body, headers = self._open("/audio/probe.wav")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, b"")
+        self.assertEqual(headers["Content-Length"], "0")
 
     def test_audio_cannot_leave_the_library(self):
         outside = Path(tempfile.mkdtemp())

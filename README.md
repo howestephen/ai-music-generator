@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 # AI Music Generator
@@ -164,6 +164,7 @@ be reordered or removed, an active one shows a labelled percentage estimate and 
 be cancelled. Finished tracks sit in a newest-first history, each waveform playable and
 seekable. Queue and history live on the server, so browsers share one state and history
 rebuilds from `output/`. **Refresh history** picks up files generated elsewhere.
+Audio serving supports single byte ranges, including suffix and open-ended requests.
 Delete offers one hour of Undo, then the server purges the WAV and sidecar even
 without an open browser. Uploaded and converted working inputs are removed when
 their queued job finishes, fails or is removed; user originals are preserved.

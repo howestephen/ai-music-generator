@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import re
 import threading
 import time
 import webbrowser
@@ -299,6 +300,14 @@ def _static_file(url_path: str) -> Path | None:
     return None
 
 
+def _bounded_range_number(text: str, size: int) -> int:
+    """Clamp decimal range numerals without converting arbitrarily large integers."""
+    digits = text.lstrip("0") or "0"
+    if len(digits) > len(str(size)):
+        return size
+    return min(int(digits), size)
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -492,18 +501,25 @@ class Handler(BaseHTTPRequestHandler):
         start, end = 0, size - 1
         status = 200
         if range_header:
-            if not range_header.startswith("bytes="):
-                self._send_json({"error": "bad range"}, status=416)
-                return
-            spec = range_header[6:]
-            start_text, _, end_text = spec.partition("-")
+            match = re.fullmatch(r"bytes=([0-9]*)-([0-9]*)", range_header)
             try:
-                start = int(start_text) if start_text else 0
-                end = int(end_text) if end_text else size - 1
+                if match is None or size == 0:
+                    raise ValueError("bad range")
+                start_text, end_text = match.groups()
+                if start_text:
+                    start = _bounded_range_number(start_text, size)
+                    end = _bounded_range_number(end_text, size) if end_text else size - 1
+                    if start >= size or end < start:
+                        raise ValueError("unsatisfiable range")
+                    end = min(end, size - 1)
+                else:
+                    if not end_text:
+                        raise ValueError("bad range")
+                    suffix = _bounded_range_number(end_text, size)
+                    if suffix <= 0:
+                        raise ValueError("empty suffix range")
+                    start = max(0, size - suffix)
             except ValueError:
-                self._send_json({"error": "bad range"}, status=416)
-                return
-            if start < 0 or end >= size or start > end:
                 self.send_response(416)
                 self.send_header("Content-Range", f"bytes */{size}")
                 self.send_header("Content-Length", "0")

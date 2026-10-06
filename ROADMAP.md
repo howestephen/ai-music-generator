@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 # ROADMAP
@@ -133,13 +133,21 @@ no archive copy (2026-09-20).
 
 ## Current next step
 
-- Current milestone: audit repairs implemented and verified on `prompt-and-tool-models`.
+- Current milestone: audit repairs merged and pushed to main at `609532c`.
   Repairs cover working-input ownership, deletion retries and unattended expiry,
   restored lyrics, silent stems, SoulX seed application and remote runtime metadata.
   The removed rating controls remain a design decision; no new controls are added.
-- Verified: 244 unit tests, 104/104 mutations, eight installed backend probes,
+- Verified for that merge: 244 unit tests, 104/104 mutations, eight installed backend probes,
   frontend build, validators and clean independent re-audit.
-- Next: owner review. No real render, listening test or live remote graph was run.
+- Continuing audit: single audio byte-range repair on `fix/audio-byte-ranges`.
+  Suffix requests now read from EOF and oversized ends clip to the file length.
+  Large decimal numerals are bounded before conversion. Four new playback mutations
+  caught by the served-HTTP suite; all 246 tests pass after restoration and re-audit is
+  clean. Eight installed backend probes, frontend build and validators pass.
+  The previous 104 mutations were not rerun here; a full-suite mutation attempt
+  stalled in the unrelated legacy Gradio configuration probe and was stopped.
+- Next: owner review after the playback repair. No real render, listening test or
+  live remote graph was run.
 - The honest gap: the owner has heard Stable Audio's vocal texture (occasional vague
   voice noises) and is not happy with the output. Nothing else in this file is a
   judgement of how a track sounds

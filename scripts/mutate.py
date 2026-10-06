@@ -23,6 +23,18 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("audio converts unbounded range numerals", "synth/ui_server.py",
+     '                    suffix = _bounded_range_number(end_text, size)',
+     '                    suffix = int(end_text)'),
+    ("audio suffix returns the file head", "synth/ui_server.py",
+     '                    start = max(0, size - suffix)',
+     '                    start = 0'),
+    ("audio range extends past the file", "synth/ui_server.py",
+     '                    end = min(end, size - 1)',
+     '                    end = end'),
+    ("audio accepts a zero suffix", "synth/ui_server.py",
+     '                    if suffix <= 0:',
+     '                    if suffix < 0:'),
     ("converted inputs reuse one filename", "app.py",
      '    converted = new_working_audio()',
      '    converted = (_INPUT_SCOPE.paths[0] if getattr(_INPUT_SCOPE, "paths", None) else new_working_audio())'),
