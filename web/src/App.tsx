@@ -320,6 +320,10 @@ export function App() {
       setUseSeed(true);
     }
     setLyrics(track.lyrics || "");
+    if (next) {
+      const hasLyrics = Boolean(track.lyrics && track.lyrics !== "[Instrumental]");
+      setVocals(next.voice_choices[hasLyrics ? 1 : 0] ?? next.voice_choices[0]);
+    }
     setTool("generate");
     setLibraryView("tracks");
     settleDrawer("closed");

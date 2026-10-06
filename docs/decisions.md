@@ -14,6 +14,9 @@ rationale and reason to revisit it.
 
 ## 2026-10-06 - Audit repairs: owned working audio and reliable deletion
 
+**Vocal restoration:** restoring a vocal track also restores the vocal mode, so
+Generate submits its saved words rather than silently submitting no lyrics.
+
 **Changed:** requests own their uploaded and converted working files until the
 serial queue takes ownership. Completion, failure and removal clean those exact
 files; rejected requests clean them immediately. Converted inputs use unique

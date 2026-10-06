@@ -3515,6 +3515,39 @@ class AuditRegressions(unittest.TestCase):
         self.assertFalse(path.exists())
         self.assertTrue(source.exists())
 
+    def test_restoring_vocal_settings_submits_the_restored_words(self):
+        # Run the actual React component with controlled hooks and a stub API.
+        script = r'''
+const fs = require('fs'), vm = require('vm'), ts = require('./web/node_modules/typescript');
+const code = ts.transpileModule(fs.readFileSync('web/src/App.tsx','utf8'), {
+  compilerOptions: {jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+}).outputText;
+const model={name:'minimax-mlx',voice_choices:['Instrumental','With vocals'],
+  duration:{minimum:1,maximum:300,default:60,integer:false},steps:{default:30},
+  guidance:null,supports_lyrics:true};
+const state=[]; state[0]={models:[model],genres:[],characters:[],labels:{},singers:[],melodies:[]};
+state[1]=model.name; state[32]='history';
+let cursor=0,submitted;
+const react={useState:init=>{const i=cursor++;if(!(i in state))state[i]=typeof init==='function'?init():init;
+  return[state[i],v=>state[i]=typeof v==='function'?v(state[i]):v];},useEffect:()=>{},useMemo:fn=>fn(),useRef:v=>({current:v})};
+const jsx=(type,props)=>({type,props});
+const api={generate:async body=>{submitted=body;return{seed:42,queue:[]};}};
+const exports={};
+vm.runInNewContext(code,{exports,require:name=>name==='react'?react:name==='react/jsx-runtime'?{jsx,jsxs:jsx}:name==='./api'?api:{},window:{matchMedia:()=>({matches:true})}});
+function find(node,predicate){if(!node||typeof node!=='object')return null;if(predicate(node))return node;
+  for(const child of [node.props?.children].flat(Infinity)){const hit=find(child,predicate);if(hit)return hit;}return null;}
+let tree=exports.App();
+find(tree,n=>typeof n.type==='function'&&n.type.name==='SettingsHistory').props.onRestore({
+  backend:model.name,prompt:'pop song',genre:null,requested_duration:30,steps:30,guidance:null,seed:7,lyrics:'words to sing'});
+cursor=0; tree=exports.App();
+find(tree,n=>n.props?.id==='generate-button').props.onClick();
+if(submitted.lyrics!=='words to sing')throw new Error('Restored lyrics were dropped');
+'''
+        result = subprocess.run(["node", "-e", script], cwd=core.PROJECT_ROOT,
+                                capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 class MutationSuite(unittest.TestCase):
     """The mutation suite is only evidence while its anchors still match the code."""
 

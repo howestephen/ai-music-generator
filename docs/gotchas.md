@@ -244,6 +244,9 @@ after unlink errors; history used the non-silent generation audit for Demucs.
 purge metadata and server-driven expiry, plus separation-aware history audit.
 Cleanup never includes user originals.
 
+Restoring vocal settings must restore both the words and vocal mode. Otherwise
+Generate submits no lyrics even though the restored words appear on screen.
+
 ### Regenerate keeps saying Rhodes, plate reverb, or a polished finish
 
 **Symptom:** prompts from different genres, or repeated presses of Regenerate, use
