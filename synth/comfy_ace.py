@@ -174,6 +174,7 @@ def render(backend_name: str, job: dict) -> dict:
     return {
         "path": job["output_path"],
         "elapsed_seconds": round(time.time() - started, 1),
+        "dtype": "ComfyUI (runtime dtype not reported)",
     }
 
 

@@ -63,7 +63,7 @@ MUTATIONS = [
      '          "step": 0.1,\n'
      '          "label": "Prompt adherence",\n'
      '          "info": "MusicGen guidance scale. Default: 15.",'),
-    ("stamp float32 for everyone", "synth/core.py", "dtype=backend.dtype,", 'dtype="float32",'),
+    ("stamp float32 for everyone", "synth/core.py", 'dtype=result.get("dtype", backend.dtype),', 'dtype="float32",'),
     ("sidecar backend = model_id", "synth/core.py", "backend=backend.name,", "backend=backend.model_id,"),
     ("silently drop unsupported knob", "synth/core.py",
      '            raise ValueError(f"{backend.name} has no {knob} control (got {value!r})")', "            pass"),

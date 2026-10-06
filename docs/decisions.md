@@ -20,6 +20,9 @@ Generate submits its saved words rather than silently submitting no lyrics.
 **SoulX seed:** seed PyTorch before constructing the model. The upstream sampler
 draws its noise from PyTorch, so recording the seed alone did not apply it.
 
+**Remote provenance:** ComfyUI results override the local backend dtype label.
+They identify ComfyUI and explicitly leave its unreported runtime dtype unknown.
+
 **Changed:** requests own their uploaded and converted working files until the
 serial queue takes ownership. Completion, failure and removal clean those exact
 files; rejected requests clean them immediately. Converted inputs use unique

@@ -317,7 +317,7 @@ def generate(
             lyrics=lyrics,
             backend=backend.name,
             model=backend.model_id,
-            dtype=backend.dtype,
+            dtype=result.get("dtype", backend.dtype),
             generated_at=stamp,
             elapsed_seconds=round(elapsed, 1),
             title=title,

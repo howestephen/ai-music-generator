@@ -133,11 +133,13 @@ no archive copy (2026-09-20).
 
 ## Current next step
 
-- Current milestone: audit repairs, `in_progress` on `prompt-and-tool-models`.
+- Current milestone: audit repairs implemented and verified on `prompt-and-tool-models`.
   Repairs cover working-input ownership, deletion retries and unattended expiry,
   restored lyrics, silent stems, SoulX seed application and remote runtime metadata.
   The removed rating controls remain a design decision; no new controls are added.
-- Next: regression tests, mutations, independent audit, then owner review.
+- Verified: 244 unit tests, 104/104 mutations, eight installed backend probes,
+  frontend build, validators and clean independent re-audit.
+- Next: owner review. No real render, listening test or live remote graph was run.
 - The honest gap: the owner has heard Stable Audio's vocal texture (occasional vague
   voice noises) and is not happy with the output. Nothing else in this file is a
   judgement of how a track sounds

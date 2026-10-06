@@ -3526,6 +3526,17 @@ class AuditRegressions(unittest.TestCase):
         source = inspect.getsource(runner.main)
         self.assertLess(source.index('seed_inference(request["seed"])'), source.index("model = SoulXSinger"))
 
+    def test_remote_render_records_runtime_instead_of_mlx(self):
+        stub = _StubRunner()
+        def remote(name, job):
+            result = stub(backends.get(name), job)
+            result["dtype"] = "ComfyUI (runtime dtype not reported)"
+            return result
+        with mock.patch.object(comfy_ace, "render", remote), mock.patch.object(backends.Backend, "available", new_callable=mock.PropertyMock, return_value=True):
+            track = core.generate("test", duration=10, model="acestep", output_dir=self.out)
+        self.assertEqual(track.dtype, "ComfyUI (runtime dtype not reported)")
+        self.assertEqual(json.loads(track.sidecar_path().read_text(encoding="utf-8"))["dtype"], track.dtype)
+
     def test_restoring_vocal_settings_submits_the_restored_words(self):
         # Run the actual React component with controlled hooks and a stub API.
         script = r'''
