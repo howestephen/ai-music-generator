@@ -45,8 +45,10 @@ class GenerationQueue:
         *,
         clock: Callable[[], float] = time.monotonic,
         completed_hold_seconds: float = 0.75,
+        cleanup: Callable[[dict], None] | None = None,
     ) -> None:
         self._run = run
+        self._cleanup = cleanup or (lambda payload: None)
         self._clock = clock
         self._completed_hold_seconds = completed_hold_seconds
         self._jobs: list[GenerationJob] = []
@@ -115,10 +117,13 @@ class GenerationQueue:
 
     def remove(self, job_id: str) -> list[dict]:
         with self._condition:
+            removed = [job for job in self._jobs if job.id == job_id and job.status != "running"]
             self._jobs = [
                 job for job in self._jobs
                 if job.id != job_id or job.status == "running"
             ]
+        for job in removed:
+            self._cleanup(job.payload)
         return self.snapshot()
 
     def stop(self) -> None:
@@ -168,7 +173,10 @@ class GenerationQueue:
                 job.started_at = self._clock()
 
             try:
-                track = self._run(job.payload)
+                try:
+                    track = self._run(job.payload)
+                finally:
+                    self._cleanup(job.payload)
                 output_path = Path(getattr(track, "path", ""))
                 if not output_path.is_file():
                     raise RuntimeError(

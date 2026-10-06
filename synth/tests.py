@@ -2897,7 +2897,7 @@ print(json.dumps({
             def __exit__(self, _exc_type, _exc, _traceback):
                 self.lock.release()
 
-        def construct(_runner):
+        def construct(_runner, **_kwargs):
             queue = object()
             with created_lock:
                 index = len(created)
@@ -3301,6 +3301,220 @@ print(json.dumps({
                 app._estimate_runtime("minimax-mlx", 10), overhead + rate * 10
             )
 
+class AuditRegressions(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="music-regression-")
+        self.addCleanup(self.temp.cleanup)
+        self.out = Path(self.temp.name)
+
+    def test_failed_purge_retains_metadata_and_retries_partial_pair(self):
+        wav = self.out / "gone.wav"
+        _write_test_wav(wav, 8000)
+        wav.with_suffix(".json").write_text("{}", encoding="utf-8")
+        app.delete_track(str(wav), self.out)
+        entry = app._pending_entries(self.out)[0]
+        real_unlink = Path.unlink
+        def deny_sidecar(path, *args, **kwargs):
+            if path == entry["sidecar"]:
+                raise PermissionError("locked sidecar")
+            return real_unlink(path, *args, **kwargs)
+        with mock.patch.object(Path, "unlink", deny_sidecar), self.assertLogs(level="ERROR"):
+            self.assertEqual(app.purge_expired_deletions(self.out, now=time.time() + 3601), 0)
+        self.assertFalse(entry["wav"].exists())
+        self.assertTrue(entry["meta"].exists())
+        self.assertEqual(len(app._pending_entries(self.out)), 1)
+        self.assertEqual(app.purge_expired_deletions(self.out, now=time.time() + 3601), 1)
+        self.assertFalse(entry["sidecar"].exists())
+        self.assertFalse(entry["meta"].exists())
+
+    def test_delete_rolls_back_when_the_sidecar_move_fails(self):
+        wav = self.out / "keep.wav"
+        _write_test_wav(wav, 8000)
+        sidecar = wav.with_suffix(".json")
+        sidecar.write_text("{}", encoding="utf-8")
+        real_move = shutil.move
+        def deny_sidecar(source, target):
+            if Path(source) == sidecar:
+                raise PermissionError("locked sidecar")
+            return real_move(source, target)
+        with mock.patch.object(app.shutil, "move", deny_sidecar):
+            with self.assertRaises(PermissionError):
+                app.delete_track(str(wav), self.out)
+        self.assertTrue(wav.exists())
+        self.assertTrue(sidecar.exists())
+        self.assertEqual(app._pending_entries(self.out), [])
+
+    def test_interrupted_delete_recovers_for_undo_and_expiry(self):
+        for expired in (False, True):
+            wav = self.out / "interrupted.wav"
+            _write_test_wav(wav, 8000)
+            sidecar = wav.with_suffix(".json")
+            sidecar.write_text('{"prompt": "keep the metadata"}', encoding="utf-8")
+            original = sidecar.read_bytes()
+            real_move = shutil.move
+            def terminate(source, target):
+                if Path(source) == sidecar:
+                    raise SystemExit("simulated process exit")
+                return real_move(source, target)
+            with mock.patch.object(app.shutil, "move", terminate):
+                with self.assertRaises(SystemExit):
+                    app.delete_track(str(wav), self.out)
+            entry = app._pending_entries(self.out)[0]
+            self.assertFalse(wav.exists())
+            self.assertTrue(sidecar.exists())
+            sidecar.write_text('{"replacement": true}', encoding="utf-8")
+            with self.assertRaises(FileExistsError):
+                app.undo_delete(wav.stem, self.out)
+            self.assertTrue(entry["wav"].exists())
+            self.assertEqual(sidecar.read_text(encoding="utf-8"), '{"replacement": true}')
+            sidecar.write_bytes(original)
+            if expired:
+                self.assertEqual(app.purge_expired_deletions(self.out, now=time.time() + 3601), 1)
+                self.assertFalse(sidecar.exists())
+                self.assertFalse(entry["wav"].exists())
+            else:
+                app.undo_delete(wav.stem, self.out)
+                self.assertTrue(wav.exists())
+                self.assertEqual(sidecar.read_bytes(), original)
+                wav.unlink(); sidecar.unlink()
+
+    def test_interruption_before_any_move_has_no_false_undo_entry(self):
+        wav = self.out / "unmoved.wav"
+        _write_test_wav(wav, 8000)
+        sidecar = wav.with_suffix(".json")
+        sidecar.write_text("{}", encoding="utf-8")
+        with mock.patch.object(app.shutil, "move", side_effect=SystemExit("exit before move")):
+            with self.assertRaises(SystemExit):
+                app.delete_track(str(wav), self.out)
+        self.assertTrue(wav.exists())
+        self.assertTrue(sidecar.exists())
+        self.assertEqual(app._pending_entries(self.out), [])
+        self.assertEqual(list(app._pending_root(self.out).iterdir()), [])
+
+    def test_interrupted_undo_finishes_before_expiry_can_remove_metadata(self):
+        for cut_before_sidecar in (False, True):
+            wav = self.out / "restore.wav"
+            _write_test_wav(wav, 8000)
+            sidecar = wav.with_suffix(".json")
+            sidecar.write_text('{"prompt": "original"}', encoding="utf-8")
+            app.delete_track(str(wav), self.out)
+            entry = app._pending_entries(self.out)[0]
+            real_move = shutil.move
+            def terminate(source, target):
+                if Path(source) == (entry["sidecar"] if cut_before_sidecar else entry["wav"]):
+                    raise SystemExit("exit during Undo")
+                return real_move(source, target)
+            with mock.patch.object(app.shutil, "move", terminate):
+                with self.assertRaises(SystemExit):
+                    app.undo_delete(wav.stem, self.out)
+            self.assertEqual(app.purge_expired_deletions(self.out, now=time.time() + 3601), 0)
+            self.assertTrue(wav.exists())
+            self.assertEqual(sidecar.read_text(encoding="utf-8"), '{"prompt": "original"}')
+            self.assertEqual(app._pending_entries(self.out), [])
+            wav.unlink(); sidecar.unlink()
+
+    def test_background_expiry_does_not_need_browser_polling(self):
+        wav = self.out / "expired.wav"
+        _write_test_wav(wav, 8000)
+        app.delete_track(str(wav), self.out)
+        entry = app._pending_entries(self.out)[0]
+        entry["meta"].write_text(json.dumps({"deleted_at": time.time() - 3601}), encoding="utf-8")
+        with mock.patch.object(core, "OUTPUT_DIR", self.out):
+            server, _ = ui_server.serve_in_thread()
+            try:
+                deadline = time.monotonic() + 2
+                while entry["wav"].exists() and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertFalse(entry["wav"].exists())
+            finally:
+                server.shutdown()
+                server.server_close()
+
+    def test_same_named_converted_inputs_are_distinct_and_scope_cleans_them(self):
+        first = self.out / "one"; first.mkdir()
+        second = self.out / "two"; second.mkdir()
+        sf.write(first / "mix.wav", [[0.1, 0.1]] * 48000, 48000)
+        sf.write(second / "mix.wav", [[0.7, 0.7]] * 48000, 48000)
+        with app.temporary_inputs():
+            a, _ = app._prepare_edit_source(str(first / "mix.wav"))
+            before = a.read_bytes()
+            b, _ = app._prepare_edit_source(str(second / "mix.wav"))
+            self.assertNotEqual(a, b)
+            self.assertEqual(a.read_bytes(), before)
+        self.assertFalse(a.exists())
+        self.assertFalse(b.exists())
+        self.assertTrue((first / "mix.wav").exists())
+
+    def test_owned_inputs_survive_queueing_then_clean_on_finish_failure_and_remove(self):
+        for failure in (False, True):
+            done = threading.Event()
+            output = self.out / "result.wav"
+            def run(payload):
+                self.assertTrue(Path(payload["source"]).exists())
+                if failure:
+                    raise ValueError("runner failed")
+                _write_test_wav(output)
+                return SimpleNamespace(path=output)
+            def cleanup(payload):
+                app._cleanup_job_inputs(payload)
+                done.set()
+            queue = jobs.GenerationQueue(run, cleanup=cleanup)
+            try:
+                with app.temporary_inputs():
+                    path = app.new_working_audio()
+                    self.addCleanup(path.unlink, missing_ok=True)
+                    app._enqueue_owned(queue, {"source": str(path)}, {}, 1)
+                self.assertTrue(done.wait(2))
+                self.assertFalse(path.exists())
+            finally:
+                queue.stop()
+        gate = threading.Event()
+        started = threading.Event()
+        def blocked(payload):
+            started.set(); gate.wait(2)
+            return SimpleNamespace(path=output)
+        queue = jobs.GenerationQueue(blocked, cleanup=app._cleanup_job_inputs)
+        try:
+            queue.enqueue({}, {}, 1)
+            self.assertTrue(started.wait(1))
+            with app.temporary_inputs():
+                path = app.new_working_audio()
+                self.addCleanup(path.unlink, missing_ok=True)
+                job = app._enqueue_owned(queue, {"source": str(path)}, {}, 1)
+            self.assertTrue(path.exists())
+            queued = next(item for item in queue.snapshot() if item["status"] == "queued")
+            queue.remove(queued["id"])
+            self.assertFalse(path.exists())
+        finally:
+            gate.set(); queue.stop()
+
+    def test_silent_separation_stems_keep_duration_and_pass_history_audit(self):
+        wav = self.out / "silent-vocals.wav"
+        sf.write(wav, [0.0] * 8000, 8000)
+        wav.with_suffix(".json").write_text(json.dumps({"backend": "demucs", "requested_duration": 1}), encoding="utf-8")
+        track = app._load_history(self.out)[0]
+        self.assertEqual(track["audit_status"], "passed")
+        self.assertEqual(track["duration"], 1)
+        wav.with_suffix(".json").write_text(json.dumps({"backend": "acestep", "requested_duration": 1}), encoding="utf-8")
+        self.assertEqual(app._load_history(self.out)[0]["audit_status"], "invalid")
+
+    def test_cleanup_failure_is_retried_without_deleting_user_sources(self):
+        path = self.out / "owned.wav"
+        _write_test_wav(path)
+        source = self.out / "user.wav"
+        _write_test_wav(source)
+        real_unlink = Path.unlink
+        def locked(target, *args, **kwargs):
+            if target == path:
+                raise PermissionError("in use")
+            return real_unlink(target, *args, **kwargs)
+        with mock.patch.object(Path, "unlink", locked), self.assertLogs(level="ERROR"):
+            app.cleanup_inputs([path])
+        self.assertTrue(path.exists())
+        app.retry_input_cleanup()
+        self.assertFalse(path.exists())
+        self.assertTrue(source.exists())
+
 class MutationSuite(unittest.TestCase):
     """The mutation suite is only evidence while its anchors still match the code."""
 
@@ -3439,6 +3653,22 @@ class ServedUi(unittest.TestCase):
                 return response.status, response.read(), response.headers
         except urllib.error.HTTPError as exc:
             return exc.code, exc.read(), exc.headers
+
+    def test_rejected_upload_removes_its_working_file(self):
+        body = (b'--probe\r\nContent-Disposition: form-data; name="file"; filename="mix.wav"\r\n'
+                b'Content-Type: audio/wav\r\n\r\nnot audio\r\n--probe--\r\n')
+        created = []
+        allocate = app.new_working_audio
+        def recording(suffix):
+            path = allocate(suffix)
+            created.append(path)
+            return path
+        with mock.patch.object(app, "new_working_audio", recording):
+            status, _body, _headers = self._open("/api/remix", body,
+                {"Content-Type": "multipart/form-data; boundary=probe"})
+        self.assertEqual(status, 400)
+        self.assertEqual(len(created), 1)
+        self.assertTrue(all(not path.exists() for path in created))
 
     def test_each_model_keeps_its_own_duration_cap(self):
         caps = {model["name"]: model["duration"]["maximum"] for model in ui_server.bootstrap()["models"]}

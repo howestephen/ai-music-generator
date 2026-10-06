@@ -7,6 +7,9 @@ sidecars already written by ``core.generate``; the UI owns no second copy of tha
 from __future__ import annotations
 
 import html
+import hashlib
+import os
+import logging
 import json
 import math
 import random
@@ -16,7 +19,8 @@ import statistics
 import tempfile
 import threading
 import time
-from functools import lru_cache
+from contextlib import contextmanager
+from functools import lru_cache, wraps
 from pathlib import Path
 
 import gradio as gr
@@ -29,6 +33,73 @@ from synth.sing import count_mismatch, parse_score, pitched_count
 PENDING_DELETE_DIR = ".pending-delete"
 UNDO_WINDOW_SECONDS = 3600
 PENDING_META_SUFFIX = ".pending.json"
+_LIBRARY_LOCK = threading.RLock()
+_INPUT_SCOPE = threading.local()
+_INPUT_RETRIES: set[Path] = set()
+_INPUT_LOCK = threading.Lock()
+
+
+def _library_locked(function):
+    @wraps(function)
+    def locked(*args, **kwargs):
+        with _LIBRARY_LOCK:
+            return function(*args, **kwargs)
+    return locked
+
+
+def cleanup_inputs(paths) -> None:
+    """Remove only explicitly owned working files, retaining failures for retry."""
+    for value in paths:
+        path = Path(value)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            logging.exception("Could not remove working audio %s", path)
+            with _INPUT_LOCK:
+                _INPUT_RETRIES.add(path)
+        else:
+            with _INPUT_LOCK:
+                _INPUT_RETRIES.discard(path)
+
+
+def retry_input_cleanup() -> None:
+    with _INPUT_LOCK:
+        paths = tuple(_INPUT_RETRIES)
+    cleanup_inputs(paths)
+
+
+@contextmanager
+def temporary_inputs():
+    """A request owns its inputs until a queue job takes ownership."""
+    if getattr(_INPUT_SCOPE, "paths", None) is not None:
+        yield
+        return
+    _INPUT_SCOPE.paths = []
+    try:
+        yield
+    finally:
+        cleanup_inputs(_INPUT_SCOPE.paths)
+        del _INPUT_SCOPE.paths
+
+
+def new_working_audio(suffix=".wav") -> Path:
+    descriptor, name = tempfile.mkstemp(prefix="music-input-", suffix=suffix)
+    os.close(descriptor)
+    path = Path(name)
+    if getattr(_INPUT_SCOPE, "paths", None) is not None:
+        _INPUT_SCOPE.paths.append(path)
+    return path
+
+
+def _enqueue_owned(queue, payload, summary, estimate):
+    paths = getattr(_INPUT_SCOPE, "paths", [])
+    owned = dict(payload, _cleanup_paths=[str(path) for path in paths])
+    queue.enqueue(owned, summary, estimate)
+    paths.clear()
+
+
+def _cleanup_job_inputs(payload):
+    cleanup_inputs(payload.get("_cleanup_paths", ()))
 
 UI_CSS = """
 #generate-button:disabled {
@@ -554,11 +625,12 @@ def _model_updates(model, duration, genre, bpm):
 def _history_audio_audit(
     path_string: str,
     modified_ns: int,
+    allow_silence: bool = False,
 ) -> tuple[backends.AudioAudit | None, str | None]:
     """Fully audit a WAV once per file revision, including its sample stream."""
     del modified_ns  # Cache key: a replaced file is audited again.
     try:
-        return backends.audit_audio_file(Path(path_string), "history"), None
+        return backends.audit_audio_file(Path(path_string), "history", allow_silence=allow_silence), None
     except RuntimeError as exc:
         return None, str(exc)
 
@@ -690,6 +762,7 @@ def filter_history(
     return results
 
 
+@_library_locked
 def _pending_entries(output_dir: Path | None = None) -> list[dict]:
     pending = _pending_root(output_dir)
     entries = []
@@ -707,9 +780,16 @@ def _pending_entries(output_dir: Path | None = None) -> list[dict]:
         stem = meta_path.name[: -len(PENDING_META_SUFFIX)]
         wav = pending / f"{stem}.wav"
         sidecar = pending / f"{stem}.json"
-        if not wav.is_file():
+        if not math.isfinite(deleted_at):
             continue
-        entries.append({
+        if not wav.exists() and not sidecar.exists():
+            # No move began, or both files were purged before a process exit.
+            try:
+                meta_path.unlink(missing_ok=True)
+            except OSError:
+                logging.exception("Could not remove empty deletion metadata %s", meta_path)
+            continue
+        entry = {
             "stem": stem,
             "deleted_at": deleted_at,
             "expires_at": deleted_at + UNDO_WINDOW_SECONDS,
@@ -718,10 +798,69 @@ def _pending_entries(output_dir: Path | None = None) -> list[dict]:
             "meta": meta_path,
             "title": payload.get("title") or stem,
             "name": f"{stem}.wav",
-        })
+            "sidecar_sha256": payload.get("sidecar_sha256"),
+            "wav_identity": payload.get("wav_identity"),
+            "operation": payload.get("operation", "delete"),
+        }
+        if entry["operation"] == "restore":
+            try:
+                _restore_delete_pair(entry, output_dir)
+            except OSError:
+                logging.exception("Could not finish restoring %s", entry["name"])
+            else:
+                continue
+        entries.append(entry)
     return sorted(entries, key=lambda item: item["deleted_at"], reverse=True)
 
 
+def _wav_identity(path):
+    stat = path.stat()
+    return [stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns]
+
+
+def _write_delete_meta(path, payload):
+    temporary = path.with_name(path.name + ".tmp")
+    try:
+        temporary.write_text(json.dumps(payload), encoding="utf-8")
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _restore_delete_pair(entry, output_dir=None):
+    root = Path(output_dir) if output_dir else core.OUTPUT_DIR
+    wav = root / entry["wav"].name
+    sidecar = root / entry["sidecar"].name
+    candidate = wav if wav.exists() else entry["wav"]
+    if _wav_identity(candidate) != entry["wav_identity"]:
+        raise FileExistsError("A different track occupies the restore path")
+    expected = entry.get("sidecar_sha256")
+    if expected:
+        metadata = sidecar if sidecar.exists() else entry["sidecar"]
+        if hashlib.sha256(metadata.read_bytes()).hexdigest() != expected:
+            raise FileExistsError("A different sidecar occupies the restore path")
+    if not wav.exists():
+        shutil.move(str(entry["wav"]), str(wav))
+    if expected and not sidecar.exists():
+        shutil.move(str(entry["sidecar"]), str(sidecar))
+    entry["meta"].unlink(missing_ok=True)
+
+
+def _complete_delete_pair(entry, output_dir=None):
+    """Recover a process exit between the two moves, without trusting a new file."""
+    root = Path(output_dir) if output_dir else core.OUTPUT_DIR
+    original = root / entry["sidecar"].name
+    if not entry["wav"].exists() or entry["sidecar"].exists() or not original.exists():
+        return
+    expected = entry.get("sidecar_sha256")
+    if (root / entry["wav"].name).exists() or not expected:
+        raise FileExistsError("Cannot recover a partially deleted track safely")
+    if hashlib.sha256(original.read_bytes()).hexdigest() != expected:
+        raise FileExistsError("The original sidecar changed after deletion")
+    shutil.move(str(original), str(entry["sidecar"]))
+
+
+@_library_locked
 def purge_expired_deletions(
     output_dir: Path | None = None,
     *,
@@ -731,17 +870,34 @@ def purge_expired_deletions(
     clock = time.time() if now is None else now
     removed = 0
     for entry in _pending_entries(output_dir):
+        if entry["operation"] == "restore":
+            continue  # Undo intent survives a process exit; never purge its metadata.
         if entry["expires_at"] > clock:
             continue
-        for path in (entry["wav"], entry["sidecar"], entry["meta"]):
+        try:
+            _complete_delete_pair(entry, output_dir)
+        except OSError:
+            logging.exception("Could not complete deleted pair %s", entry["name"])
+            continue
+        failed = False
+        for path in (entry["wav"], entry["sidecar"]):
             try:
                 path.unlink(missing_ok=True)
             except OSError:
-                pass
+                failed = True
+                logging.exception("Could not purge deleted track %s", path)
+        if failed:
+            continue
+        try:
+            entry["meta"].unlink(missing_ok=True)
+        except OSError:
+            logging.exception("Could not remove deletion metadata %s", entry["meta"])
+            continue
         removed += 1
     return removed
 
 
+@_library_locked
 def delete_track(path_string: str, output_dir: Path | None = None) -> list[dict]:
     """Move a track out of the library into the one-hour undo area."""
     output_dir = Path(output_dir) if output_dir else core.OUTPUT_DIR
@@ -756,13 +912,9 @@ def delete_track(path_string: str, output_dir: Path | None = None) -> list[dict]
     destination_wav = pending / wav.name
     destination_sidecar = pending / sidecar.name
     destination_meta = pending / f"{wav.stem}{PENDING_META_SUFFIX}"
-    if destination_wav.exists() or destination_meta.exists():
+    if destination_wav.exists() or destination_sidecar.exists() or destination_meta.exists():
         raise FileExistsError(f"a pending deletion already uses {wav.name}")
-    shutil.move(str(wav), str(destination_wav))
-    if sidecar.is_file():
-        shutil.move(str(sidecar), str(destination_sidecar))
-    destination_meta.write_text(
-        json.dumps({
+    _write_delete_meta(destination_meta, {
             "deleted_at": time.time(),
             "title": metadata.get("title") or _display_title({
                 "title": metadata.get("title"),
@@ -770,12 +922,24 @@ def delete_track(path_string: str, output_dir: Path | None = None) -> list[dict]
                 "name": wav.name,
             }),
             "name": wav.name,
-        }),
-        encoding="utf-8",
-    )
+            "sidecar_sha256": hashlib.sha256(sidecar.read_bytes()).hexdigest() if sidecar.is_file() else None,
+            "wav_identity": _wav_identity(wav),
+        })
+    try:
+        shutil.move(str(wav), str(destination_wav))
+        if sidecar.is_file():
+            shutil.move(str(sidecar), str(destination_sidecar))
+    except OSError:
+        if destination_wav.exists() and not wav.exists():
+            shutil.move(str(destination_wav), str(wav))
+        if destination_sidecar.exists() and not sidecar.exists():
+            shutil.move(str(destination_sidecar), str(sidecar))
+        destination_meta.unlink(missing_ok=True)
+        raise
     return _load_history(output_dir)
 
 
+@_library_locked
 def undo_delete(stem: str, output_dir: Path | None = None) -> list[dict]:
     """Restore a pending deletion back into the library."""
     output_dir = Path(output_dir) if output_dir else core.OUTPUT_DIR
@@ -786,17 +950,22 @@ def undo_delete(stem: str, output_dir: Path | None = None) -> list[dict]:
     if entry["expires_at"] <= time.time():
         purge_expired_deletions(output_dir)
         raise FileNotFoundError(f"undo window expired for {stem!r}")
+    _complete_delete_pair(entry, output_dir)
     destination_wav = output_dir / entry["wav"].name
     destination_sidecar = output_dir / entry["sidecar"].name
-    if destination_wav.exists():
+    if destination_wav.exists() or destination_sidecar.exists():
         raise FileExistsError(f"library already has {destination_wav.name}")
-    shutil.move(str(entry["wav"]), str(destination_wav))
-    if entry["sidecar"].is_file():
-        shutil.move(str(entry["sidecar"]), str(destination_sidecar))
-    entry["meta"].unlink(missing_ok=True)
+    payload = json.loads(entry["meta"].read_text(encoding="utf-8"))
+    payload.update(operation="restore", wav_identity=_wav_identity(entry["wav"]),
+                   sidecar_sha256=hashlib.sha256(entry["sidecar"].read_bytes()).hexdigest()
+                   if entry["sidecar"].exists() else None)
+    _write_delete_meta(entry["meta"], payload)
+    entry.update(payload)
+    _restore_delete_pair(entry, output_dir)
     return _load_history(output_dir)
 
 
+@_library_locked
 def set_track_rating(
     path_string: str,
     rating: str | None,
@@ -829,7 +998,12 @@ def _load_history(output_dir: Path | None = None) -> list[dict]:
         except OSError:
             continue
         requested_duration = metadata.get("requested_duration", metadata.get("duration"))
-        audio_audit, audit_error = _history_audio_audit(str(path), modified_ns)
+        backend_name = metadata.get("backend")
+        backend_spec = backends.BACKENDS.get(str(backend_name))
+        audio_audit, audit_error = _history_audio_audit(
+            str(path), modified_ns,
+            allow_silence=backend_spec is not None and backend_spec.task == "separate",
+        )
         measured_duration = audio_audit.duration_seconds if audio_audit else None
         audio_frames = audio_audit.frames if audio_audit else None
         sample_rate = audio_audit.sample_rate if audio_audit else None
@@ -1075,7 +1249,7 @@ def _prepare_edit_source(path_string: str) -> tuple[Path, str | None]:
         data = np.repeat(data, 2, axis=1)
     # Not output/: a converted input is not a generated asset, and anything left
     # in output/ appears in the track history as a sidecar-less mystery file.
-    converted = Path(tempfile.gettempdir()) / f"sa3-input-{source.stem}-44k1.wav"
+    converted = new_working_audio()
     sf.write(str(converted), data, EDIT_SAMPLE_RATE, subtype="PCM_16")
     return converted, (
         f"converted {rate} Hz {subtype} to {EDIT_SAMPLE_RATE} Hz 16-bit"
@@ -1131,6 +1305,7 @@ _JOB_QUEUE_LOCK = threading.Lock()
 
 def _run_queued_job(payload: dict) -> core.Track:
     request = dict(payload)
+    request.pop("_cleanup_paths", None)
     operation = request.pop("operation", "generate")
     if operation == "separate":
         tracks = core.separate(request["source"], seed=request.get("seed"))
@@ -1168,7 +1343,7 @@ def _get_job_queue() -> jobs.GenerationQueue:
     if _JOB_QUEUE is None:
         with _JOB_QUEUE_LOCK:
             if _JOB_QUEUE is None:
-                _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job)
+                _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job, cleanup=_cleanup_job_inputs)
     return _JOB_QUEUE
 
 
@@ -1247,6 +1422,7 @@ def _editable_track_choices_update():
     return gr.update(choices=_editable_track_choices())
 
 
+@temporary_inputs()
 def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps,
                   guidance, mode=SECTION_MODE, noise=0.6):
     """Rework one span of a track, or remix the whole thing.
@@ -1343,7 +1519,7 @@ def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps
     # Init-audio remixes of long tracks are much slower than text-to-audio of the
     # same length. A 347s remix took 221s here while the txt2audio fit predicted ~29s.
     estimate = max(_estimate_runtime(model, duration), float(duration) * 0.5, 60.0)
-    queue.enqueue(payload, summary, estimate)
+    _enqueue_owned(queue, payload, summary, estimate)
     detail = f" · {note}" if note else ""
     if whole_track:
         headline = (
@@ -1359,6 +1535,7 @@ def _enqueue_edit(model, track_path, upload, prompt, bpm, start_bar, bars, steps
     return headline, queue.snapshot()
 
 
+@temporary_inputs()
 def _enqueue_separate(track_path, upload):
     """Queue a split of one mix into vocals, drums, bass and other."""
     track_path = upload or track_path
@@ -1391,7 +1568,7 @@ def _enqueue_separate(track_path, upload):
     except ValueError as exc:
         raise gr.Error(str(exc)) from exc
     queue = _get_job_queue()
-    queue.enqueue(payload, summary, _estimate_runtime("demucs", audit.duration_seconds))
+    _enqueue_owned(queue, payload, summary, _estimate_runtime("demucs", audit.duration_seconds))
     detail = f" · {note}" if note else ""
     headline = f"**Queued a separation of {Path(track_path).name[:40]}**{detail}"
     return headline, queue.snapshot()
@@ -1436,6 +1613,7 @@ def _enqueue_sing(lyrics, score):
     return headline, queue.snapshot()
 
 
+@temporary_inputs()
 def _enqueue_convert(track_path, upload, prompt_path, prompt_upload):
     """Queue a conversion of one sung recording. A missing file fails here."""
     performance = upload or track_path
@@ -1476,7 +1654,7 @@ def _enqueue_convert(track_path, upload, prompt_path, prompt_upload):
         "seed": chosen_seed,
     }
     queue = _get_job_queue()
-    queue.enqueue(payload, summary, _estimate_runtime("soulx-svc", taken))
+    _enqueue_owned(queue, payload, summary, _estimate_runtime("soulx-svc", taken))
     headline = (
         f"**Queued a voice conversion of {performance.name[:40]}** · "
         f"seed `{chosen_seed}`"

@@ -23,6 +23,24 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("converted inputs reuse one filename", "app.py",
+     '    converted = new_working_audio()',
+     '    converted = (_INPUT_SCOPE.paths[0] if getattr(_INPUT_SCOPE, "paths", None) else new_working_audio())'),
+    ("failed purge discards retry metadata", "app.py",
+     '        if failed:\n            continue',
+     '        if False:\n            continue'),
+    ("history rejects silent separation stems", "app.py",
+     'allow_silence=backend_spec is not None and backend_spec.task == "separate",',
+     'allow_silence=False,'),
+    ("queue never cleans finished inputs", "synth/jobs.py",
+     '\n                    self._cleanup(job.payload)',
+     '\n                    pass'),
+    ("queue removal leaves inputs behind", "synth/jobs.py",
+     '\n            self._cleanup(job.payload)',
+     '\n            pass'),
+    ("server stops background expiry", "synth/ui_server.py",
+     '        app.purge_expired_deletions()',
+     '        pass'),
     ("default backend reverts to ACE-Step", "synth/backends.json",
      '  "default_backend": "stable-audio-medium",',
      '  "default_backend": "acestep",'),
@@ -178,9 +196,9 @@ MUTATIONS = [
     ("queue singleton initialisation loses its lock", "app.py",
      "        with _JOB_QUEUE_LOCK:\n"
      "            if _JOB_QUEUE is None:\n"
-     "                _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job)",
+     "                _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job, cleanup=_cleanup_job_inputs)",
      "        if _JOB_QUEUE is None:\n"
-     "            _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job)"),
+     "            _JOB_QUEUE = jobs.GenerationQueue(_run_queued_job, cleanup=_cleanup_job_inputs)"),
     ("runner subprocess has no timeout", "synth/backends.py",
      "        stdout, stderr = proc.communicate(input_text, timeout=timeout_seconds)",
      "        stdout, stderr = proc.communicate(input_text, timeout=None)"),

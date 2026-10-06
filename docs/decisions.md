@@ -2,13 +2,34 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-09-30
+updated: 2026-10-06
 ---
 
 # Decisions
 
 Why the stack looks the way it does. Newest first. Each entry records the decision,
 rationale and reason to revisit it.
+
+---
+
+## 2026-10-06 - Audit repairs: owned working audio and reliable deletion
+
+**Changed:** requests own their uploaded and converted working files until the
+serial queue takes ownership. Completion, failure and removal clean those exact
+files; rejected requests clean them immediately. Converted inputs use unique
+paths. User source files are never part of cleanup. Failed cleanup is retried.
+
+Deletion and Undo are serialised; failed deletion moves roll back. Interrupted moves
+recover using the original file identity and sidecar checksum, without overwriting
+replacements. Undo intent is stored atomically before moving either file. Purge keeps its
+metadata until both audio and sidecar are removed. The HTTP server checks expiry
+every 30 seconds without needing an open browser; startup still purges expiry.
+The one-hour Undo decision is unchanged.
+
+Silent Demucs stems retain valid duration without weakening generation checks.
+
+**Would revisit if:** durable jobs or multiple server processes require persistent
+working-file ownership. Abrupt process termination is outside normal cleanup.
 
 ---
 

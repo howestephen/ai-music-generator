@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import tempfile
 import threading
 import time
 import webbrowser
@@ -256,7 +255,7 @@ def _parse_multipart(handler: BaseHTTPRequestHandler) -> tuple[dict, dict[str, P
             suffix = Path(filename).suffix.lower() or ".bin"
             if suffix not in {".wav", ".mp3", ".flac", ".aiff", ".aif", ".ogg"}:
                 raise ValueError("upload a wav, mp3, flac, aiff or ogg file")
-            target = Path(tempfile.gettempdir()) / f"ui-upload-{time.time_ns()}{suffix}"
+            target = app.new_working_audio(suffix)
             target.write_bytes(payload)
             uploads[name] = target
         else:
@@ -313,6 +312,10 @@ class Handler(BaseHTTPRequestHandler):
         self._handle()
 
     def _handle(self) -> None:
+        with app.temporary_inputs():
+            self._dispatch()
+
+    def _dispatch(self) -> None:
         try:
             parsed = urlparse(self.path)
             path = parsed.path
@@ -556,8 +559,20 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+class Server(ThreadingHTTPServer):
+    """Perform expiry and failed working-file cleanup even without a browser."""
+    _next_cleanup = 0.0
+
+    def service_actions(self) -> None:
+        if time.monotonic() < self._next_cleanup:
+            return
+        self._next_cleanup = time.monotonic() + 30
+        app.purge_expired_deletions()
+        app.retry_input_cleanup()
+
+
 def serve(port: int = 7860) -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = Server(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}"
     print(f"Running on {url}", flush=True)
     webbrowser.open(url)
@@ -565,7 +580,7 @@ def serve(port: int = 7860) -> None:
 
 
 def serve_in_thread(port: int = 0) -> tuple[ThreadingHTTPServer, int]:
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = Server(("127.0.0.1", port), Handler)
     thread = threading.Thread(target=server.serve_forever, name="ui-http", daemon=True)
     thread.start()
     bound = server.server_address[1]

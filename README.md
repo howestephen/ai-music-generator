@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-01
+updated: 2026-10-06
 ---
 
 # AI Music Generator
@@ -10,7 +10,8 @@ updated: 2026-10-01
 A local workbench for **verbal music synthesis**: describing music in words and rendering
 it locally as audio.
 
-Runs on Apple Silicon (M3 Max, 128 GB). No cloud, no per-track licensing, nothing uploaded.
+Runs on Apple Silicon (M3 Max, 128 GB), with ACE-Step optionally using your own 4090.
+No hosted inference or per-track charges.
 Deliberately open-ended: soundtrack and underscore, vocal parts or textures for production,
 a larger studio engine, and other experiments.
 
@@ -163,6 +164,9 @@ be reordered or removed, an active one shows a labelled percentage estimate and 
 be cancelled. Finished tracks sit in a newest-first history, each waveform playable and
 seekable. Queue and history live on the server, so browsers share one state and history
 rebuilds from `output/`. **Refresh history** picks up files generated elsewhere.
+Delete offers one hour of Undo, then the server purges the WAV and sidecar even
+without an open browser. Uploaded and converted working inputs are removed when
+their queued job finishes, fails or is removed; user originals are preserved.
 
 Every completed WAV is checked for a readable, finite, non-silent sample stream and its
 measured duration, on the CLI and in the UI alike. A short render stays in the history

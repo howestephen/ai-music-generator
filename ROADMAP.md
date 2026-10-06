@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-09-30
+updated: 2026-10-06
 ---
 
 # ROADMAP
@@ -19,7 +19,7 @@ they are never buried in a chat.
 
 - Goal: describe music in words, render it locally on Apple Silicon, and keep adding
   models cheap
-- Current phase: Phase 3, the track library
+- Current phase: audit repairs after Phase 4 and the model tools
 - Biggest known risk: the owner is not happy with the output yet
 - Default backend: `stable-audio-medium` (2026-09-19, superseding `minimax-mlx`)
 
@@ -55,7 +55,7 @@ they are never buried in a chat.
 
 ## Phase 3: Track library and generate panel
 
-- Status: `done` on branch `phase-3-track-library`, merging to main. Spec:
+- Status: `done`, merged to main on 2026-09-23. Spec:
   [specs/2026-09-20-track-library.md](specs/2026-09-20-track-library.md)
 - Handoff: [handoffs/2026-09-20-track-library.md](handoffs/2026-09-20-track-library.md)
 - Goal: a generation can be named, kept, found and removed. `output/` is flat and
@@ -133,7 +133,11 @@ no archive copy (2026-09-20).
 
 ## Current next step
 
-- Current milestone: Phase 4 is served at the usual port. Next is your review of that page
+- Current milestone: audit repairs, `in_progress` on `prompt-and-tool-models`.
+  Repairs cover working-input ownership, deletion retries and unattended expiry,
+  restored lyrics, silent stems, SoulX seed application and remote runtime metadata.
+  The removed rating controls remain a design decision; no new controls are added.
+- Next: regression tests, mutations, independent audit, then owner review.
 - The honest gap: the owner has heard Stable Audio's vocal texture (occasional vague
   voice noises) and is not happy with the output. Nothing else in this file is a
   judgement of how a track sounds

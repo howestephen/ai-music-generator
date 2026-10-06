@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-01
+updated: 2026-10-06
 ---
 
 # Gotchas
@@ -231,6 +231,18 @@ The note stays because a PyTorch fallback would hit it.
 ---
 
 ## Runtime
+
+### Working audio and deletion must survive failure paths
+
+**Symptom:** same-named inputs change a queued job's source, deleted audio survives
+unseen, or silent separation stems show as invalid.
+
+**Cause:** converted paths reused the source stem; purge discarded metadata even
+after unlink errors; history used the non-silent generation audit for Demucs.
+
+**Fix:** unique owned inputs, cleanup on queue completion/failure/removal, retained
+purge metadata and server-driven expiry, plus separation-aware history audit.
+Cleanup never includes user originals.
 
 ### Regenerate keeps saying Rhodes, plate reverb, or a polished finish
 
