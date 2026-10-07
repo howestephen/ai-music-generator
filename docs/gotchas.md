@@ -246,6 +246,27 @@ The note stays because a PyTorch fallback would hit it.
 
 ## Runtime
 
+### A long render queue hides the library instead of scrolling
+
+**Symptom:** queued cards fill the drawer and existing tracks cannot be reached;
+scrolling works again when the queue clears.
+
+**Cause:** only the track list scrolled, while the non-shrinking queue and filters
+sat above it, outside that scroll area.
+
+**Fix:** the drawer body scrolls the queue, filters, tracks and library links
+together. Its handle stays fixed. The track list no longer has a nested scroller.
+
+### SoulX first-use downloads look like an almost-finished render
+
+**Symptom:** Sing sits at its capped estimated progress, past its time estimate.
+
+**Observed 2026-10-07:** the active runner was downloading incomplete `svs` and
+`svc` weight shards over HTTPS. It had not reached generation or UI publication.
+The initial SoulX estimate is an unmeasured fallback, not a download estimate.
+The runner's unrestricted first snapshot includes both components. No active job
+was cancelled or restarted during this diagnosis.
+
 ### Working audio and deletion must survive failure paths
 
 **Symptom:** same-named inputs change a queued job's source, deleted audio survives

@@ -164,6 +164,7 @@ be reordered or removed, an active one shows a labelled percentage estimate and 
 be cancelled. Finished tracks sit in a newest-first history, each waveform playable and
 seekable. Queue and history live on the server, so browsers share one state and history
 rebuilds from `output/`. **Refresh history** picks up files generated elsewhere.
+Queued jobs and existing tracks share one scroll area, so a long queue cannot hide the library.
 Audio serving supports single byte ranges, including suffix and open-ended requests.
 Delete offers one hour of Undo, then the server purges the WAV and sidecar even
 without an open browser. Uploaded and converted working inputs are removed when

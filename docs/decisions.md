@@ -12,6 +12,17 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-10-07 - Queue and library share the drawer's scroll area
+
+**Changed:** the drawer body scrolls, including queued jobs, filters, tracks and
+links. The track list is ordinary non-shrinking content. The heading or handle
+stays outside the scroll area, on both desktop and phone.
+
+**Why:** a queue taller than the available drawer consumed the track list's
+viewport and left its queued cards unscrollable.
+
+**Would revisit if:** the queue and library require deliberately separate views.
+
 ## 2026-10-07 - Audio serves correct single byte ranges
 
 **Changed:** the HTTP audio handler interprets suffix ranges from EOF and clips

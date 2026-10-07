@@ -440,14 +440,14 @@ input[type="range"].full-range {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
 }
 
 .library-scroll {
-  flex: 1 1 0;
+  flex: none;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .library-links {

@@ -146,8 +146,16 @@ no archive copy (2026-09-20).
   clean. Eight installed backend probes, frontend build and validators pass.
   The previous 104 mutations were not rerun here; a full-suite mutation attempt
   stalled in the unrelated legacy Gradio configuration probe and was stopped.
-- Next: owner review after the playback repair. No real render, listening test or
-  live remote graph was run.
+- Drawer repair on `fix/queued-library-scroll`: queue and library share the scrolling
+  body so long queues cannot consume the track viewport. All 246 tests, the new
+  targeted scrolling mutation, eight import probes, frontend build and validators
+  pass. Browser scrolling measurements await a per-action hook approval; source
+  and built CSS were checked, but no mobile or desktop browser measurement is claimed.
+  Sing's apparent end-of-render stall was diagnosed as first-use weight downloading,
+  not UI publication. The active job and queued work were left running.
+- Next: browser verification of the drawer repair, then owner review of both
+  unmerged repair branches. No new test render, listening test or live remote
+  graph was run.
 - The honest gap: the owner has heard Stable Audio's vocal texture (occasional vague
   voice noises) and is not happy with the output. Nothing else in this file is a
   judgement of how a track sounds

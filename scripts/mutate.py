@@ -23,6 +23,9 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("queue remains outside the scrollable drawer body", "web/src/index.css",
+     '  overflow-y: auto;\n  overscroll-behavior: contain;',
+     '  overflow-y: hidden;\n  overscroll-behavior: contain;'),
     ("audio converts unbounded range numerals", "synth/ui_server.py",
      '                    suffix = _bounded_range_number(end_text, size)',
      '                    suffix = int(end_text)'),

@@ -3966,7 +3966,7 @@ if (snapDrawer(0, 800, true) !== "closed") fail("a zero drag stays shut");
 
     def test_desktop_is_two_columns_and_the_page_does_not_scroll(self):
         """Wide windows keep controls and tracks side by side. The document
-        stays fixed. Only the track list scrolls. The phone drawer stays a
+        stays fixed. Queue and tracks share the scrolling body. The phone drawer stays a
         drawer, and its hooks still run when the width crosses 960px."""
         source = (core.PROJECT_ROOT / "web" / "src" / "App.tsx").read_text(encoding="utf-8")
         css = (core.PROJECT_ROOT / "web" / "src" / "index.css").read_text(encoding="utf-8")
@@ -3987,8 +3987,13 @@ if (snapDrawer(0, 800, true) !== "closed") fail("a zero drag stays shut");
         self.assertIn("flex-direction: column", phone_css)
         self.assertIn("overflow: hidden", phone_css)
         self.assertIn(".library-scroll", phone_css)
-        scroll = phone_css.split(".library-scroll", 1)[1].split("}", 1)[0]
-        self.assertIn("overflow-y: auto", scroll)
+        body = phone_css.split(".drawer-body", 1)[1].split("}", 1)[0]
+        self.assertIn("overflow-y: auto", body)
+        self.assertIn("min-height: 0", body)
+        self.assertIn("overscroll-behavior: contain", body)
+        tracks = phone_css.split(".library-scroll", 1)[1].split("}", 1)[0]
+        self.assertIn("flex: none", tracks)
+        self.assertNotIn("overflow-y: auto", tracks)
         self.assertIn("flex-direction: row", desktop_css)
         self.assertIn("position: relative", desktop_css)
         self.assertNotIn("position: fixed", desktop_css)
