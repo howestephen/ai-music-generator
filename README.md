@@ -90,7 +90,13 @@ uv pip install --python .venv-soulx/bin/python \
   omegaconf einops accelerate soundfile tqdm huggingface_hub mlx safetensors \
   g2p_en nltk "scipy==1.16.2" "librosa==0.11.0"
 printf '%s\n' "$SOULX" > .venv-soulx/lib/python3.12/site-packages/soulx.pth
+./.venv-soulx/bin/python -m nltk.downloader -d .venv-soulx/nltk_data \
+  cmudict averaged_perceptron_tagger averaged_perceptron_tagger_eng
+./.venv-soulx/bin/python -c 'import nltk, sys; nltk.data.path = [sys.prefix + "/nltk_data"]; from g2p_en import G2p; assert G2p()("Hello")'
 ```
+
+The pronunciation check uses the installed language data, without loading singing
+weights. An import-only model probe does not check this dependency.
 
 Weights download on first use to `~/.cache/`: MiniMax MLX about 13 GB, MusicGen 19 GB,
 and both Stable Audio sizes together about 6.1 GB, since they share one repository.

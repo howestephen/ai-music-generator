@@ -151,8 +151,13 @@ no archive copy (2026-09-20).
   targeted scrolling mutation, eight import probes, frontend build and validators
   pass. Browser scrolling measurements await a per-action hook approval; source
   and built CSS were checked, but no mobile or desktop browser measurement is claimed.
-  Sing's apparent end-of-render stall was diagnosed as first-use weight downloading,
-  not UI publication. The active job and queued work were left running.
+  Sing's apparent end-of-render stall was first-use weight downloading,
+  not UI publication. After downloading, that job failed on missing NLTK English
+  tagger data. Installed the missing resource into the singing environment and
+  verified the failed lyric's six words against the real G2p and SoulX phone set.
+  README now installs all pronunciation resources and checks a real G2p call.
+  Full singing retry remains unverified: the public failed-job summary does not
+  retain the melody needed to repeat the original request exactly.
 - Next: browser verification of the drawer repair, then owner review of both
   unmerged repair branches. No new test render, listening test or live remote
   graph was run.

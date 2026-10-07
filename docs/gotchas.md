@@ -193,6 +193,21 @@ would clip a recording the backend accepts up to 600.
 the README. The conversion runner passes a 600 second cap into that
 extractor. Do not put the environment back on Python 3.10.
 
+### SoulX imports successfully but fails when processing lyrics
+
+**Symptom:** the first Sing downloads weights, then fails with missing
+`taggers/averaged_perceptron_tagger_eng/`.
+
+**Cause:** installed `g2p_en` requests the older tagger at import time, but
+installed NLTK's English `pos_tag` uses the `_eng` resource. The import probe
+therefore passed without proving that pronunciation worked.
+
+**Fix:** install the language data into `.venv-soulx/nltk_data` using the
+README command, then call the real `G2p` rather than only importing it.
+On 2026-10-07 the failed lyric's six words passed pronunciation and every
+returned phoneme matched SoulX's installed phone set. This does not prove
+that inference or audio publication succeeds; those still need a render.
+
 ### HTDemucs will not load without the convert extra
 
 **Symptom:** Separate fails at once with `Model conversion requires the [convert] extras` from `demucs_mlx.mlx_convert`.
