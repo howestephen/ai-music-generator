@@ -12,6 +12,18 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-10-07 - SoulX score runner permits unsupported MPS operations on CPU
+
+**Changed:** enable PyTorch's MPS fallback before imports in the score runner.
+The runner overrides a disabled inherited fallback because this installed
+runtime needs it for reference-audio FFT. The model remains on MPS.
+
+**Why:** the actual PyTorch 2.2 FFT failed on Metal after pronunciation passed.
+Both the FFT and installed SoulX mel encoder pass with fallback enabled.
+
+**Would revisit if:** the pinned runtime supports every required MPS operation.
+This repair and operation check cover score singing, not voice conversion.
+
 ## 2026-10-07 - Queue and library share the drawer's scroll area
 
 **Changed:** the drawer body scrolls, including queued jobs, filters, tracks and

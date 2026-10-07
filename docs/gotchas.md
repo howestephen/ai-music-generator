@@ -208,6 +208,19 @@ On 2026-10-07 the failed lyric's six words passed pronunciation and every
 returned phoneme matched SoulX's installed phone set. This does not prove
 that inference or audio publication succeeds; those still need a render.
 
+### SoulX reference-audio FFT is unsupported on MPS
+
+**Symptom:** score singing reaches the mel encoder, then fails with
+`aten::_fft_r2c` not implemented for MPS.
+
+**Cause:** the installed PyTorch 2.2 runtime cannot run this FFT on Metal.
+
+**Fix:** the score runner enables `PYTORCH_ENABLE_MPS_FALLBACK=1` before
+importing PyTorch. Unsupported operations use CPU; the model stays on MPS.
+The actual installed `MelSpectrogramEncoder` passed with finite output on
+MPS after this change. This operation check does not verify full inference
+or publication of the failed song. Voice conversion was not tested here.
+
 ### HTDemucs will not load without the convert extra
 
 **Symptom:** Separate fails at once with `Model conversion requires the [convert] extras` from `demucs_mlx.mlx_convert`.

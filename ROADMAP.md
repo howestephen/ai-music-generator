@@ -158,6 +158,13 @@ no archive copy (2026-09-20).
   README now installs all pronunciation resources and checks a real G2p call.
   Full singing retry remains unverified: the public failed-job summary does not
   retain the melody needed to repeat the original request exactly.
+- Subsequent score-singing retry reached the reference-audio mel encoder and
+  failed on PyTorch's unsupported MPS FFT. The score runner now enables CPU
+  fallback before PyTorch imports. The installed FFT and SoulX mel encoder
+  pass on MPS with finite output; full singing output is still unverified.
+  All 247 unit tests pass outside the sandbox, the new targeted fallback
+  mutation is caught, validators pass and independent audit found no blocker.
+  The full mutation suite was not rerun for this repair.
 - Next: browser verification of the drawer repair, then owner review of both
   unmerged repair branches. No new test render, listening test or live remote
   graph was run.

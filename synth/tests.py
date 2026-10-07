@@ -3515,6 +3515,14 @@ class AuditRegressions(unittest.TestCase):
         self.assertFalse(path.exists())
         self.assertTrue(source.exists())
 
+    def test_soulx_enables_mps_fallback_before_importing_torch(self):
+        path = core.PROJECT_ROOT / "runners/soulx_runner.py"
+        source = path.read_text(encoding="utf-8")
+        with mock.patch.dict(os.environ, {"PYTORCH_ENABLE_MPS_FALLBACK": "0"}):
+            exec(compile(source, str(path), "exec"), {"__name__": "fallback_runner"})
+            self.assertEqual(os.environ["PYTORCH_ENABLE_MPS_FALLBACK"], "1")
+        self.assertLess(source.index('os.environ["PYTORCH_ENABLE_MPS_FALLBACK"]'), source.index("import torch"))
+
     def test_soulx_applies_seed_before_constructing_the_model(self):
         spec = importlib.util.spec_from_file_location("seed_runner", core.PROJECT_ROOT / "runners/soulx_runner.py")
         runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)

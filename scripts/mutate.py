@@ -23,6 +23,9 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("SoulX disables unsupported MPS operation fallback", "runners/soulx_runner.py",
+     'os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"',
+     'os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"'),
     ("queue remains outside the scrollable drawer body", "web/src/index.css",
      '  overflow-y: auto;\n  overscroll-behavior: contain;',
      '  overflow-y: hidden;\n  overscroll-behavior: contain;'),

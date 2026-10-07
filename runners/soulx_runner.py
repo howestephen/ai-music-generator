@@ -11,6 +11,9 @@ import time
 from pathlib import Path
 
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+# PyTorch 2.2 cannot run the reference-audio FFT on MPS. Set before torch
+# is imported so unsupported operations can use CPU, not the whole model.
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 CLONE = Path.home() / ".cache" / "ai-music-generator" / "SoulX-Singer-MLX"
 PROMPT_WAV = CLONE / "example" / "audio" / "en_prompt.mp3"
