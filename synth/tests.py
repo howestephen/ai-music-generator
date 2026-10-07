@@ -3523,6 +3523,25 @@ class AuditRegressions(unittest.TestCase):
             self.assertEqual(os.environ["PYTORCH_ENABLE_MPS_FALLBACK"], "1")
         self.assertLess(source.index('os.environ["PYTORCH_ENABLE_MPS_FALLBACK"]'), source.index("import torch"))
 
+    def test_soulx_reconstructs_waveform_on_cpu_after_final_model_move(self):
+        path = core.PROJECT_ROOT / "runners/soulx_runner.py"
+        namespace = {"__name__": "cpu_head_runner"}
+        source = path.read_text(encoding="utf-8")
+        exec(compile(source, str(path), "exec"), namespace)
+        head = mock.Mock()
+        model = SimpleNamespace(vocoder=SimpleNamespace(model=SimpleNamespace(head=head)))
+        namespace["use_cpu_vocoder_head"](model)
+        head.to.assert_called_once_with("cpu")
+        hook = head.register_forward_pre_hook.call_args.args[0]
+        tensor = mock.Mock()
+        converted = hook(head, (tensor,))
+        tensor.to.assert_called_once_with("cpu")
+        self.assertEqual(converted, (tensor.to.return_value,))
+        import inspect
+        main = inspect.getsource(namespace["main"])
+        self.assertLess(main.index('model.eval().to("mps")'), main.index("use_cpu_vocoder_head(model)"))
+        self.assertLess(main.index("use_cpu_vocoder_head(model)"), main.index("process_svs(args, config, model)"))
+
     def test_soulx_applies_seed_before_constructing_the_model(self):
         spec = importlib.util.spec_from_file_location("seed_runner", core.PROJECT_ROOT / "runners/soulx_runner.py")
         runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)

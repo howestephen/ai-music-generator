@@ -98,7 +98,9 @@ printf '%s\n' "$SOULX" > .venv-soulx/lib/python3.12/site-packages/soulx.pth
 The pronunciation check uses the installed language data, without loading singing
 weights. An import-only model probe does not check this dependency.
 The score runner enables CPU fallback for PyTorch operations unsupported on MPS,
-including reference-audio FFT, while keeping the model on MPS.
+including reference-audio FFT. Its final vocoder head and input run explicitly
+on CPU because complex MPS arithmetic crashes even with fallback enabled;
+the backbone and diffusion stay on MPS.
 
 Weights download on first use to `~/.cache/`: MiniMax MLX about 13 GB, MusicGen 19 GB,
 and both Stable Audio sizes together about 6.1 GB, since they share one repository.

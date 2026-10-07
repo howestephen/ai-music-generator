@@ -161,13 +161,22 @@ no archive copy (2026-09-20).
 - Subsequent score-singing retry reached the reference-audio mel encoder and
   failed on PyTorch's unsupported MPS FFT. The score runner now enables CPU
   fallback before PyTorch imports. The installed FFT and SoulX mel encoder
-  pass on MPS with finite output; full singing output is still unverified.
+  passed on MPS with finite output; that operation check left singing output unverified.
   All 247 unit tests pass outside the sandbox, the new targeted fallback
   mutation is caught, validators pass and independent audit found no blocker.
   The full mutation suite was not rerun for this repair.
+- Complete-render follow-up: MPS fallback did not catch the vocoder's complex
+  arithmetic assertion. Move only the nested final waveform head and its input
+  to CPU after the final model MPS move; leave backbone and diffusion on MPS.
+  Live API diagnostics at 1s and 5.25s completed, published in library state,
+  passed finite/non-silent/duration audits and served 1,024-byte HTTP 206 audio
+  ranges. All 248 tests pass, three new targeted mutations are caught, and the
+  installed bridge wiring has an independent clean audit. The full mutation
+  suite, browser playback/listening and voice conversion were not checked.
+  These were diagnostic lyrics and notes, not an exact retry of the owner's melody.
 - Next: browser verification of the drawer repair, then owner review of both
-  unmerged repair branches. No new test render, listening test or live remote
-  graph was run.
+  unmerged repair branches. No additional render, listening test or live remote
+  graph is planned for this checkpoint.
 - The honest gap: the owner has heard Stable Audio's vocal texture (occasional vague
   voice noises) and is not happy with the output. Nothing else in this file is a
   judgement of how a track sounds

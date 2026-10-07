@@ -26,6 +26,13 @@ def seed_inference(seed: int) -> None:
     torch.manual_seed(seed)
 
 
+def use_cpu_vocoder_head(model) -> None:
+    """Keep complex waveform reconstruction off PyTorch 2.2's MPS backend."""
+    head = model.vocoder.model.head
+    head.to("cpu")
+    head.register_forward_pre_hook(lambda _module, inputs: (inputs[0].to("cpu"),))
+
+
 def build_target(lyrics: str, notes: list[dict], word_phones: list[list[str]], allowed: set[str] | None = None) -> dict:
     """Metadata SoulX reads. Pitched notes and words must be the same length."""
     words = lyrics.split()
@@ -147,6 +154,7 @@ def main() -> int:
     model = SoulXSinger(config).to("mps")
     model.load_state_dict(load_component_state(model_dir, "svs"), strict=True)
     model.eval().to("mps")
+    use_cpu_vocoder_head(model)
     save_dir = Path(tempfile.mkdtemp(prefix="soulx-"))
     meta_path = save_dir / "target.json"
     meta_path.write_text(json.dumps([target]), encoding="utf-8")

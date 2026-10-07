@@ -221,6 +221,25 @@ The actual installed `MelSpectrogramEncoder` passed with finite output on
 MPS after this change. This operation check does not verify full inference
 or publication of the failed song. Voice conversion was not tested here.
 
+### SoulX vocoder complex arithmetic crashes even with MPS fallback
+
+**Symptom:** singing reaches `ISTFTHead`, then complex multiplication raises
+an internal MPS assertion.
+
+**Cause:** enabling fallback did not prevent this complex-arithmetic MPS
+assertion in PyTorch 2.2. The earlier mel-only check did not reach it.
+
+**Fix:** after the final model move to MPS, the score runner moves only
+`model.vocoder.model.head` to CPU and transfers its input with a pre-forward hook.
+The backbone and diffusion remain on MPS. The head returns CPU waveform
+samples, which the upstream inference path already converts to NumPy for saving.
+The installed `Vocoder` wraps `Vocos` under `.model`; `.vocoder.head` does not
+exist. The first diagnostic exposed that incorrect path, which was corrected
+before requeueing. The upstream clone is not modified. The one-second diagnostic
+then completed through the live API, passed the non-silent finite-audio audit,
+appeared in library state and served a 1,024-byte player range with HTTP 206.
+Import and mel-encoder checks alone had missed the waveform failure.
+
 ### HTDemucs will not load without the convert extra
 
 **Symptom:** Separate fails at once with `Model conversion requires the [convert] extras` from `demucs_mlx.mlx_convert`.

@@ -14,9 +14,16 @@ rationale and reason to revisit it.
 
 ## 2026-10-07 - SoulX score runner permits unsupported MPS operations on CPU
 
+**Follow-up:** MPS fallback did not prevent the vocoder's internal assertion
+on complex multiplication. Keep only its final `ISTFTHead` and input on CPU,
+after the last whole-model MPS move. The backbone and diffusion stay on MPS.
+Use a runner-owned pre-forward hook rather than editing the pinned clone.
+The upstream head already returns the final waveform, so no MPS tensor is
+required downstream before the existing NumPy save.
+
 **Changed:** enable PyTorch's MPS fallback before imports in the score runner.
 The runner overrides a disabled inherited fallback because this installed
-runtime needs it for reference-audio FFT. The model remains on MPS.
+runtime needs it for reference-audio FFT. The backbone and diffusion remain on MPS.
 
 **Why:** the actual PyTorch 2.2 FFT failed on Metal after pronunciation passed.
 Both the FFT and installed SoulX mel encoder pass with fallback enabled.

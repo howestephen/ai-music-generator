@@ -23,6 +23,13 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("SoulX leaves complex waveform head on MPS", "runners/soulx_runner.py",
+     '    use_cpu_vocoder_head(model)', '    pass'),
+    ("SoulX waveform head parameters stay on MPS", "runners/soulx_runner.py",
+     '    head.to("cpu")', '    pass'),
+    ("SoulX sends MPS tensors into CPU waveform head", "runners/soulx_runner.py",
+     'head.register_forward_pre_hook(lambda _module, inputs: (inputs[0].to("cpu"),))',
+     'head.register_forward_pre_hook(lambda _module, inputs: inputs)'),
     ("SoulX disables unsupported MPS operation fallback", "runners/soulx_runner.py",
      'os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"',
      'os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"'),
