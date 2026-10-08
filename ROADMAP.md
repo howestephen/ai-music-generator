@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # ROADMAP
@@ -132,6 +132,12 @@ track immediately, retains it for one hour for Undo, then permanently removes it
 no archive copy (2026-09-20).
 
 ## Current next step
+
+- 2026-10-08: track Download moved into the shared action row with Remix,
+  Separate and Delete. The native player download option is hidden where supported.
+  All 249 tests, the targeted Download mutation, frontend build and validators
+  pass. The live app serves the rebuilt assets. No browser viewport measurement,
+  real download click, full mutation run or audio generation was performed here.
 
 - Current milestone: audit repairs merged and pushed to main at `609532c`.
   Repairs cover working-input ownership, deletion retries and unattended expiry,

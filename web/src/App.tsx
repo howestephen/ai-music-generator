@@ -1076,6 +1076,7 @@ function TrackCard({
       <audio
         className="history-audio"
         controls
+        controlsList="nodownload"
         preload="none"
         src={track.audio}
         ref={(node) => {
@@ -1086,6 +1087,7 @@ function TrackCard({
         }}
       />
       <div className="card-actions">
+        <a href={track.audio} download={track.name}>Download</a>
         <button type="button" onClick={onRemix}>Remix</button>
         <button type="button" onClick={onSeparate}>Separate</button>
         <button type="button" onClick={onDelete}>Delete</button>

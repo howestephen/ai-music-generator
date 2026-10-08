@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # AI Music Generator
@@ -176,6 +176,7 @@ seekable. Queue and history live on the server, so browsers share one state and 
 rebuilds from `output/`. **Refresh history** picks up files generated elsewhere.
 Queued jobs and existing tracks share one scroll area, so a long queue cannot hide the library.
 Audio serving supports single byte ranges, including suffix and open-ended requests.
+Download sits beside Remix, Separate and Delete on each track's action row.
 Delete offers one hour of Undo, then the server purges the WAV and sidecar even
 without an open browser. Uploaded and converted working inputs are removed when
 their queued job finishes, fails or is removed; user originals are preserved.

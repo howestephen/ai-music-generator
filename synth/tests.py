@@ -3302,6 +3302,29 @@ print(json.dumps({
             )
 
 class AuditRegressions(unittest.TestCase):
+    def test_track_download_shares_the_action_row_and_keeps_its_filename(self):
+        script = r'''
+const fs = require('fs'), vm = require('vm'), ts = require('./web/node_modules/typescript');
+const code = ts.transpileModule(fs.readFileSync('web/src/App.tsx','utf8')+'\nexport { TrackCard };', {
+  compilerOptions: {jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+}).outputText;
+const jsx=(type,props)=>({type,props}), exports={};
+vm.runInNewContext(code,{exports,require:name=>name==='react'?{}:name==='react/jsx-runtime'?{jsx,jsxs:jsx}:{}});
+const calls=[], track={title:'Test track',name:'test track.wav',audio:'/audio/test%20track.wav',duration:3,peaks:[],audit_status:'passed'};
+const tree=exports.TrackCard({track,onRemix:()=>calls.push('Remix'),onSeparate:()=>calls.push('Separate'),onDelete:()=>calls.push('Delete')});
+const children=[tree.props.children].flat(Infinity), row=children.find(n=>n?.props?.className==='card-actions');
+const actions=[row.props.children].flat(Infinity);
+if(actions.map(n=>n.props.children).join(',')!=='Download,Remix,Separate,Delete')throw new Error('Download is not in the shared action row');
+const link=actions[0];
+if(link.type!=='a'||link.props.href!==track.audio||link.props.download!==track.name)throw new Error('Download target or filename changed');
+if(children.find(n=>n?.type==='audio')?.props.controlsList!=='nodownload')throw new Error('Native download option duplicated');
+for(const action of actions.slice(1))action.props.onClick();
+if(calls.join(',')!=='Remix,Separate,Delete')throw new Error('Existing actions changed');
+'''
+        result = subprocess.run(["node", "-e", script], cwd=core.PROJECT_ROOT,
+                                capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="music-regression-")
         self.addCleanup(self.temp.cleanup)

@@ -23,6 +23,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("track download loses its action-row link", "web/src/App.tsx",
+     '        <a href={track.audio} download={track.name}>Download</a>', ''),
     ("SoulX leaves complex waveform head on MPS", "runners/soulx_runner.py",
      '    use_cpu_vocoder_head(model)', '    pass'),
     ("SoulX waveform head parameters stay on MPS", "runners/soulx_runner.py",

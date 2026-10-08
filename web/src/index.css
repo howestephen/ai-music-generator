@@ -460,6 +460,7 @@ input[type="range"].full-range {
 .library-links button,
 .library-back,
 .card-actions button,
+.card-actions a,
 .quiet-row > button {
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -546,6 +547,10 @@ input[type="range"].full-range {
   flex-wrap: wrap;
   gap: 0.4rem;
   margin-top: 0.35rem;
+}
+
+.card-actions a {
+  text-decoration: none;
 }
 
 .queue-job-header {
