@@ -547,6 +547,30 @@ class GenerateSeam(unittest.TestCase):
         self.addCleanup(reservation.unlink, missing_ok=True)
         self.assertEqual(path.name, "same_2.wav")
 
+    def test_output_reserves_names_against_trash_sidecars_and_pending_original_names(self):
+        pending = app._pending_root(self.out)
+        (pending / "same.wav").write_bytes(b"deleted")
+        (self.out / "same_2.json").write_text("{}", encoding="utf-8")
+        (pending / "different.pending.json").write_text(
+            '{"name":"SAME_3.WAV"}', encoding="utf-8")
+        path, reservation = core._reserve_output_path(self.out, "same")
+        self.addCleanup(reservation.unlink, missing_ok=True)
+        self.assertEqual(path.name, "same_4.wav")
+        self.assertEqual(core._reserved_title("Same", path), "Same 4")
+        self.assertEqual((pending / "same.wav").read_bytes(), b"deleted")
+
+    def test_repeated_generations_have_distinct_saved_and_visible_titles(self):
+        first = self.gen()
+        second = self.gen()
+        self.assertNotEqual(first.path, second.path)
+        self.assertNotEqual(first.title, second.title)
+        self.assertEqual(second.title, f"{first.title} 2")
+        self.assertEqual(json.loads(second.sidecar_path().read_text(encoding="utf-8"))["title"], second.title)
+        app.delete_track(str(first.path), self.out)
+        third = self.gen()
+        self.assertNotEqual(third.title, first.title)
+        self.assertNotEqual(third.title, second.title)
+
     def test_output_path_reservations_are_atomic_across_concurrent_callers(self):
         barrier = threading.Barrier(8)
         results = []
@@ -1506,9 +1530,7 @@ class Registry(unittest.TestCase):
         self.assertTrue(2 <= len(first.split()) <= 3)
         self.assertTrue(first[0].isupper())
 
-    def test_track_title_skips_tags_and_keeps_a_prose_phrase(self):
-        """Titles were opening on TrackType, Genre, Drum and Bass. The name is
-        a consecutive run of the prose, and the file is that name alone."""
+    def test_track_title_uses_random_words_not_repeated_prompt_fragments(self):
         prompt = (
             "TrackType: Music, VocalType: Instrumental, Genre: Drum and Bass, "
             "Instruments: Drums, Bass, Vocal Sample. A rowdy and simple jump-up "
@@ -1520,12 +1542,10 @@ class Registry(unittest.TestCase):
         self.assertTrue(2 <= len(words) <= 3, titled)
         for banned in ("tracktype", "vocaltype", "genre", "drum", "bass", "jump-up"):
             self.assertNotIn(banned, words, titled)
-        prose = prompt.split(". ", 1)[1].lower()
-        cursor = 0
-        for word in words:
-            found = prose.find(word, cursor)
-            self.assertGreaterEqual(found, cursor, titled)
-            cursor = found + len(word)
+        self.assertEqual(len(set(words)), 3)
+        names = {prompting.track_title("same", None, seed) for seed in range(100)}
+        self.assertGreater(len(names), 95)
+        self.assertTrue(all(set(name.split()) <= set(prompting._TITLE_WORDS) for name in names))
 
     def test_menu_options_are_offered_for_every_genre(self):
         self.assertGreater(len(prompting.instrument_options()), 10)
@@ -3302,6 +3322,132 @@ print(json.dumps({
             )
 
 class AuditRegressions(unittest.TestCase):
+    def test_undo_does_not_restore_into_a_reserved_render_path(self):
+        wav = self.out / "reserved.wav"
+        _write_test_wav(wav, 800)
+        app.delete_track(str(wav), self.out)
+        entry = app._pending_entries(self.out)[0]
+        reservation = wav.with_suffix(".wav.lock")
+        reservation.write_text("", encoding="utf-8")
+        with self.assertRaisesRegex(FileExistsError, "reserved"):
+            app.undo_delete(entry["stem"], self.out)
+        self.assertFalse(wav.exists())
+        self.assertTrue(entry["wav"].exists())
+        payload = json.loads(entry["meta"].read_text(encoding="utf-8"))
+        payload["operation"] = "restore"
+        entry["meta"].write_text(json.dumps(payload), encoding="utf-8")
+        self.assertEqual(len(app._pending_entries(self.out)), 1)
+        self.assertFalse(wav.exists())
+        reservation.unlink()
+        self.assertEqual(app._pending_entries(self.out), [])
+        self.assertTrue(wav.exists())
+
+    def test_uppercase_extension_delete_undo_and_expiry(self):
+        wav = self.out / "upper.WAV"
+        _write_test_wav(wav, 800)
+        app.delete_track(str(wav), self.out)
+        entry = app._pending_entries(self.out)[0]
+        self.assertEqual(entry["name"], "upper.WAV")
+        self.assertTrue(entry["wav"].exists())
+        stored_names = {path.name for path in app._pending_root(self.out).iterdir()}
+        self.assertIn("upper.wav", stored_names)
+        self.assertNotIn("upper.WAV", stored_names)
+        app.undo_delete(entry["stem"], self.out)
+        self.assertTrue(wav.exists())
+        app.delete_track(str(wav), self.out)
+        self.assertEqual(app.purge_expired_deletions(self.out, now=time.time() + 3601), 1)
+        self.assertEqual(list(app._pending_root(self.out).iterdir()), [])
+
+    def test_interrupted_undo_without_sidecar_does_not_attach_an_unrelated_sidecar(self):
+        wav = self.out / "bare.wav"
+        _write_test_wav(wav, 800)
+        app.delete_track(str(wav), self.out)
+        with mock.patch.object(app.shutil, "move", side_effect=SystemExit("interrupted Undo")):
+            with self.assertRaises(SystemExit):
+                app.undo_delete("bare", self.out)
+        sidecar = wav.with_suffix(".json")
+        sidecar.write_text('{"prompt":"unrelated"}', encoding="utf-8")
+        entries = app._pending_entries(self.out)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["operation"], "restore")
+        self.assertFalse(wav.exists())
+        self.assertTrue(entries[0]["wav"].exists())
+        self.assertEqual(sidecar.read_text(encoding="utf-8"), '{"prompt":"unrelated"}')
+        sidecar.unlink()
+        self.assertEqual(app._pending_entries(self.out), [])
+        self.assertTrue(wav.exists())
+    def test_repeated_filename_deletions_keep_each_version_and_original_restore_name(self):
+        wav = self.out / "repeat.wav"
+        versions = []
+        for frames in (800, 1600, 2400):
+            _write_test_wav(wav, frames)
+            wav.with_suffix(".json").write_text(json.dumps({"prompt": str(frames)}), encoding="utf-8")
+            versions.append((wav.read_bytes(), wav.with_suffix(".json").read_bytes()))
+            app.delete_track(str(wav), self.out)
+            self.assertFalse(wav.exists())
+        entries = app._pending_entries(self.out)
+        self.assertEqual(len(entries), 3)
+        self.assertEqual(len({entry["stem"] for entry in entries}), 3)
+        self.assertTrue(all(entry["name"] == "repeat.wav" for entry in entries))
+        for entry, original in zip(reversed(entries), versions):
+            self.assertEqual((entry["wav"].read_bytes(), entry["sidecar"].read_bytes()), original)
+        newest, middle, oldest = entries
+        app.undo_delete(newest["stem"], self.out)
+        self.assertEqual((wav.read_bytes(), wav.with_suffix(".json").read_bytes()), versions[2])
+        with self.assertRaises(FileExistsError):
+            app.undo_delete(middle["stem"], self.out)
+        self.assertEqual(middle["wav"].read_bytes(), versions[1][0])
+        self.assertEqual(wav.read_bytes(), versions[2][0])
+        self.assertEqual(app.purge_expired_deletions(self.out, now=time.time() + 3601), 2)
+        self.assertEqual(wav.read_bytes(), versions[2][0])
+        self.assertFalse(oldest["wav"].exists())
+        self.assertFalse(middle["sidecar"].exists())
+
+    def test_collision_deletion_recovers_original_sidecar_after_process_exit(self):
+        for restore in (True, False):
+            with tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                wav = root / "repeat.wav"
+                _write_test_wav(wav, 800)
+                wav.with_suffix(".json").write_text('{"prompt":"old"}', encoding="utf-8")
+                app.delete_track(str(wav), root)
+                older = app._pending_entries(root)[0]
+                older_bytes = older["wav"].read_bytes()
+                _write_test_wav(wav, 1600)
+                sidecar = wav.with_suffix(".json")
+                sidecar.write_text('{"prompt":"new"}', encoding="utf-8")
+                expected = (wav.read_bytes(), sidecar.read_bytes())
+                real_move = shutil.move
+                def terminate(source, destination):
+                    if Path(source) == sidecar:
+                        raise SystemExit("interrupted collision deletion")
+                    return real_move(source, destination)
+                with mock.patch.object(app.shutil, "move", terminate):
+                    with self.assertRaises(SystemExit):
+                        app.delete_track(str(wav), root)
+                newest = app._pending_entries(root)[0]
+                self.assertNotEqual(newest["stem"], older["stem"])
+                if restore:
+                    app.undo_delete(newest["stem"], root)
+                    self.assertEqual((wav.read_bytes(), sidecar.read_bytes()), expected)
+                    self.assertEqual(older["wav"].read_bytes(), older_bytes)
+                else:
+                    self.assertEqual(app.purge_expired_deletions(root, now=time.time() + 3601), 2)
+                    self.assertFalse(sidecar.exists())
+                    self.assertEqual(app._pending_entries(root), [])
+
+    def test_pending_original_name_cannot_escape_the_library(self):
+        wav = self.out / "safe.wav"
+        _write_test_wav(wav, 800)
+        app.delete_track(str(wav), self.out)
+        entry = app._pending_entries(self.out)[0]
+        payload = json.loads(entry["meta"].read_text(encoding="utf-8"))
+        for invalid in ("../outside.wav", "..\\outside.wav", "/outside.wav", ".hidden.wav", None, 42):
+            payload["name"] = invalid
+            entry["meta"].write_text(json.dumps(payload), encoding="utf-8")
+            self.assertEqual(app._pending_entries(self.out), [])
+            self.assertTrue(entry["wav"].exists())
+
     def test_track_download_shares_the_action_row_and_keeps_its_filename(self):
         script = r'''
 const fs = require('fs'), vm = require('vm'), ts = require('./web/node_modules/typescript');

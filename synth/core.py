@@ -113,6 +113,15 @@ def _slug(text: str, max_len: int = 48) -> str:
 
 def _reserve_output_path(output_dir: Path, stem: str) -> tuple[Path, Path]:
     """Atomically reserve a path across concurrent CLI and server processes."""
+    deleted_names = set()
+    pending = output_dir / ".pending-delete"
+    for metadata in pending.glob("*.pending.json"):
+        try:
+            payload = json.loads(metadata.read_text(encoding="utf-8"))
+            if isinstance(payload, dict) and isinstance(payload.get("name"), str):
+                deleted_names.add(payload["name"].casefold())
+        except (OSError, ValueError, UnicodeError):
+            continue
     suffix = 2
     candidate = output_dir / f"{stem}.wav"
     while True:
@@ -124,12 +133,19 @@ def _reserve_output_path(output_dir: Path, stem: str) -> tuple[Path, Path]:
             suffix += 1
             continue
         os.close(descriptor)
-        if candidate.exists():
+        if (candidate.exists() or candidate.with_suffix(".json").exists()
+                or (pending / candidate.name).exists() or candidate.name.casefold() in deleted_names):
             reservation.unlink()
             candidate = output_dir / f"{stem}_{suffix}.wav"
             suffix += 1
             continue
         return candidate, reservation
+
+
+def _reserved_title(title: str, path: Path) -> str:
+    """Keep the visible title distinct when the filename needed a collision suffix."""
+    stem = _slug(title, max_len=80)
+    return title if path.stem == stem else f"{title} {path.stem[len(stem) + 1:]}"
 
 
 def _resolve(backend: backends.Backend, knob: str, value, default):
@@ -259,6 +275,7 @@ def generate(
     title = prompting.track_title(prompt, genre, int(seed))
     stem = _slug(title, max_len=80)
     path, reservation = _reserve_output_path(output_dir, stem)
+    title = _reserved_title(title, path)
 
     try:
         started = time.time()
@@ -458,7 +475,7 @@ def separate(
                 dtype=separation_dtype,
                 generated_at=stamp,
                 elapsed_seconds=round(float(elapsed), 1),
-                title=f"{base_title} {label}",
+                title=_reserved_title(f"{base_title} {label}", outputs[label]),
                 rating=None,
                 genre=source_genre,
             )
@@ -512,6 +529,7 @@ def sing(
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     title = prompting.track_title(words, None, int(seed))
     path, reservation = _reserve_output_path(output_dir, _slug(title, max_len=80))
+    title = _reserved_title(title, path)
     try:
         started = time.time()
         result = backends.run_subprocess(backend, {
@@ -619,6 +637,7 @@ def convert(
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     title = f"{base_title} vocal"
     path, reservation = _reserve_output_path(output_dir, _slug(title, max_len=80))
+    title = _reserved_title(title, path)
     if voice is None:
         described = f"convert {source.name} in the English example voice"
     else:

@@ -408,6 +408,26 @@ export function App() {
     }
   }
 
+  async function onDeleteTrack(name: string) {
+    setNotice(null);
+    try {
+      applyLibrary(await deleteTrack(name));
+      setNotice({ tone: "ok", text: "Track deleted. Undo is available in Trash for one hour." });
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "Could not delete track" });
+    }
+  }
+
+  async function onRestoreTrack(stem: string) {
+    setNotice(null);
+    try {
+      applyLibrary(await undoDelete(stem));
+      setNotice({ tone: "ok", text: "Track restored." });
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "Could not restore track" });
+    }
+  }
+
   function remixTrackFromLibrary(track: Track) {
     setRemixTrack(track.name);
     setRemixPrompt(track.prompt === "Prompt unavailable" ? "" : track.prompt);
@@ -732,7 +752,7 @@ export function App() {
           {libraryView === "trash" ? (
             <TrashList
               pending={pending}
-              onRestore={(stem) => void undoDelete(stem).then(applyLibrary)}
+              onRestore={(stem) => void onRestoreTrack(stem)}
             />
           ) : null}
           {libraryView === "history" ? (
@@ -749,7 +769,7 @@ export function App() {
                     track={track}
                     onRemix={() => remixTrackFromLibrary(track)}
                     onSeparate={() => void onSeparate(track.name)}
-                    onDelete={() => void deleteTrack(track.name).then(applyLibrary)}
+                    onDelete={() => void onDeleteTrack(track.name)}
                   />
                 ))}
               </div>

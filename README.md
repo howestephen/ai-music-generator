@@ -182,6 +182,9 @@ disclosure shows its own saved values, not the current form.
 Delete offers one hour of Undo, then the server purges the WAV and sidecar even
 without an open browser. Uploaded and converted working inputs are removed when
 their queued job finishes, fails or is removed; user originals are preserved.
+Same-name deletions have separate Undo identities. Delete and Restore errors are visible.
+New renders use three random words, with a visible numeric suffix on collision;
+names in the library and the Undo area are reserved. Existing tracks are not renamed.
 
 Every completed WAV is checked for a readable, finite, non-silent sample stream and its
 measured duration, on the CLI and in the UI alike. A short render stays in the history

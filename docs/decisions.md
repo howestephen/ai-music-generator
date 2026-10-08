@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # Decisions
@@ -11,6 +11,19 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-10-08 - Names need not describe the prompt
+
+**Decided:** new generation and singing titles use three random words from a
+broader vocabulary. Reservations check the library, sidecars and the one-hour
+Undo area; a collision suffix is included in the saved and displayed title.
+Existing tracks retain their names. This supersedes prompt-fragment naming.
+
+**Why:** repeated prompt fragments produced indistinguishable labels, and reuse
+of a deleted filename blocked Delete. Separately, pending deletions must preserve
+each version without overwriting another and restore only to its original basename.
+
+**Would revisit if:** the owner wants editable titles or a different naming style.
 
 ## 2026-10-07 - SoulX score runner permits unsupported MPS operations on CPU
 

@@ -133,9 +133,13 @@ no archive copy (2026-09-20).
 
 ## Current next step
 
-- 2026-10-08: Advanced shows the returned seed and Lock; every track has a
-  collapsed disclosure for its saved prompt and seed. Targeted component tests,
-  three mutations, the frontend build and desktop disclosure checks pass.
+- 2026-10-08: Advanced seed and each card's saved prompt/seed restored. Same-name
+  deletion collisions fixed, with visible Delete/Restore errors and crash-safe Undo.
+  New titles use random words; collision suffixes are visible and Trash names reserved.
+  All 258 tests, nine targeted mutations, frontend build and eight backend probes pass.
+  Desktop fixture checks cover Separate dispatch, colliding Delete, Undo and conflict
+  errors. Full mutation run and audio rendering were not performed. Vocal texture's
+  menu-to-prompt connection remains unresolved; Regenerate includes it.
 
 - 2026-10-08: track Download moved into the shared action row with Remix,
   Separate and Delete. The native player download option is hidden where supported.

@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # Gotchas
@@ -15,6 +15,18 @@ The nastiest share a shape: **the thing appears to work and produces plausible o
 nothing raises an alarm. Prefer failures that are loud.
 
 ---
+
+## Same-name tracks can block Delete
+
+The earlier Undo storage used the original filename. A new render could reuse a
+deleted name, and deleting it failed while the earlier version remained in Trash.
+The React callback also discarded that error. Pending pairs now get separate
+storage identities while retaining the original restore basename; both Delete and
+Restore report failures. New output reservations include Trash names and sidecars.
+
+Vocal texture changes the menu selection only. Its wordless-vocal request is added
+when a genre is selected or Regenerate is pressed; Generate submits the visible
+prompt unchanged. This UI connection remains unresolved, not an audio-quality finding.
 
 ## Seneca
 

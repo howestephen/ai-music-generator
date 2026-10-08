@@ -23,6 +23,22 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("uppercase WAV deletion keeps an unreadable pending extension", "app.py",
+     '    destination_wav = pending / f"{wav.stem}.wav"',
+     '    destination_wav = pending / wav.name'),
+    ("Undo recovery ignores a reserved render path", "app.py",
+     '    if wav.with_suffix(".wav.lock").exists():', '    if False:'),
+    ("deletion collisions reuse the occupied pending name", "app.py",
+     '    while destination_wav.exists() or destination_sidecar.exists() or destination_meta.exists():',
+     '    while False:'),
+    ("Undo restores under its pending collision suffix", "app.py",
+     '    wav = root / entry["name"]', '    wav = root / entry["wav"].name'),
+    ("new renders forget pending original names", "synth/core.py",
+     'or (pending / candidate.name).exists() or candidate.name.casefold() in deleted_names',
+     'or (pending / candidate.name).exists()'),
+    ("visible track titles ignore collision suffixes", "synth/core.py",
+     '    return title if path.stem == stem else f"{title} {path.stem[len(stem) + 1:]}"',
+     '    return title'),
     ("Advanced seed stops displaying returned seed", "web/src/App.tsx",
      '      setSeed(result.seed);', '      setSeed(seed);'),
     ("track details drop the saved prompt", "web/src/App.tsx",

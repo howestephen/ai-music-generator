@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-10-08
 generated_by: claude-opus-5
 generated_at: 2026-09-20T14:08Z
 generated_from: conversation
@@ -49,10 +49,11 @@ Constraints:
   lack fields and are handled by reading the WAV directly; do the same here. A
   missing `title` falls back to the prompt's first few words, a missing `rating` to
   `None`, a missing `genre` to `None`. No migration script, no rewriting old files.
-- `title` is generated from the prompt and genre, not asked for. It is a label, not
-  a creative act: a deterministic function of prompt, genre and seed so the same
-  render always gets the same name. Put it in `synth/prompting.py` beside the other
-  language, with its own tests.
+- `title` uses three random words from the naming vocabulary (owner decision,
+  2026-10-08, superseding prompt-fragment labels). The base selection is deterministic
+  from prompt, genre and seed; reservations include the library and Undo area, and a
+  collision suffix appears in both the filename and displayed title. Existing tracks
+  retain their names. The base selector lives in `synth/prompting.py` with its own tests.
 - `genre` must come from the UI selection rather than being parsed back out of the
   prompt, which would be guesswork.
 

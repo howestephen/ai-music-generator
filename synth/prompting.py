@@ -2836,65 +2836,22 @@ def genre_names() -> list[str]:
     return list(_GENRE_ORDER)
 
 
-# Words that never earn a place in a generated track title. Prompt tags and
-# the words every track of a genre shares are noise. What remains should read
-# like a short name taken from the prose.
-_TITLE_STOP = frozenset({
-    "a", "an", "the", "and", "or", "of", "to", "in", "with", "for", "on", "at",
-    "by", "from", "as", "is", "are", "be", "this", "that", "its", "into", "over",
-    "under", "only", "no", "not", "bpm", "track", "tracks", "instrumental",
-    "music", "genre", "mood", "arrangement", "structure", "instruments",
-    "production", "tracktype", "vocaltype", "global", "metadata", "seconds",
-    "bars", "bar", "then", "sits", "wordless", "vocal", "texture", "vocals",
-    "drum", "drums", "bass", "sub", "mix", "phrase", "sound", "sounds",
-    "simple", "basic", "whole", "entire", "just", "very", "your", "out",
-    "off", "notes", "note", "between", "through", "across", "before", "after",
-})
-
-
-def _title_prose(prompt: str) -> str:
-    """Drop a leading tag block (`Key: Value, Key: Value.`) and name the prose."""
-    parts = re.split(r"\.\s+", prompt or "", maxsplit=1)
-    if len(parts) == 2 and ":" in parts[0]:
-        return parts[1]
-    return prompt or ""
+_TITLE_WORDS = (
+    "Amber", "Anchor", "Appletree", "Aurora", "Birch", "Bloom", "Brook", "Cairn",
+    "Cedar", "Cinder", "Cloud", "Comet", "Copper", "Coral", "Cricket", "Dawn",
+    "Delta", "Dune", "Ember", "Fern", "Flint", "Frost", "Garden", "Garnet",
+    "Grove", "Harbour", "Hazel", "Heron", "Hollow", "Indigo", "Iris", "Island",
+    "Jade", "Juniper", "Kestrel", "Lantern", "Lark", "Laurel", "Linden", "Marble",
+    "Meadow", "Mist", "Moss", "Nectar", "Oak", "Ocean", "Orbit", "Pebble",
+    "Pine", "Quartz", "Reed", "River", "Robin", "Saffron", "Shore", "Silver",
+    "Solstice", "Sparrow", "Stone", "Summit", "Thistle", "Tide", "Willow", "Wren",
+)
 
 
 def track_title(prompt: str, genre: str | None = None, seed: int = 0) -> str:
-    """A short name of two or three consecutive words from the prompt prose.
-
-    Deterministic for the same inputs. The same prompt, genre and seed always
-    produce the same string so a re-render does not rename the track. Tag names
-    and the genre's own words are left out, because those made every drum and
-    bass title start with Drum and Bass.
-    """
+    """Three random words; output reservation resolves any remaining collision."""
     rng = random.Random(f"{int(seed)}\0{genre or ''}\0{prompt}")
-    genre_words = {
-        word.lower()
-        for name in (*GENRES, genre or "")
-        for word in re.findall(r"[A-Za-z][A-Za-z'-]*", name)
-    }
-
-    def _words(text: str) -> list[str]:
-        found = []
-        for raw in re.findall(r"[A-Za-z][A-Za-z'-]*", text):
-            lower = raw.lower()
-            if lower in _TITLE_STOP or lower in genre_words or len(lower) < 3:
-                continue
-            found.append(raw)
-        return found
-
-    words = _words(_title_prose(prompt))
-    if len(words) < 2:
-        words = _words(prompt or "")
-    if len(words) < 2:
-        only = words[0] if words else "Untitled"
-        return f"{_upper_first(only)} Track"
-
-    count = 3 if len(words) >= 3 and rng.random() < 0.65 else 2
-    count = min(count, len(words))
-    start = rng.randrange(0, len(words) - count + 1)
-    return " ".join(_upper_first(word) for word in words[start:start + count])
+    return " ".join(rng.sample(_TITLE_WORDS, 3))
 
 
 # Offered in the UI as menus. Empty means "let the genre decide", so a selection

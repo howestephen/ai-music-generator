@@ -778,6 +778,11 @@ def _pending_entries(output_dir: Path | None = None) -> list[dict]:
         except (TypeError, ValueError, OverflowError):
             continue
         stem = meta_path.name[: -len(PENDING_META_SUFFIX)]
+        name = payload.get("name", f"{stem}.wav")
+        if (not isinstance(name, str) or not name or name.startswith(".")
+                or "/" in name or "\\" in name or "\x00" in name
+                or Path(name).suffix.lower() != ".wav"):
+            continue
         wav = pending / f"{stem}.wav"
         sidecar = pending / f"{stem}.json"
         if not math.isfinite(deleted_at):
@@ -797,7 +802,7 @@ def _pending_entries(output_dir: Path | None = None) -> list[dict]:
             "sidecar": sidecar,
             "meta": meta_path,
             "title": payload.get("title") or stem,
-            "name": f"{stem}.wav",
+            "name": name,
             "sidecar_sha256": payload.get("sidecar_sha256"),
             "wav_identity": payload.get("wav_identity"),
             "operation": payload.get("operation", "delete"),
@@ -829,12 +834,16 @@ def _write_delete_meta(path, payload):
 
 def _restore_delete_pair(entry, output_dir=None):
     root = Path(output_dir) if output_dir else core.OUTPUT_DIR
-    wav = root / entry["wav"].name
-    sidecar = root / entry["sidecar"].name
+    wav = root / entry["name"]
+    sidecar = wav.with_suffix(".json")
+    if wav.with_suffix(".wav.lock").exists():
+        raise FileExistsError("A render has reserved the restore path")
     candidate = wav if wav.exists() else entry["wav"]
     if _wav_identity(candidate) != entry["wav_identity"]:
         raise FileExistsError("A different track occupies the restore path")
     expected = entry.get("sidecar_sha256")
+    if not expected and sidecar.exists():
+        raise FileExistsError("A different sidecar occupies the restore path")
     if expected:
         metadata = sidecar if sidecar.exists() else entry["sidecar"]
         if hashlib.sha256(metadata.read_bytes()).hexdigest() != expected:
@@ -849,11 +858,12 @@ def _restore_delete_pair(entry, output_dir=None):
 def _complete_delete_pair(entry, output_dir=None):
     """Recover a process exit between the two moves, without trusting a new file."""
     root = Path(output_dir) if output_dir else core.OUTPUT_DIR
-    original = root / entry["sidecar"].name
+    original_wav = root / entry["name"]
+    original = original_wav.with_suffix(".json")
     if not entry["wav"].exists() or entry["sidecar"].exists() or not original.exists():
         return
     expected = entry.get("sidecar_sha256")
-    if (root / entry["wav"].name).exists() or not expected:
+    if original_wav.exists() or not expected:
         raise FileExistsError("Cannot recover a partially deleted track safely")
     if hashlib.sha256(original.read_bytes()).hexdigest() != expected:
         raise FileExistsError("The original sidecar changed after deletion")
@@ -909,11 +919,16 @@ def delete_track(path_string: str, output_dir: Path | None = None) -> list[dict]
     sidecar = wav.with_suffix(".json")
     pending = _pending_root(output_dir)
     metadata = _read_sidecar(wav)
-    destination_wav = pending / wav.name
+    destination_wav = pending / f"{wav.stem}.wav"
     destination_sidecar = pending / sidecar.name
     destination_meta = pending / f"{wav.stem}{PENDING_META_SUFFIX}"
-    if destination_wav.exists() or destination_sidecar.exists() or destination_meta.exists():
-        raise FileExistsError(f"a pending deletion already uses {wav.name}")
+    counter = 1
+    while destination_wav.exists() or destination_sidecar.exists() or destination_meta.exists():
+        counter += 1
+        pending_stem = f"{wav.stem}-deleted-{counter}"
+        destination_wav = pending / f"{pending_stem}.wav"
+        destination_sidecar = pending / f"{pending_stem}.json"
+        destination_meta = pending / f"{pending_stem}{PENDING_META_SUFFIX}"
     _write_delete_meta(destination_meta, {
             "deleted_at": time.time(),
             "title": metadata.get("title") or _display_title({
@@ -951,8 +966,10 @@ def undo_delete(stem: str, output_dir: Path | None = None) -> list[dict]:
         purge_expired_deletions(output_dir)
         raise FileNotFoundError(f"undo window expired for {stem!r}")
     _complete_delete_pair(entry, output_dir)
-    destination_wav = output_dir / entry["wav"].name
-    destination_sidecar = output_dir / entry["sidecar"].name
+    destination_wav = output_dir / entry["name"]
+    destination_sidecar = destination_wav.with_suffix(".json")
+    if destination_wav.with_suffix(".wav.lock").exists():
+        raise FileExistsError(f"a render has reserved {destination_wav.name}")
     if destination_wav.exists() or destination_sidecar.exists():
         raise FileExistsError(f"library already has {destination_wav.name}")
     payload = json.loads(entry["meta"].read_text(encoding="utf-8"))
