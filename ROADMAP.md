@@ -133,6 +133,10 @@ no archive copy (2026-09-20).
 
 ## Current next step
 
+- 2026-10-08: Advanced shows the returned seed and Lock; every track has a
+  collapsed disclosure for its saved prompt and seed. Targeted component tests,
+  three mutations, the frontend build and desktop disclosure checks pass.
+
 - 2026-10-08: track Download moved into the shared action row with Remix,
   Separate and Delete. The native player download option is hidden where supported.
   All 249 tests, the targeted Download mutation, frontend build and validators

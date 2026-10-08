@@ -548,16 +548,6 @@ export function App() {
             {model.guidance ? (
               <Slider wide label="Guidance" hint={`${model.guidance.label}. ${model.guidance.info}`} control={model.guidance} value={guidance} onChange={setGuidance} />
             ) : null}
-            <label title="Off uses a new seed each time. On repeats this one.">
-              <span className="field-label seed-label">
-                Seed
-                <span className="inline-flex items-center gap-1">
-                  <input type="checkbox" checked={useSeed} onChange={(event) => setUseSeed(event.target.checked)} />
-                  Lock
-                </span>
-              </span>
-              <input type="number" aria-label="Seed" value={seed} onChange={(event) => setSeed(Number(event.target.value))} />
-            </label>
           </div>
         ) : null}
 
@@ -568,6 +558,16 @@ export function App() {
         <details className="advanced-disclosure">
           <summary>Advanced</summary>
           <div className="mt-1 grid gap-1.5">
+            <label title="Off uses a new seed each time. On repeats this one.">
+              <span className="field-label seed-label">
+                Seed
+                <span className="inline-flex items-center gap-1">
+                  <input type="checkbox" aria-label="Lock seed" checked={useSeed} onChange={(event) => setUseSeed(event.target.checked)} />
+                  Lock
+                </span>
+              </span>
+              <input type="number" aria-label="Seed" value={seed} onChange={(event) => setSeed(Number(event.target.value))} />
+            </label>
             <select aria-label="Instruments" multiple size={3} value={instruments} onChange={(event) => setInstruments(selectedValues(event))}>
               {instrumentChoices.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
@@ -1092,6 +1092,13 @@ function TrackCard({
         <button type="button" onClick={onSeparate}>Separate</button>
         <button type="button" onClick={onDelete}>Delete</button>
       </div>
+      <details className="mt-2 text-xs text-[var(--muted)]">
+        <summary className="cursor-pointer">Prompt and seed</summary>
+        <dl className="settings-list">
+          <div><dt>Seed</dt><dd>{track.seed ?? "Unavailable"}</dd></div>
+        </dl>
+        <p className="quiet-meta whitespace-pre-wrap">{track.prompt}</p>
+      </details>
     </article>
   );
 }

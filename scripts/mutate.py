@@ -23,6 +23,13 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("Advanced seed stops displaying returned seed", "web/src/App.tsx",
+     '      setSeed(result.seed);', '      setSeed(seed);'),
+    ("track details drop the saved prompt", "web/src/App.tsx",
+     '<p className="quiet-meta whitespace-pre-wrap">{track.prompt}</p>',
+     '<p className="quiet-meta whitespace-pre-wrap"></p>'),
+    ("track details treat seed zero as missing", "web/src/App.tsx",
+     '{track.seed ?? "Unavailable"}', '{track.seed || "Unavailable"}'),
     ("track download loses its action-row link", "web/src/App.tsx",
      '        <a href={track.audio} download={track.name}>Download</a>', ''),
     ("SoulX leaves complex waveform head on MPS", "runners/soulx_runner.py",

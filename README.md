@@ -177,6 +177,8 @@ rebuilds from `output/`. **Refresh history** picks up files generated elsewhere.
 Queued jobs and existing tracks share one scroll area, so a long queue cannot hide the library.
 Audio serving supports single byte ranges, including suffix and open-ended requests.
 Download sits beside Remix, Separate and Delete on each track's action row.
+Advanced shows the last returned seed; Lock reuses it. Each track's Prompt and seed
+disclosure shows its own saved values, not the current form.
 Delete offers one hour of Undo, then the server purges the WAV and sidecar even
 without an open browser. Uploaded and converted working inputs are removed when
 their queued job finishes, fails or is removed; user originals are preserved.

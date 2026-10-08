@@ -3310,7 +3310,7 @@ const code = ts.transpileModule(fs.readFileSync('web/src/App.tsx','utf8')+'\nexp
 }).outputText;
 const jsx=(type,props)=>({type,props}), exports={};
 vm.runInNewContext(code,{exports,require:name=>name==='react'?{}:name==='react/jsx-runtime'?{jsx,jsxs:jsx}:{}});
-const calls=[], track={title:'Test track',name:'test track.wav',audio:'/audio/test%20track.wav',duration:3,peaks:[],audit_status:'passed'};
+const calls=[], track={title:'Test track',name:'test track.wav',audio:'/audio/test%20track.wav',duration:3,peaks:[],audit_status:'passed',seed:0,prompt:'Saved prompt\nwith <literal> text'};
 const tree=exports.TrackCard({track,onRemix:()=>calls.push('Remix'),onSeparate:()=>calls.push('Separate'),onDelete:()=>calls.push('Delete')});
 const children=[tree.props.children].flat(Infinity), row=children.find(n=>n?.props?.className==='card-actions');
 const actions=[row.props.children].flat(Infinity);
@@ -3320,6 +3320,47 @@ if(link.type!=='a'||link.props.href!==track.audio||link.props.download!==track.n
 if(children.find(n=>n?.type==='audio')?.props.controlsList!=='nodownload')throw new Error('Native download option duplicated');
 for(const action of actions.slice(1))action.props.onClick();
 if(calls.join(',')!=='Remix,Separate,Delete')throw new Error('Existing actions changed');
+const details=children.find(n=>n?.type==='details');
+if(!details||details.props.open)throw new Error('Track details must be closed by default');
+const detailChildren=[details.props.children].flat(Infinity);
+if(detailChildren.find(n=>n?.type==='p')?.props.children!==track.prompt)throw new Error('Saved prompt missing or changed');
+if(detailChildren.find(n=>n?.type==='dl')?.props.children.props.children[1].props.children!==0)throw new Error('Seed zero was lost');
+track.seed=null;
+const missing=exports.TrackCard({track,onRemix:()=>{},onSeparate:()=>{},onDelete:()=>{}});
+const missingDetails=missing.props.children.find(n=>n?.type==='details');
+if(missingDetails.props.children.find(n=>n?.type==='dl').props.children.props.children[1].props.children!=='Unavailable')throw new Error('Missing seed is not labelled');
+'''
+        result = subprocess.run(["node", "-e", script], cwd=core.PROJECT_ROOT,
+                                capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_advanced_seed_reflects_generated_seed_and_lock(self):
+        script = r'''
+const fs=require('fs'),vm=require('vm'),ts=require('./web/node_modules/typescript');
+const code=ts.transpileModule(fs.readFileSync('web/src/App.tsx','utf8'),{
+ compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+}).outputText;
+const model={name:'stable-audio-medium',voice_choices:['Instrumental','Vocal texture'],duration:{minimum:1,maximum:380,default:180},steps:null,guidance:null,supports_lyrics:false};
+const state=[{models:[model],genres:[],characters:[],labels:{},singers:[],melodies:[]},model.name];
+let cursor=0, submitted, nextSeed=101;
+const react={useState:init=>{const i=cursor++;if(!(i in state))state[i]=typeof init==='function'?init():init;
+ return[state[i],v=>state[i]=typeof v==='function'?v(state[i]):v];},useEffect:()=>{},useMemo:fn=>fn(),useRef:v=>({current:v})};
+const jsx=(type,props)=>({type,props}),exports={};
+vm.runInNewContext(code,{exports,require:n=>n==='react'?react:n==='react/jsx-runtime'?{jsx,jsxs:jsx}:n==='./api'?{generate:async body=>{submitted=body;return{seed:nextSeed,queue:[]};}}:{},window:{matchMedia:()=>({matches:true})}});
+function find(n,p){if(!n||typeof n!=='object')return null;if(p(n))return n;for(const c of [n.props?.children].flat(Infinity)){const hit=find(c,p);if(hit)return hit;}return null;}
+function render(){cursor=0;return exports.App();}
+function advanced(tree){return find(tree,n=>n.type==='details'&&n.props.className==='advanced-disclosure');}
+function seed(tree){const a=advanced(tree);if(!a||a.props.open)throw new Error('Advanced missing or unexpectedly open');return find(a,n=>n.props?.['aria-label']==='Seed');}
+(async()=>{
+ let tree=render();if(!seed(tree))throw new Error('Seed not inside Advanced');
+ find(tree,n=>n.props?.id==='generate-button').props.onClick();await new Promise(setImmediate);
+ tree=render();if(seed(tree).props.value!==101||submitted.use_seed)throw new Error('Unlocked result seed not displayed');
+ nextSeed=202;find(tree,n=>n.props?.id==='generate-button').props.onClick();await new Promise(setImmediate);
+ tree=render();if(seed(tree).props.value!==202)throw new Error('Changed seed not displayed');
+ find(advanced(tree),n=>n.props?.['aria-label']==='Lock seed').props.onChange({target:{checked:true}});
+ tree=render();find(tree,n=>n.props?.id==='generate-button').props.onClick();await new Promise(setImmediate);
+ if(!submitted.use_seed||submitted.seed!==202)throw new Error('Seed lock submission changed');
+})().catch(error=>{console.error(error);process.exitCode=1;});
 '''
         result = subprocess.run(["node", "-e", script], cwd=core.PROJECT_ROOT,
                                 capture_output=True, text=True, encoding="utf-8")
