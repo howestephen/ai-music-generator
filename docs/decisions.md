@@ -12,6 +12,25 @@ rationale and reason to revisit it.
 
 ---
 
+## 2026-10-09 - Installed routes share one dispatch boundary
+
+**Decided:** manifest schema 9 declares ordered device routes. All four core
+operations use `synth/routing.py`. Generate exposes Auto or an explicit supported
+device in Advanced and the CLI; a pin never falls back. Saved execution metadata
+records requested, preferred and actual routes plus a pre-dispatch fallback reason.
+Local means this execution host, not proof that every operator used its GPU.
+
+**Why:** extending the previous inline ACE-Step exception would duplicate routing
+and lose provenance on other tools. Isolated runners remain unchanged. Only ACE-Step
+currently has an installed CUDA adapter; other modules cannot advertise one.
+ComfyUI submission now uses a hard failure: a timeout after POST may have accepted
+the job, so treating it as offline could create a second local generation.
+
+**Trade-off:** route preferences reflect supported installations, not comparative
+speed. Local readiness still uses import probes, not a complete weight inventory.
+New CUDA adapters and download management are separate work. Revisit with each
+installed backend, and preserve the no-retry boundary after dispatch.
+
 ## 2026-10-09 - Expand the local studio through isolated modules
 
 **Decided:** extend the existing manifest and subprocess runners into a local
@@ -28,7 +47,8 @@ the existing queue and output-audit boundary without either restriction.
 actual execution device. Initially preferences reflect runtime compatibility,
 not measured relative speed. Only a pre-dispatch unavailable route may fall back;
 generation failures remain failures. Same model and honoured controls are required.
-This contract is planned, not a claim that shared routing already exists.
+The initial installed-route implementation is recorded above; the wider installer
+and route health inventory remain planned.
 
 **Consequences:** MIDI, text and score outputs need typed artefact handling rather
 than the WAV-only library. Licences belong to weights and voicebanks as well as

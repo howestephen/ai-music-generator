@@ -1097,6 +1097,7 @@ def _load_history(output_dir: Path | None = None) -> list[dict]:
             "guidance": guidance,
             "lyrics": lyrics,
             "model": model_id,
+            "execution": core.routing.public_execution(metadata.get("execution")),
         }
         track["display_title"] = _display_title(track)
         tracks.append(track)
@@ -1684,10 +1685,11 @@ def _enqueue_convert(track_path, upload, prompt_path, prompt_upload):
 
 
 def _enqueue_generation(model, prompt, duration, steps, guidance, seed,
-                        use_seed, lyrics=None, genre=None):
+                        use_seed, lyrics=None, genre=None, device="auto"):
     if not prompt or not prompt.strip():
         raise gr.Error("Enter a prompt first.")
     backend = backends.get(model)
+    core.routing.validate_preference(backend, device)
     try:
         duration = backend.duration.validate(duration, f"{backend.name} duration")
         steps = (
@@ -1714,6 +1716,7 @@ def _enqueue_generation(model, prompt, duration, steps, guidance, seed,
         "duration": duration,
         "seed": chosen_seed,
         "infer_step": steps,
+        "device": device,
         "guidance_scale": guidance,
         "model": backend.name,
         "genre": chosen_genre or None,

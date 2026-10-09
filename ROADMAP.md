@@ -93,7 +93,7 @@ they are never buried in a chat.
 | # | Work | Status | Acceptance |
 |---|---|---|---|
 | 5.1 | Stable Audio sound effects | `done` | Installed checkpoint, direct prompt UI, three-second audited WAV and library dispatch verified |
-| 5.2 | Shared device preferences and fallbacks | `planned` | Per-tool supported routes, health checks, visible actual device; fallback only before dispatch |
+| 5.2 | Shared device preferences and fallbacks | `in_progress` | Installed-route router, generation pins and provenance implemented; fuller readiness inventory and new CUDA adapters remain |
 | 5.3 | YuE2 and HeartMuLa song generation | `planned` | Efficient MLX variants first; licences recorded; full lyric-to-audio jobs |
 | 5.4 | Audio-to-MIDI and lyric transcription | `planned` | Basic Pitch, GAME and HeartTranscriptor assessed; playable source and downloadable MIDI/text artefacts |
 | 5.5 | More score singing and voice tools | `planned` | DiffSinger with a separately cleared voicebank; SAM Audio subject to model access |
@@ -150,9 +150,8 @@ drop a control, or retry a dispatched failed generation on another machine.
 None.
 
 Resolved: a broader local suite and later downloadable app are the destination
-(2026-10-09). Device-aware preferences and fallbacks will supersede the current
-ACE-Step-only remote routing once verified. Currently ACE-Step generate uses
-Seneca's 4090 when ComfyUI answers, and every other model stays on this Mac
+(2026-10-09). Shared routing preserves ACE-Step's 4090-first preference with
+local fallback before dispatch; other models currently have local routes only
 (2026-09-30), superseding the 2026-09-24 choice
 to keep all renders here; the next UI is React and Tailwind, not a Gradio skin (2026-09-24);
 Stable Audio's voice control is a texture and the owner has heard it add occasional
@@ -162,23 +161,27 @@ backend (2026-09-19, superseding
 `minimax-mlx` of 2026-09-17); `briefs/` stays declared for future prompt sets though
 its contents were deleted (2026-09-10); the pinned `.venv-mlx` install command lives
 in the README rather than a new top-level file (2026-09-10); UI deletion removes a
-track immediately, retains it for one hour for Undo, then permanently removes it with
-no archive copy (2026-09-20).
+track immediately, with one-hour Undo and no permanent archive.
 
 ## Current next step
 
+- 2026-10-09: shared installed-route checkpoint implemented. Generation supports
+  Auto, local or 4090 pins in Advanced and CLI. Tracks retain actual execution and
+  fallback reason. Ambiguous remote submission must fail without local resubmission.
+  Only ACE-Step has a CUDA adapter; complete readiness inventory remains planned.
+  269 tests, seven targeted mutations, nine probes, build, validators and independent
+  audit pass. Full mutations, Windows and listening remain unchecked.
+  Ten-second CUDA and local-fallback WAVs passed audits and HTTP 206. First local
+  attempt failed on a missing planner; explicit installation and identical retry passed.
+  Next: install verified YuE2 and HeartMuLa builds.
+
 - 2026-10-09: suite expansion first checkpoint delivered. SFX uses the installed
-  MLX runtime with its own downloaded checkpoint. Music and sound drafts stay
-  separate; music menus are hidden in SFX mode. The real queued diagnostic produced
-  a three-second stereo WAV, finite and non-silent, served with HTTP 206. Desktop
-  switching and Remix dispatch passed; Separate produced four audited stems, then
-  those four diagnostic stems were moved through the normal one-hour Undo flow.
-  All 260 unit tests, five new mutations, nine import probes, frontend build and
-  both validators pass; independent re-audit is clean. Full mutation suite, Windows,
-  remote fallback, browser listening and actual download clicks were not checked.
-  Existing documentation word-count warnings remain. The diagnostic SFX sample
-  remains in the library. Next checkpoint: shared device routing, then YuE2 and
-  HeartMuLa installation; inspect each efficient build before downloading weights.
+  MLX runtime with its own checkpoint. Separate drafts and music-menu hiding were
+  checked on desktop, with Remix dispatch. A queued three-second WAV and four
+  separated stems passed audits; WAV serving returned HTTP 206. Diagnostic stems
+  entered normal Undo. All 260 tests, five mutations, nine import probes, build,
+  validators and independent re-audit passed. Full mutations, Windows, remote
+  fallback, listening and download clicks were not checked. SFX sample remains.
 
 - 2026-10-08: Advanced seed and each card's saved prompt/seed restored. Same-name
   deletion collisions fixed, with visible Delete/Restore errors and crash-safe Undo.

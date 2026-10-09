@@ -237,6 +237,7 @@ class Backend:
     # Pairs, not a dict: a dict field would make this frozen value unhashable.
     runner_options: tuple[tuple[str, str], ...] = ()
     timeout_seconds: int | None = None
+    devices: tuple[str, ...] = ("local",)
 
     @classmethod
     def from_manifest(cls, name: str, data) -> "Backend":
@@ -247,10 +248,17 @@ class Backend:
             {
                 "model_id", "venv", "runner", "licence", "notes", "label", "version",
                 "dtype", "prompt_style", "instrumental_tag", "supports_lyrics", "runtime",
-                "controls", "output_audit", "supports_editing", "task",
+                "controls", "output_audit", "supports_editing", "task", "devices",
             },
             f"backends.{name}",
         )
+        devices = data["devices"]
+        if (not isinstance(devices, list) or not devices
+                or any(not isinstance(device, str) or device not in {"local", "cuda"} for device in devices)
+                or len(set(devices)) != len(devices)):
+            raise ValueError(f"backends.{name}.devices must be a unique non-empty list of local/cuda routes")
+        if "cuda" in devices and name != "acestep":
+            raise ValueError(f"backends.{name} has no installed CUDA adapter")
         runtime = data["runtime"]
         if not isinstance(runtime, dict):
             raise ValueError(f"backends.{name}.runtime must be an object")
@@ -358,6 +366,7 @@ class Backend:
             probe_modules=tuple(probe_modules),
             runner_options=tuple(sorted(runner_options.items())),
             timeout_seconds=timeout_seconds,
+            devices=tuple(devices),
         )
 
     @property
@@ -419,7 +428,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> tuple[str, dict[str, Backend]]:
     if not isinstance(document, dict):
         raise ValueError("backend manifest must contain one JSON object")
     _expect_keys(document, {"schema_version", "default_backend", "backends"}, "manifest")
-    if document["schema_version"] != 8:
+    if document["schema_version"] != 9:
         raise ValueError(f"unsupported backend manifest schema {document['schema_version']!r}")
     raw_backends = document["backends"]
     if not isinstance(raw_backends, dict) or not raw_backends:

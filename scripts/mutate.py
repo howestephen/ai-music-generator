@@ -23,6 +23,21 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("UI drops selected device pin", "web/src/App.tsx",
+     '        prompt,\n        device,', '        prompt,\n        device: "auto",'),
+    ("queue drops selected device pin", "app.py",
+     '        "device": device,', '        "device": "auto",'),
+    ("ambiguous remote submission permits local duplicate", "synth/comfy_ace.py",
+     '        timeout=30,\n        soft=False,', '        timeout=30,\n        soft=True,'),
+    ("forced device silently uses auto fallbacks", "synth/routing.py",
+     '    candidates = backend.devices if preference == "auto" else (preference,)',
+     '    candidates = backend.devices'),
+    ("device router masks failed remote graph", "synth/routing.py",
+     '            except comfy_ace.Offline:', '            except Exception:'),
+    ("local pin contacts remote device", "synth/routing.py",
+     '        if device == "cuda":', '        if backend.name == "acestep":'),
+    ("route provenance loses actual device", "synth/routing.py",
+     '            "actual": device,', '            "actual": "unknown",'),
     ("switching to sound effects keeps a music prompt", "web/src/App.tsx",
      '      setPrompt(familyPrompts.current[nextFamily]);', '      setPrompt(prompt);'),
     ("Stable Audio drops zero guidance", "runners/stable_audio_runner.py",

@@ -69,3 +69,15 @@ An entry is not installed or supported here until its real job passes.
 SFX integration and a recorded suite plan. Shared routing, additional singers,
 MIDI/text artefacts and the installer screen remain subsequent work, not delivered
 by this first checkpoint. Packaging must not delay useful local tools.
+
+## Installed-route checkpoint
+
+Schema 9 declares ordered installed routes. All audio operations share dispatch;
+generation exposes Auto/local/4090 pins in Advanced and CLI. Only ACE-Step has
+a CUDA adapter today. A pinned route never falls back. Auto may fall back after
+pre-dispatch unavailability, never after ambiguous submission or a failed graph.
+Track sidecars and the library expose requested, preferred and actual routes and
+fallback reason. Local labels identify the host, not a measured accelerator.
+Remote ACE-Step checks reachability and required weights; local readiness still
+uses the existing import probe, not a complete weight inventory. Richer health
+reporting, additional singers and new CUDA adapters remain subsequent work.

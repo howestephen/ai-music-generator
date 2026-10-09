@@ -1,8 +1,9 @@
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "default_backend": "stable-audio-medium",
   "backends": {
     "acestep": {
+      "devices": ["cuda", "local"],
       "task": "generate",
       "model_id": "ACE-Step/Ace-Step1.5",
       "venv": ".venv-ace",
@@ -54,6 +55,7 @@
       }
     },
     "minimax-mlx": {
+      "devices": ["local"],
       "task": "generate",
       "model_id": "vanch007/MiniMax-Music3-MLX-8bit",
       "venv": ".venv-mlx",
@@ -101,6 +103,7 @@
       }
     },
     "stable-audio-sm": {
+      "devices": ["local"],
       "task": "generate",
       "model_id": "stabilityai/stable-audio-3-optimized",
       "venv": ".venv-sa3",
@@ -156,6 +159,7 @@
       }
     },
     "stable-audio-sfx": {
+      "devices": ["local"],
       "task": "generate",
       "model_id": "stabilityai/stable-audio-3-optimized",
       "venv": ".venv-sa3",
@@ -211,6 +215,7 @@
       }
     },
     "stable-audio-medium": {
+      "devices": ["local"],
       "task": "generate",
       "model_id": "stabilityai/stable-audio-3-optimized",
       "venv": ".venv-sa3",
@@ -266,6 +271,7 @@
       }
     },
     "musicgen": {
+      "devices": ["local"],
       "task": "generate",
       "model_id": "facebook/musicgen-stereo-large",
       "venv": ".venv",
@@ -313,6 +319,7 @@
       }
     },
     "demucs": {
+      "devices": ["local"],
       "task": "separate",
       "model_id": "mlx-community/demucs-mlx",
       "venv": ".venv-demucs",
@@ -354,6 +361,7 @@
       }
     },
     "soulx": {
+      "devices": ["local"],
       "task": "sing",
       "model_id": "mlx-community/SoulX-Singer",
       "venv": ".venv-soulx",
@@ -393,6 +401,7 @@
       }
     },
     "soulx-svc": {
+      "devices": ["local"],
       "task": "sing",
       "model_id": "mlx-community/SoulX-Singer",
       "venv": ".venv-soulx",

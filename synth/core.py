@@ -9,7 +9,7 @@ import re
 import time
 import warnings
 
-from . import backends, comfy_ace, prompting
+from . import backends, comfy_ace, prompting, routing
 from . import sing as melody
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -68,6 +68,7 @@ class Track:
     title: str
     rating: str | None = None
     genre: str | None = None
+    execution: dict | None = None
 
     def sidecar_path(self) -> Path:
         return self.path.with_suffix(".json")
@@ -171,6 +172,7 @@ def generate(
     inpaint_range: tuple[float, float] | None = None,
     genre: str | None = None,
     rating: str | None = None,
+    device: str = "auto",
 ) -> Track:
     """Generate one track.
 
@@ -203,11 +205,7 @@ def generate(
     # that did not pass one, which was the whole CLI.
     if duration is None:
         duration = backend.duration.default
-    if not backend.available:
-        raise RuntimeError(
-            f"Backend {backend.name!r} is not set up: {backend.availability_error}. "
-            "See README for install steps."
-        )
+    routing.validate_preference(backend, device)
     duration = backend.duration.validate(duration, f"{backend.name} duration")
 
     steps = _resolve(backend, "step count", infer_step, backend.default_steps)
@@ -293,10 +291,7 @@ def generate(
                 "init_noise_level": init_noise_level,
                 "inpaint_range": list(inpaint_range) if inpaint_range else None,
             }
-            try:
-                result = comfy_ace.render(backend.name, job)
-            except comfy_ace.Offline:
-                result = backends.run_subprocess(backend, job)
+            result = routing.render(backend, job, device)
             elapsed = result.get("elapsed_seconds", time.time() - started)
             audio_audit = result.get("_audio_audit")
         else:
@@ -340,6 +335,7 @@ def generate(
             title=title,
             rating=rating,
             genre=genre,
+            execution=result.get("_execution"),
         )
         track.write_sidecar()
         if audit_status != "passed":
@@ -412,7 +408,7 @@ def separate(
             )
             reserved.append((label, path, reservation))
             outputs[label] = path
-        result = backends.run_subprocess(backend, {
+        result = routing.render(backend, {
             "prompt": f"separate {source.name}",
             "lyrics": "",
             "duration": float(duration),
@@ -478,6 +474,7 @@ def separate(
                 title=_reserved_title(f"{base_title} {label}", outputs[label]),
                 rating=None,
                 genre=source_genre,
+                execution=result.get("_execution"),
             )
             track.write_sidecar()
             tracks.append(track)
@@ -532,7 +529,7 @@ def sing(
     title = _reserved_title(title, path)
     try:
         started = time.time()
-        result = backends.run_subprocess(backend, {
+        result = routing.render(backend, {
             "prompt": words,
             "lyrics": words,
             "notes": notes,
@@ -587,6 +584,7 @@ def sing(
             title=title,
             rating=None,
             genre=None,
+            execution=result.get("_execution"),
         )
         track.write_sidecar()
         if status != "passed":
@@ -644,7 +642,7 @@ def convert(
         described = f"convert {source.name} in the voice of {voice.name}"
     try:
         started = time.time()
-        result = backends.run_subprocess(backend, {
+        result = routing.render(backend, {
             "prompt": described,
             "target_audio": str(source),
             "prompt_audio": None if voice is None else str(voice),
@@ -699,6 +697,7 @@ def convert(
             title=title,
             rating=None,
             genre=source_genre,
+            execution=result.get("_execution"),
         )
         track.write_sidecar()
         if status != "passed":

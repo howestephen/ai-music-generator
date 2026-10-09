@@ -36,7 +36,7 @@ import urllib.request
 
 import app
 import soundfile as sf
-from synth import analyze, backends, cli, comfy_ace, core, jobs, prompting, sing, ui_server
+from synth import analyze, backends, cli, comfy_ace, core, jobs, prompting, routing, sing, ui_server
 
 
 def _write_test_wav(path: Path, frames: int = 1) -> None:
@@ -1069,6 +1069,89 @@ class SungMelody(unittest.TestCase):
             sing.score_for("C major up", 20000)
 
 
+class DeviceRouting(unittest.TestCase):
+    def test_cli_and_queue_forward_explicit_device(self):
+        args = cli.build_parser().parse_args(["gen", "rain", "-m", "stable-audio-sfx", "--device", "local"])
+        with mock.patch.object(core, "generate") as generate, mock.patch.object(cli, "_print_track"):
+            cli.cmd_gen(args)
+        self.assertEqual(generate.call_args.kwargs["device"], "local")
+        queue = mock.Mock()
+        queue.snapshot.return_value = []
+        with mock.patch.object(app, "_get_job_queue", return_value=queue):
+            app._enqueue_generation("stable-audio-sfx", "rain", 3, 8, 1, 0, True, device="local")
+        self.assertEqual(queue.enqueue.call_args.args[0]["device"], "local")
+
+    def test_auto_falls_back_only_on_predispatch_unavailability(self):
+        backend = backends.get("acestep")
+        with mock.patch.object(comfy_ace, "render", side_effect=comfy_ace.Offline("asleep")), \
+                mock.patch.object(backends.Backend, "available", new_callable=mock.PropertyMock, return_value=True), \
+                mock.patch.object(backends, "run_subprocess", return_value={}) as local:
+            result = routing.render(backend, {})
+        local.assert_called_once()
+        self.assertEqual(result["_execution"]["actual"], "local")
+        self.assertEqual(result["_execution"]["preferred"], "cuda")
+        self.assertTrue(result["_execution"]["fallback_reason"])
+
+    def test_forced_cuda_never_falls_back(self):
+        with mock.patch.object(comfy_ace, "render", side_effect=comfy_ace.Offline()), \
+                mock.patch.object(backends, "run_subprocess") as local:
+            with self.assertRaisesRegex(RuntimeError, "No available device"):
+                routing.render(backends.get("acestep"), {}, "cuda")
+        local.assert_not_called()
+
+    def test_forced_local_never_contacts_remote(self):
+        with mock.patch.object(comfy_ace, "render") as remote, \
+                mock.patch.object(backends.Backend, "available", new_callable=mock.PropertyMock, return_value=True), \
+                mock.patch.object(backends, "run_subprocess", return_value={}):
+            result = routing.render(backends.get("acestep"), {}, "local")
+        remote.assert_not_called()
+        self.assertIsNone(result["_execution"]["fallback_reason"])
+
+    def test_remote_success_does_not_require_a_local_install(self):
+        with mock.patch.object(comfy_ace, "render", return_value={}), \
+                mock.patch.object(backends.Backend, "available", new_callable=mock.PropertyMock, return_value=False), \
+                mock.patch.object(backends, "run_subprocess") as local:
+            result = routing.render(backends.get("acestep"), {})
+        self.assertEqual(result["_execution"]["actual"], "cuda")
+        local.assert_not_called()
+
+    def test_submission_timeout_never_becomes_offline_or_local_retry(self):
+        backend = backends.get("acestep")
+        job = {"prompt":"test", "duration":10, "seed":1, "steps":8,
+               "options":dict(backend.runner_options)}
+        with mock.patch.dict(os.environ, {"AI_MUSIC_COMFY":"1"}), \
+                mock.patch.object(comfy_ace, "probe", return_value=True), \
+                mock.patch.object(comfy_ace.urllib.request, "urlopen", side_effect=TimeoutError("uncertain")), \
+                mock.patch.object(backends, "run_subprocess") as local:
+            with self.assertRaisesRegex(RuntimeError, "connection failed"):
+                routing.render(backend, job)
+        local.assert_not_called()
+
+    def test_failed_remote_graph_is_not_retried(self):
+        with mock.patch.object(comfy_ace, "render", side_effect=RuntimeError("graph failed")), \
+                mock.patch.object(backends, "run_subprocess") as local:
+            with self.assertRaisesRegex(RuntimeError, "graph failed"):
+                routing.render(backends.get("acestep"), {})
+        local.assert_not_called()
+
+    def test_device_manifest_rejects_invalid_or_uninstalled_routes(self):
+        data = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))["backends"]["acestep"]
+        self.assertEqual(backends.get("acestep").devices, ("cuda", "local"))
+        for devices in ([], "local", [True], ["cuda", "cuda"], ["mystery"], [{}]):
+            with self.subTest(devices=devices), self.assertRaises(ValueError):
+                backends.Backend.from_manifest("acestep", {**data, "devices": devices})
+        with self.assertRaisesRegex(ValueError, "CUDA adapter"):
+            backends.Backend.from_manifest("unsupported", data)
+        with self.assertRaises(ValueError):
+            routing.render(backends.get("stable-audio-sfx"), {}, "cuda")
+
+    def test_malformed_sidecar_execution_is_not_sent_to_react(self):
+        for value in (None, [], {}, {"actual":{}}, {"actual":"cuda", "preferred":"local", "requested":"auto", "fallback_reason":{}}):
+            self.assertIsNone(routing.public_execution(value))
+        valid = {"actual":"local", "preferred":"cuda", "requested":"auto", "fallback_reason":"worker asleep", "label":{}}
+        self.assertEqual(routing.public_execution(valid)["label"], "Local device")
+
+
 class SenecaAce(unittest.TestCase):
     def test_the_graph_matches_the_installed_4b_split(self):
         job = {
@@ -1193,7 +1276,7 @@ class Registry(unittest.TestCase):
 
     def test_manifest_declares_the_default_and_every_registered_backend(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 8)
+        self.assertEqual(document["schema_version"], 9)
         self.assertEqual(document["default_backend"], backends.DEFAULT_BACKEND)
         shown = {backend.name: backend.display_name for backend in backends.BACKENDS.values()}
         self.assertEqual(shown["stable-audio-medium"], "Stable Audio (Med) 3")
@@ -3550,7 +3633,7 @@ const fs=require('fs'),vm=require('vm'),ts=require('./web/node_modules/typescrip
 const code=ts.transpileModule(fs.readFileSync('web/src/App.tsx','utf8'),{
  compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
 }).outputText;
-const model={name:'stable-audio-medium',voice_choices:['Instrumental','Vocal texture'],duration:{minimum:1,maximum:380,default:180},steps:null,guidance:null,supports_lyrics:false};
+const model={name:'stable-audio-medium',devices:['local'],voice_choices:['Instrumental','Vocal texture'],duration:{minimum:1,maximum:380,default:180},steps:null,guidance:null,supports_lyrics:false};
 const state=[{models:[model],genres:[],characters:[],labels:{},singers:[],melodies:[]},model.name];
 let cursor=0, submitted, nextSeed=101;
 const react={useState:init=>{const i=cursor++;if(!(i in state))state[i]=typeof init==='function'?init():init;
@@ -3563,8 +3646,10 @@ function advanced(tree){return find(tree,n=>n.type==='details'&&n.props.classNam
 function seed(tree){const a=advanced(tree);if(!a||a.props.open)throw new Error('Advanced missing or unexpectedly open');return find(a,n=>n.props?.['aria-label']==='Seed');}
 (async()=>{
  let tree=render();if(!seed(tree))throw new Error('Seed not inside Advanced');
+ find(advanced(tree),n=>n.props?.['aria-label']==='Execution device').props.onChange({target:{value:'local'}});tree=render();
  find(tree,n=>n.props?.id==='generate-button').props.onClick();await new Promise(setImmediate);
  tree=render();if(seed(tree).props.value!==101||submitted.use_seed)throw new Error('Unlocked result seed not displayed');
+ if(submitted.device!=='local')throw new Error('Device pin did not reach request');
  nextSeed=202;find(tree,n=>n.props?.id==='generate-button').props.onClick();await new Promise(setImmediate);
  tree=render();if(seed(tree).props.value!==202)throw new Error('Changed seed not displayed');
  find(advanced(tree),n=>n.props?.['aria-label']==='Lock seed').props.onChange({target:{checked:true}});

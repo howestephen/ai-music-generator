@@ -198,5 +198,7 @@ class GenerationQueue:
                         job.summary["seed"] = track.seed
                     if hasattr(track, "duration"):
                         job.summary["delivered_duration"] = track.duration
+                    if getattr(track, "execution", None):
+                        job.summary["execution"] = track.execution
                     job.completed_at = self._clock()
                     self._condition.notify_all()

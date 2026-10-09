@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-08
+updated: 2026-10-09
 ---
 
 # Gotchas
@@ -29,6 +29,25 @@ when a genre is selected or Regenerate is pressed; Generate submits the visible
 prompt unchanged. This UI connection remains unresolved, not an audio-quality finding.
 
 ## Seneca
+
+### A submission timeout does not mean the remote job was rejected
+
+**Symptom:** a remote POST timeout triggers local fallback and may produce two jobs.
+**Cause:** the earlier submit used the same soft-offline error as health probes.
+**Fix:** only pre-dispatch health failures may fall back. Submission, polling and
+download failures are hard errors. Never resubmit after an uncertain response.
+Explicit device pins also fail rather than falling back. Tracks retain the route
+and reason when Auto legitimately chooses the local runner before dispatch.
+
+The local import probe does not establish weight readiness. During the routing
+diagnostic, ACE-Step's first local render downloaded the main checkpoint bundle
+before inference, including the upstream default planner despite our smaller
+planner selection. Do not report this setup time as render performance.
+The selected 0.6B planner must be downloaded explicitly; the loader fails if it
+is absent. Pass the cache directory explicitly to the downloader, whose default
+is the working directory unless its checkpoint/project-root environment overrides
+are set. An incomplete planner folder also passes its existence
+check; `--force` runs the download path without relying on that folder check.
 
 ### ComfyUI is on port 8000, and the LAN address does not answer
 

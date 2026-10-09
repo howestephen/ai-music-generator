@@ -222,7 +222,7 @@ def _submit(url: str, graph: dict) -> str:
         f"{url}/prompt",
         {"prompt": graph, "client_id": uuid.uuid4().hex},
         timeout=30,
-        soft=True,
+        soft=False,
     )
     if not isinstance(body, dict) or body.get("node_errors") or "prompt_id" not in body:
         raise RuntimeError(f"ComfyUI rejected the ACE-Step graph ({body!r})"[:500])

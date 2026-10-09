@@ -53,6 +53,7 @@ def bootstrap() -> dict:
             "model_id": backend.model_id,
             "licence": backend.licence,
             "notes": backend.notes,
+            "devices": list(backend.devices),
             "available": backend.available,
             "max_duration": backend.max_duration,
             "prompt_style": backend.prompt_style,
@@ -164,6 +165,7 @@ def public_track(track: dict) -> dict:
         "audit_status": track.get("audit_status"),
         "audit_error": track.get("audit_error"),
         "backend": track.get("backend"),
+        "execution": track.get("execution"),
         "seed": track.get("seed"),
         "prompt": track.get("prompt"),
         "generated_at": track.get("generated_at"),
@@ -393,6 +395,7 @@ class Handler(BaseHTTPRequestHandler):
             bool(body.get("use_seed")),
             body.get("lyrics"),
             body.get("genre"),
+            body.get("device", "auto"),
         )
         self._send_json({
             "status": status,

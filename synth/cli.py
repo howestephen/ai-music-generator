@@ -37,6 +37,7 @@ def cmd_gen(args: argparse.Namespace) -> int:
             guidance_scale=args.guidance,
             lyrics=args.lyrics,
             model=args.model,
+            device=getattr(args, "device", "auto"),
         )
         _print_track(track, args.json)
     return 0
@@ -71,6 +72,7 @@ def cmd_batch(args: argparse.Namespace) -> int:
                     guidance_scale=args.guidance,
                     lyrics=args.lyrics,
                     model=args.model,
+                    device=getattr(args, "device", "auto"),
                 )
                 _print_track(track, as_json=False)
             except Exception as exc:  # one bad prompt shouldn't kill an overnight run
@@ -128,6 +130,8 @@ def build_parser() -> argparse.ArgumentParser:
                             "(default: the backend's own, see `models`)")
         p.add_argument("--lyrics", default=None,
                        help="lyrics; default is the backend's instrumental sentinel")
+        p.add_argument("--device", choices=("auto", "local", "cuda"), default="auto",
+                       help="auto uses installed route preferences; a pinned device never falls back")
         p.add_argument("--count", "-n", type=int, default=1,
                        help="variations to generate per prompt (default: 1)")
         p.add_argument("--model", "-m", default=core.DEFAULT_MODEL,

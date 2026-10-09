@@ -114,6 +114,7 @@ export function App() {
   const [melodyEdited, setMelodyEdited] = useState(false);
   const [melodyToken, setMelodyToken] = useState(0);
   const [drawer, setDrawer] = useState<DrawerMode>("closed");
+  const [device, setDevice] = useState("auto");
   const desktop = useDesktopLayout();
   const followQueue = useRef(true);
   const draggingDrawer = useRef(false);
@@ -169,6 +170,7 @@ export function App() {
         ? next.voice_choices[0]
         : next.voice_choices[1] ?? next.voice_choices[0];
     setModelName(next.name);
+    setDevice("auto");
     setDuration(next.name === "stable-audio-sfx" ? next.duration.default : clampControl(next.duration, duration));
     if (next.steps) setSteps(next.steps.default);
     if (next.guidance) setGuidance(next.guidance.default);
@@ -229,6 +231,7 @@ export function App() {
       const result = await generate({
         model: model.name,
         prompt,
+        device,
         duration,
         steps: model.steps ? steps : null,
         guidance: model.guidance ? guidance : null,
@@ -589,6 +592,13 @@ export function App() {
         <details className="advanced-disclosure">
           <summary>Advanced</summary>
           <div className="mt-1 grid gap-1.5">
+            <label>
+              <span className="field-label">Device</span>
+              <select aria-label="Execution device" value={device} onChange={(event) => setDevice(event.target.value)}>
+                <option value="auto">Auto ({(model.devices ?? ["local"]).map((route) => route === "cuda" ? "4090" : "local").join(" then ")})</option>
+                {(model.devices ?? ["local"]).map((route) => <option key={route} value={route}>{route === "cuda" ? "RTX 4090 only" : "Local device only"}</option>)}
+              </select>
+            </label>
             <label title="Off uses a new seed each time. On repeats this one.">
               <span className="field-label seed-label">
                 Seed
@@ -1131,6 +1141,7 @@ function TrackCard({
           <div><dt>Seed</dt><dd>{track.seed ?? "Unavailable"}</dd></div>
         </dl>
         <p className="quiet-meta whitespace-pre-wrap">{track.prompt}</p>
+        {track.execution ? <p className="quiet-meta">Device: {track.execution.label}. Requested: {track.execution.requested}.{track.execution.fallback_reason ? ` Fallback: ${track.execution.fallback_reason}` : ""}</p> : null}
       </details>
     </article>
   );

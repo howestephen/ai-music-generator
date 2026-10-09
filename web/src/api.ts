@@ -17,6 +17,7 @@ export type ModelInfo = {
   licence: string;
   notes: string;
   available: boolean;
+  devices: string[];
   max_duration: number;
   prompt_style: string;
   prompt_hint: string;
@@ -68,6 +69,7 @@ export type Track = {
   model: string | null;
   audio: string;
   peaks: number[];
+  execution?: {requested: string; preferred: string; actual: string; label: string; fallback_reason: string | null} | null;
 };
 
 export type Job = {

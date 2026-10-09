@@ -79,6 +79,8 @@ ACE=~/.cache/ai-music-generator/ACE-Step-1.5
 git clone https://github.com/ace-step/ACE-Step-1.5.git "$ACE"
 git -C "$ACE" checkout ca1e85fe9430179831e6bc6be790c332190a3866
 UV_PROJECT_ENVIRONMENT="$PWD/.venv-ace" uv sync --directory "$ACE" --python 3.12
+HF_HUB_DISABLE_XET=1 .venv-ace/bin/python -m acestep.model_downloader \
+  --model acestep-5Hz-lm-0.6B --skip-main --force --dir "$ACE/checkpoints"
 ```
 
 Separation is HTDemucs, not a prompt model. It has its own environment:
@@ -116,14 +118,16 @@ the backbone and diffusion stay on MPS.
 
 Weights download on first use to `~/.cache/`: MiniMax MLX about 13 GB, MusicGen 19 GB,
 and both Stable Audio sizes together about 6.1 GB, since they share one repository.
-ACE-Step 1.5 downloads into `$ACE/checkpoints` on the first generate. SoulX
+ACE-Step 1.5 downloads its base bundle (about 10 GB, including the upstream default
+planner) on first generate, before MLX conversion. Install the selected 0.6B
+planner explicitly with the command above. An import probe does not verify weights. SoulX
 downloads into `$SOULX/models` on the first sing. A conversion also downloads
 the official RMVPE pitch file into that same models folder, and
 `openai/whisper-base`, which the conversion model loads itself.
 
 ## Models
 
-Five prompt models behind one CLI, each in whatever environment it needs, plus
+Six prompt models behind one CLI, each in whatever environment it needs, plus
 Demucs for separation and SoulX for a sung line. `./.venv/bin/python -m synth.cli models` probes every one.
 
 | Backend | Model | Max | Prompt style | Licence |
@@ -171,6 +175,7 @@ in a voice you upload. A full mix should be separated first.
 | Flag | Effect |
 |---|---|
 | `--model` / `-m` | Backend to use |
+| `--device` | `auto`, `local` or `cuda`; pinning forbids fallback. Only ACE-Step currently has a CUDA adapter |
 | `--duration` / `-d` | Target seconds (each backend enforces its own cap and acceptance policy) |
 | `--count` / `-n` | Variations per prompt |
 | `--guidance` / `-g` | Prompt adherence. Backend default; `minimax-mlx` has none and refuses it |
@@ -192,6 +197,11 @@ Audio serving supports single byte ranges, including suffix and open-ended reque
 Download sits beside Remix, Separate and Delete on each track's action row.
 Advanced shows the last returned seed; Lock reuses it. Each track's Prompt and seed
 disclosure shows its own saved values, not the current form.
+Advanced also selects the generation device. Auto follows the manifest's ordered
+installed routes: ACE-Step prefers the 4090, then local; other modules are local-only.
+Track details record actual route and fallback reason. "Local device" identifies
+the execution host, not a promise that every operation used its GPU. A submission
+timeout is a failure, never permission to generate a duplicate locally.
 Delete offers one hour of Undo, then the server purges the WAV and sidecar even
 without an open browser. Uploaded and converted working inputs are removed when
 their queued job finishes, fails or is removed; user originals are preserved.
