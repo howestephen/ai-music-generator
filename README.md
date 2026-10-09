@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-08
+updated: 2026-10-09
 ---
 
 # AI Music Generator
@@ -57,6 +57,18 @@ uv pip install --python .venv-sa3/bin/python -r "$SA3/optimized/mlx/requirements
 printf '%s\n%s\n' "$SA3/optimized/mlx" "$SA3/optimized/mlx/scripts" \
   > .venv-sa3/lib/python3.12/site-packages/stable_audio_3.pth
 ```
+
+The same installation runs `stable-audio-sfx`, the sound-effects checkpoint.
+Pre-download its files rather than making the first queued job wait:
+
+```bash
+HF_HUB_DISABLE_XET=1 .venv-sa3/bin/python -c \
+  "import weights; [weights.ensure_local(path) for path, _ in weights.SHARED + weights.DIT_BUNDLES['sm-sfx']]"
+```
+
+Select **Stable Audio (Sound effects) 3** in Generate and describe a sound directly.
+Music presets are hidden for this model; duration, guidance and seed still apply.
+It uses the Mac's native MLX runtime. A Windows/CUDA fallback is not connected yet.
 
 ACE-Step 1.5 cannot share that environment. Upstream pins `transformers>=4.51,<4.58`
 and ships its own MLX path. The pin is the macOS launcher's default: 2B turbo and
@@ -118,6 +130,7 @@ Demucs for separation and SoulX for a sung line. `./.venv/bin/python -m synth.cl
 |---|---|---|---|---|
 | `stable-audio-medium` | Stable Audio 3 medium (1.4B DiT, default) | 380s | description | Stability Community |
 | `stable-audio-sm` | Stable Audio 3 small (50M DiT) | 120s | description | Stability Community |
+| `stable-audio-sfx` | Stable Audio 3 sound effects | 120s | direct sound description | Stability Community |
 | `minimax-mlx` | MiniMax Music 3 (MLX 8-bit) | 300s | caption | MiniMax Community |
 | `acestep` | ACE-Step 1.5 turbo (4090, else MLX) | 600s | tags | MIT |
 | `musicgen` | MusicGen stereo-large | 30s | tags | **CC-BY-NC, non-commercial** |

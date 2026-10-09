@@ -23,6 +23,18 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("switching to sound effects keeps a music prompt", "web/src/App.tsx",
+     '      setPrompt(familyPrompts.current[nextFamily]);', '      setPrompt(prompt);'),
+    ("Stable Audio drops zero guidance", "runners/stable_audio_runner.py",
+     '    if job.get("guidance") is not None:', '    if job.get("guidance"):'),
+    ("sound effects load the music checkpoint", "synth/backends.json",
+     '"runner_options": {"dit": "sm-sfx", "decoder": "same-s"}',
+     '"runner_options": {"dit": "sm-music", "decoder": "same-s"}'),
+    ("sound effects submit a music genre", "web/src/App.tsx",
+     'genre: model.name === "stable-audio-sfx" ? null : genre || null,',
+     'genre: "House",'),
+    ("sound effects expose music presets", "web/src/App.tsx",
+     '{model.name !== "stable-audio-sfx" ? (', '{true ? ('),
     ("uppercase WAV deletion keeps an unreadable pending extension", "app.py",
      '    destination_wav = pending / f"{wav.stem}.wav"',
      '    destination_wav = pending / wav.name'),

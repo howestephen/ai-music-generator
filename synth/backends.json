@@ -155,6 +155,61 @@
         }
       }
     },
+    "stable-audio-sfx": {
+      "task": "generate",
+      "model_id": "stabilityai/stable-audio-3-optimized",
+      "venv": ".venv-sa3",
+      "runner": "stable_audio_runner.py",
+      "licence": "Stability AI Community (commercial OK below the revenue threshold; bundled T5Gemma adds the Gemma Terms of Use)",
+      "notes": "Sound effects from a plain description, not a music checkpoint. Native MLX on Apple Silicon; no remote fallback is installed yet.",
+      "label": "Stable Audio (Sound effects)",
+      "version": "3",
+      "dtype": "fp16 DiT / fp32 codec (MLX)",
+      "prompt_style": "description",
+      "instrumental_tag": "",
+      "supports_lyrics": false,
+      "supports_editing": true,
+      "output_audit": {
+        "minimum_duration_ratio": 1,
+        "duration_tolerance_seconds": 0.05,
+        "random_seed_retries": 0,
+        "duration_contract": "exact"
+      },
+      "runtime": {
+        "probe_modules": ["mlx.core", "models.defs.sa3_pipeline", "weights"],
+        "timeout_seconds": 3600,
+        "runner_options": {"dit": "sm-sfx", "decoder": "same-s"}
+      },
+      "controls": {
+        "duration": {
+          "default": 10,
+          "minimum": 1,
+          "maximum": 120,
+          "step": 1,
+          "label": "Sound length (s)",
+          "info": "Fixed-length diffusion: exactly the selected length, up to 120 seconds. Describe sounds directly, without music presets.",
+          "integer": false
+        },
+        "steps": {
+          "default": 8,
+          "minimum": 1,
+          "maximum": 50,
+          "step": 1,
+          "label": "Steps",
+          "info": "Pingpong sampler steps. 1 is a single forward pass; 8 is the vendor's sweet spot.",
+          "integer": true
+        },
+        "guidance": {
+          "default": 1,
+          "minimum": 0,
+          "maximum": 10,
+          "step": 0.1,
+          "label": "Prompt adherence",
+          "info": "1 follows the prompt and is this model's own default. Above 1 pushes harder toward the prompt. Below 1 pulls away from it.",
+          "integer": false
+        }
+      }
+    },
     "stable-audio-medium": {
       "task": "generate",
       "model_id": "stabilityai/stable-audio-3-optimized",

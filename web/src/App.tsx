@@ -79,6 +79,7 @@ export function App() {
   const [vocals, setVocals] = useState("Instrumental");
   const [lyrics, setLyrics] = useState("");
   const [prompt, setPrompt] = useState("");
+  const familyPrompts = useRef({ music: "", sfx: "" });
   const [duration, setDuration] = useState(180);
   const [steps, setSteps] = useState(8);
   const [guidance, setGuidance] = useState(1);
@@ -156,13 +157,19 @@ export function App() {
   function applyModel(nextName: string) {
     const next = bootstrap?.models.find((item) => item.name === nextName);
     if (!next) return;
+    const previousFamily = modelName === "stable-audio-sfx" ? "sfx" : "music";
+    const nextFamily = next.name === "stable-audio-sfx" ? "sfx" : "music";
+    if (previousFamily !== nextFamily) {
+      familyPrompts.current[previousFamily] = prompt;
+      setPrompt(familyPrompts.current[nextFamily]);
+    }
     const vocal = next.voice_choices.includes(vocals)
       ? vocals
       : vocals === "Instrumental"
         ? next.voice_choices[0]
         : next.voice_choices[1] ?? next.voice_choices[0];
     setModelName(next.name);
-    setDuration(clampControl(next.duration, duration));
+    setDuration(next.name === "stable-audio-sfx" ? next.duration.default : clampControl(next.duration, duration));
     if (next.steps) setSteps(next.steps.default);
     if (next.guidance) setGuidance(next.guidance.default);
     setVocals(vocal);
@@ -228,7 +235,7 @@ export function App() {
         seed,
         use_seed: useSeed,
         lyrics: model.supports_lyrics && vocals !== "Instrumental" ? lyrics : null,
-        genre: genre || null,
+        genre: model.name === "stable-audio-sfx" ? null : genre || null,
       });
       setSeed(result.seed);
       followQueue.current = true;
@@ -486,6 +493,8 @@ export function App() {
       <section id="controls-panel">
         {tool === "generate" ? (
         <>
+        {model.name !== "stable-audio-sfx" ? (
+        <>
         <label>
           <span className="field-label">Genre</span>
           <select value={genre} onChange={(event) => void onGenre(event.target.value)}>
@@ -520,16 +529,18 @@ export function App() {
           ))}
         </div>
 
+        </>
+        ) : <p className="text-xs">Describe a sound directly, such as footsteps on gravel or rain on a window. This is a sound-effects model, not a music preset.</p>}
         <div className="prompt-block">
           <div className="mb-1 flex items-center justify-between gap-2">
             <span className="field-label">Prompt</span>
-            <button type="button" className="rounded-full border border-[var(--line)] px-2.5 py-0.5 text-xs" onClick={() => void writePrompt(genre).catch((error: Error) => setNotice({ tone: "error", text: error.message }))}>Regenerate</button>
+            {model.name !== "stable-audio-sfx" ? <button type="button" className="rounded-full border border-[var(--line)] px-2.5 py-0.5 text-xs" onClick={() => void writePrompt(genre).catch((error: Error) => setNotice({ tone: "error", text: error.message }))}>Regenerate</button> : null}
           </div>
           <textarea
             value={prompt}
             title={model.prompt_hint}
             onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Edit the prompt"
+            placeholder={model.name === "stable-audio-sfx" ? "Describe the sound" : "Edit the prompt"}
           />
         </div>
 
@@ -588,6 +599,7 @@ export function App() {
               </span>
               <input type="number" aria-label="Seed" value={seed} onChange={(event) => setSeed(Number(event.target.value))} />
             </label>
+            {model.name !== "stable-audio-sfx" ? <>
             <select aria-label="Instruments" multiple size={3} value={instruments} onChange={(event) => setInstruments(selectedValues(event))}>
               {instrumentChoices.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
@@ -595,6 +607,7 @@ export function App() {
               {bootstrap.characters.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
             <input aria-label="Extra keywords" value={keywords} placeholder="Extra keywords" onChange={(event) => setKeywords(event.target.value)} />
+            </> : null}
           </div>
         </details>
         </>

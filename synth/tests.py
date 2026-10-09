@@ -824,6 +824,29 @@ class SubprocessContract(unittest.TestCase):
             self.assertIn("ModuleNotFoundError", backend.availability_error)
 
 
+class StableAudioRunnerArgv(unittest.TestCase):
+    def test_sfx_manifest_options_and_controls_reach_the_installed_cli(self):
+        spec = importlib.util.spec_from_file_location(
+            "stable_audio_runner", core.PROJECT_ROOT / "runners" / "stable_audio_runner.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        backend = backends.get("stable-audio-sfx")
+        job = {"prompt": "rain", "duration": 2.5, "seed": 0, "steps": 4,
+               "guidance": 0.0, "output_path": "/tmp/sfx.wav",
+               "options": dict(backend.runner_options)}
+        with mock.patch.object(runner, "_cli_script", return_value=Path("installed-cli.py")), \
+                mock.patch.object(runner.subprocess, "run", return_value=mock.Mock(returncode=0)) as run, \
+                mock.patch.object(runner.sys, "stdin", io.StringIO(json.dumps(job))), \
+                mock.patch.object(runner.sys, "stdout", io.StringIO()):
+            self.assertEqual(runner.main(), 0)
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[:2], [sys.executable, "installed-cli.py"])
+        for flag, value in {"--dit": "sm-sfx", "--decoder": "same-s", "--seconds": "2.5",
+                            "--steps": "4", "--cfg": "0.0", "--seed": "0", "--prompt": "rain"}.items():
+            self.assertEqual(argv[argv.index(flag) + 1], value)
+        self.assertEqual(run.call_args.kwargs["encoding"], "utf-8")
+
+
 class MinimaxRunnerArgv(unittest.TestCase):
     """The runner builds the real CLI command; nothing above it sees that argv."""
 
@@ -2020,10 +2043,16 @@ class Registry(unittest.TestCase):
         a second runner script."""
         small = backends.get("stable-audio-sm")
         medium = backends.get("stable-audio-medium")
+        sfx = backends.get("stable-audio-sfx")
         self.assertEqual(small.runner, medium.runner)
+        self.assertEqual(sfx.runner, small.runner)
+        self.assertEqual(dict(sfx.runner_options), {"dit": "sm-sfx", "decoder": "same-s"})
+        self.assertEqual(sfx.duration.default, 10)
+        self.assertIn("stable-audio-sfx", backends.generative_backends())
+        self.assertIn("Describe the sound", app._prompt_hint(sfx))
         self.assertEqual(dict(small.runner_options)["dit"], "sm-music")
         self.assertEqual(dict(medium.runner_options)["dit"], "medium")
-        for backend in (small, medium):
+        for backend in (small, medium, sfx):
             with self.subTest(backend=backend.name):
                 self.assertEqual(backend.output_audit.duration_contract, "exact")
                 self.assertEqual(backend.output_audit.random_seed_retries, 0)
@@ -2052,7 +2081,7 @@ class Registry(unittest.TestCase):
                 cap = backend.duration.maximum
                 default = backend.duration.default
                 self.assertLessEqual(default, cap)
-                if cap >= 120 and name != "minimax-mlx":
+                if cap >= 120 and name not in {"minimax-mlx", "stable-audio-sfx"}:
                     self.assertGreaterEqual(
                         default, 120,
                         "a backend that can make a track should default to one",
@@ -2060,7 +2089,7 @@ class Registry(unittest.TestCase):
 
     def test_only_stable_audio_declares_editing_support(self):
         editable = {n for n, b in backends.BACKENDS.items() if b.supports_editing}
-        self.assertEqual(editable, {"stable-audio-sm", "stable-audio-medium"})
+        self.assertEqual(editable, {"stable-audio-sm", "stable-audio-medium", "stable-audio-sfx"})
 
     def test_manifest_rejects_a_non_boolean_editing_flag(self):
         document = json.loads(backends.MANIFEST_PATH.read_text(encoding="utf-8"))
@@ -3475,6 +3504,41 @@ track.seed=null;
 const missing=exports.TrackCard({track,onRemix:()=>{},onSeparate:()=>{},onDelete:()=>{}});
 const missingDetails=missing.props.children.find(n=>n?.type==='details');
 if(missingDetails.props.children.find(n=>n?.type==='dl').props.children.props.children[1].props.children!=='Unavailable')throw new Error('Missing seed is not labelled');
+'''
+        result = subprocess.run(["node", "-e", script], cwd=core.PROJECT_ROOT,
+                                capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_sfx_ui_hides_music_presets_and_does_not_submit_stale_genre(self):
+        script = r'''
+const fs=require('fs'),vm=require('vm'),ts=require('./web/node_modules/typescript');
+const code=ts.transpileModule(fs.readFileSync('web/src/App.tsx','utf8'),{
+ compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+}).outputText;
+const model={name:'stable-audio-sfx',voice_choices:['Instrumental','Vocal texture'],duration:{minimum:1,maximum:120,default:10},steps:null,guidance:null,supports_lyrics:false};
+const music={...model,name:'stable-audio-medium'};
+const state=[{models:[music,model],genres:['House'],characters:[],labels:{},singers:[],melodies:[]},music.name,'House'];
+state[12]='House music prompt';
+let cursor=0,refCursor=0,submitted;const refs=[];
+const react={useState:init=>{const i=cursor++;if(!(i in state))state[i]=typeof init==='function'?init():init;
+ return[state[i],v=>state[i]=typeof v==='function'?v(state[i]):v];},useEffect:()=>{},useMemo:fn=>fn(),useRef:v=>refs[refCursor++]??(refs[refCursor-1]={current:v})};
+const jsx=(type,props)=>({type,props}),exports={};
+vm.runInNewContext(code,{exports,require:n=>n==='react'?react:n==='react/jsx-runtime'?{jsx,jsxs:jsx}:n==='./api'?{generate:async body=>{submitted=body;return{seed:9,queue:[]};}}:{},window:{matchMedia:()=>({matches:true})}});
+const nodes=[];function walk(n){if(!n||typeof n!=='object')return;nodes.push(n);for(const c of [n.props?.children].flat(Infinity))walk(c);}
+function render(){cursor=0;refCursor=0;nodes.length=0;walk(exports.App());}
+render();nodes.find(n=>n.type==='select'&&n.props.value===music.name).props.onChange({target:{value:model.name}});render();
+for(const label of ['Instruments','Character','Extra keywords'])if(nodes.some(n=>n.props?.['aria-label']===label))throw new Error('Music preset leaked: '+label);
+if(nodes.some(n=>n.type==='select'&&n.props.children?.some?.(c=>c?.props?.children==='Choose a genre')))throw new Error('Genre preset visible');
+if(nodes.some(n=>n.type==='button'&&['Regenerate','Vocal texture'].includes(n.props.children)))throw new Error('Music prompt control visible');
+if(!nodes.some(n=>n.type==='textarea'&&n.props.placeholder==='Describe the sound'))throw new Error('Direct sound prompt missing');
+if(nodes.find(n=>n.type==='textarea'&&n.props.placeholder==='Describe the sound').props.value!=='')throw new Error('Stale music prompt leaked');
+nodes.find(n=>n.type==='textarea'&&n.props.placeholder==='Describe the sound').props.onChange({target:{value:'Rain on glass'}});
+render();
+(async()=>{nodes.find(n=>n.props?.id==='generate-button').props.onClick();await new Promise(setImmediate);
+ if(submitted.genre!==null||submitted.lyrics!==null||submitted.prompt!=='Rain on glass'||submitted.model!==model.name)throw new Error('Sound request changed');
+ render();nodes.find(n=>n.type==='select'&&n.props.value===model.name).props.onChange({target:{value:music.name}});render();
+ if(nodes.find(n=>n.type==='textarea'&&n.props.placeholder==='Edit the prompt').props.value!=='House music prompt')throw new Error('Music prompt lost');
+})().catch(e=>{console.error(e);process.exitCode=1;});
 '''
         result = subprocess.run(["node", "-e", script], cwd=core.PROJECT_ROOT,
                                 capture_output=True, text=True, encoding="utf-8")

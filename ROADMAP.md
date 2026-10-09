@@ -92,7 +92,7 @@ they are never buried in a chat.
 
 | # | Work | Status | Acceptance |
 |---|---|---|---|
-| 5.1 | Stable Audio sound effects | `in_progress` | Separate checkpoint, direct prompt UI, audited WAV and existing library actions |
+| 5.1 | Stable Audio sound effects | `done` | Installed checkpoint, direct prompt UI, three-second audited WAV and library dispatch verified |
 | 5.2 | Shared device preferences and fallbacks | `planned` | Per-tool supported routes, health checks, visible actual device; fallback only before dispatch |
 | 5.3 | YuE2 and HeartMuLa song generation | `planned` | Efficient MLX variants first; licences recorded; full lyric-to-audio jobs |
 | 5.4 | Audio-to-MIDI and lyric transcription | `planned` | Basic Pitch, GAME and HeartTranscriptor assessed; playable source and downloadable MIDI/text artefacts |
@@ -167,6 +167,19 @@ no archive copy (2026-09-20).
 
 ## Current next step
 
+- 2026-10-09: suite expansion first checkpoint delivered. SFX uses the installed
+  MLX runtime with its own downloaded checkpoint. Music and sound drafts stay
+  separate; music menus are hidden in SFX mode. The real queued diagnostic produced
+  a three-second stereo WAV, finite and non-silent, served with HTTP 206. Desktop
+  switching and Remix dispatch passed; Separate produced four audited stems, then
+  those four diagnostic stems were moved through the normal one-hour Undo flow.
+  All 260 unit tests, five new mutations, nine import probes, frontend build and
+  both validators pass; independent re-audit is clean. Full mutation suite, Windows,
+  remote fallback, browser listening and actual download clicks were not checked.
+  Existing documentation word-count warnings remain. The diagnostic SFX sample
+  remains in the library. Next checkpoint: shared device routing, then YuE2 and
+  HeartMuLa installation; inspect each efficient build before downloading weights.
+
 - 2026-10-08: Advanced seed and each card's saved prompt/seed restored. Same-name
   deletion collisions fixed, with visible Delete/Restore errors and crash-safe Undo.
   New titles use random words; collision suffixes are visible and Trash names reserved.
@@ -175,11 +188,8 @@ no archive copy (2026-09-20).
   errors. Full mutation run and audio rendering were not performed. Vocal texture's
   menu-to-prompt connection remains unresolved; Regenerate includes it.
 
-- 2026-10-08: track Download moved into the shared action row with Remix,
-  Separate and Delete. The native player download option is hidden where supported.
-  All 249 tests, the targeted Download mutation, frontend build and validators
-  pass. The live app serves the rebuilt assets. No browser viewport measurement,
-  real download click, full mutation run or audio generation was performed here.
+- 2026-10-08: Download joins Remix, Separate and Delete in the action row.
+  Tests, targeted mutation, build and validators passed; actual clicks were not checked.
 
 - Current milestone: audit repairs merged and pushed to main at `609532c`.
   Repairs cover working-input ownership, deletion retries and unattended expiry,
@@ -194,18 +204,11 @@ no archive copy (2026-09-20).
   clean. Eight installed backend probes, frontend build and validators pass.
   The previous 104 mutations were not rerun here; a full-suite mutation attempt
   stalled in the unrelated legacy Gradio configuration probe and was stopped.
-- Drawer repair on `fix/queued-library-scroll`: queue and library share the scrolling
-  body so long queues cannot consume the track viewport. All 246 tests, the new
-  targeted scrolling mutation, eight import probes, frontend build and validators
-  pass. Browser scrolling measurements await a per-action hook approval; source
-  and built CSS were checked, but no mobile or desktop browser measurement is claimed.
-  Sing's apparent end-of-render stall was first-use weight downloading,
-  not UI publication. After downloading, that job failed on missing NLTK English
-  tagger data. Installed the missing resource into the singing environment and
-  verified the failed lyric's six words against the real G2p and SoulX phone set.
-  README now installs all pronunciation resources and checks a real G2p call.
-  Full singing retry remains unverified: the public failed-job summary does not
-  retain the melody needed to repeat the original request exactly.
+- Drawer repair: queue and library share one scrolling body. Tests, targeted
+  mutation, probes, build and validators passed; viewport measurements remain
+  unverified. Singing initially stalled on first-use downloads, then failed on
+  missing NLTK data. The installed G2p call now passes. The original melody was
+  not retained, so subsequent diagnostics are not exact retries.
 - Subsequent score-singing retry reached the reference-audio mel encoder and
   failed on PyTorch's unsupported MPS FFT. The score runner now enables CPU
   fallback before PyTorch imports. The installed FFT and SoulX mel encoder
@@ -222,9 +225,8 @@ no archive copy (2026-09-20).
   installed bridge wiring has an independent clean audit. The full mutation
   suite, browser playback/listening and voice conversion were not checked.
   These were diagnostic lyrics and notes, not an exact retry of the owner's melody.
-- Next: browser verification of the drawer repair, then owner review of both
-  unmerged repair branches. No additional render, listening test or live remote
-  graph is planned for this checkpoint.
+- Earlier repair checkpoint: browser verification of the drawer repair and owner
+  review of the unmerged repair branches remain separate from the new suite work.
 - The honest gap: the owner has heard Stable Audio's vocal texture (occasional vague
   voice noises) and is not happy with the output. Nothing else in this file is a
   judgement of how a track sounds

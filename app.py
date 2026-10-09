@@ -434,6 +434,8 @@ UI_JS = """
 
 
 def _prompt_hint(backend: backends.Backend) -> str:
+    if backend.name == "stable-audio-sfx":
+        return "Describe the sound directly: footsteps on gravel, or rain on a window."
     if backend.prompt_style == "tags":
         return "Style tags beat sentences: `warm rhodes, 85bpm, mellow`."
     if backend.prompt_style == "description":
@@ -1387,6 +1389,8 @@ FALLBACK_COST = {
     # soulx-svc has not been timed on this machine. This is the generic stand-in.
     "soulx-svc": (20.0, 3.0),
     "stable-audio-sm": (3.0, 0.03),
+    # SFX shares the small architecture; this is provisional until jobs fit it.
+    "stable-audio-sfx": (3.0, 0.03),
     "stable-audio-medium": (12.0, 0.05),
 }
 # Only the most recent renders count: the first render of any backend also pays for
