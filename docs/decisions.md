@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-08
+updated: 2026-10-09
 ---
 
 # Decisions
@@ -11,6 +11,32 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-10-09 - Expand the local studio through isolated modules
+
+**Decided:** extend the existing manifest and subprocess runners into a local
+music suite. Keep dependency isolation and model-specific controls. Start with
+Stable Audio's SFX checkpoint on the installed MLX runtime; assess efficient MLX
+song models before downloading CUDA or full-precision alternatives. The future
+downloadable app and tool-management screen are a separate roadmap phase.
+
+**Options:** one shared environment would couple incompatible dependencies;
+ComfyUI-only integration would exclude native MLX tools. Isolated adapters fit
+the existing queue and output-audit boundary without either restriction.
+
+**Routing contract:** declare ordered supported routes per module and expose
+actual execution device. Initially preferences reflect runtime compatibility,
+not measured relative speed. Only a pre-dispatch unavailable route may fall back;
+generation failures remain failures. Same model and honoured controls are required.
+This contract is planned, not a claim that shared routing already exists.
+
+**Consequences:** MIDI, text and score outputs need typed artefact handling rather
+than the WAV-only library. Licences belong to weights and voicebanks as well as
+code. Gated or unclear models remain blocked; paid inference remains opt-in.
+
+**Would revisit if:** installed adapters cannot share the queue safely, or measured
+results justify a different preferred device. Candidate sources and blockers are
+in [the suite spec](../specs/2026-10-09-music-module-suite.md).
 
 ## 2026-10-08 - Names need not describe the prompt
 

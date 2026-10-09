@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-10-08
+updated: 2026-10-09
 ---
 
 # ROADMAP
@@ -17,9 +17,9 @@ they are never buried in a chat.
 
 ## Project summary
 
-- Goal: describe music in words, render it locally on Apple Silicon, and keep adding
-  models cheap
-- Current phase: audit repairs after Phase 4 and the model tools
+- Goal: a local home UI for music generation, singing, sound design, transcription
+  and production tools, with device-aware execution on Apple Silicon and NVIDIA
+- Current phase: Phase 5, music-module suite expansion
 - Biggest known risk: the owner is not happy with the output yet
 - Default backend: `stable-audio-medium` (2026-09-19, superseding `minimax-mlx`)
 
@@ -84,6 +84,37 @@ they are never buried in a chat.
 | 4.1 | Product design pass on the whole surface | `done` | Generate, queue, history and remix. Phone layout is one column. Menus are native selects |
 | 4.2 | Build that design in React and Tailwind | `done` | Queue, history and audio serving stay. Audio is read from `output/` by filename. The old Gradio builder is still in `app.py` and is not launched |
 
+## Phase 5: Music-module suite
+
+- Status: `in_progress`. Spec: [specs/2026-10-09-music-module-suite.md](specs/2026-10-09-music-module-suite.md)
+- Priority: install and integrate suitable tools, not packaging. A source or import
+  probe is not a completed integration; each tool needs an installed end-to-end job.
+
+| # | Work | Status | Acceptance |
+|---|---|---|---|
+| 5.1 | Stable Audio sound effects | `in_progress` | Separate checkpoint, direct prompt UI, audited WAV and existing library actions |
+| 5.2 | Shared device preferences and fallbacks | `planned` | Per-tool supported routes, health checks, visible actual device; fallback only before dispatch |
+| 5.3 | YuE2 and HeartMuLa song generation | `planned` | Efficient MLX variants first; licences recorded; full lyric-to-audio jobs |
+| 5.4 | Audio-to-MIDI and lyric transcription | `planned` | Basic Pitch, GAME and HeartTranscriptor assessed; playable source and downloadable MIDI/text artefacts |
+| 5.5 | More score singing and voice tools | `planned` | DiffSinger with a separately cleared voicebank; SAM Audio subject to model access |
+| 5.6 | Expose existing runtime capabilities | `planned` | ACE-Step cover/repaint; Stable Audio negative prompts and compatible LoRA controls |
+| 5.7 | Remaining candidate decisions | `planned` | SongGeneration/LeVo2 licence evidence, MusicFlamingo restrictions, Seed-VC maintenance assessment |
+
+Device preference means an initial supported route, not a speed claim. Compare
+real timings only if needed and authorised. Never silently substitute another model,
+drop a control, or retry a dispatched failed generation on another machine.
+
+## Phase 6: Downloadable studio
+
+- Status: `planned`, owner direction 2026-10-09. Other people should be able to
+  download and use the app. This follows the immediate suite work.
+- Tool-selection/download screen: capability, licence and consent, hardware support,
+  disk requirements, install progress, version/pin, repair and uninstall actions.
+- Portable setup: hardware detection, isolated runtimes, optional remote worker,
+  resumable downloads, clear unsupported-device errors and no bundled private paths.
+- Distribution gates: clean-machine installation, licence/redistribution review,
+  model-specific notices, signed releases and update/rollback design.
+
 ## Deferred ideas
 
 - ACE-Step 1.5 replaced v1 on 2026-09-27: MLX turbo plus the 0.6B planner, 10s to
@@ -118,8 +149,11 @@ they are never buried in a chat.
 
 None.
 
-Resolved: ACE-Step generate uses Seneca's 4090 when ComfyUI answers, and every
-other model stays on this Mac (2026-09-30), superseding the 2026-09-24 choice
+Resolved: a broader local suite and later downloadable app are the destination
+(2026-10-09). Device-aware preferences and fallbacks will supersede the current
+ACE-Step-only remote routing once verified. Currently ACE-Step generate uses
+Seneca's 4090 when ComfyUI answers, and every other model stays on this Mac
+(2026-09-30), superseding the 2026-09-24 choice
 to keep all renders here; the next UI is React and Tailwind, not a Gradio skin (2026-09-24);
 Stable Audio's voice control is a texture and the owner has heard it add occasional
 vague voice noises (2026-09-24); a library Delete removes at once, is restorable for
