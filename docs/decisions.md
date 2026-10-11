@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 # Decisions
@@ -11,6 +11,19 @@ Why the stack looks the way it does. Newest first. Each entry records the decisi
 rationale and reason to revisit it.
 
 ---
+
+## 2026-10-11 - Vocal texture changes the displayed prompt immediately
+
+**Changed:** the non-lyric voice toggle updates prompt text synchronously, rather
+than only its highlighted selection. Replace recognised composer-owned vocal and
+instrumental markers while preserving other wording; do not regenerate the genre
+or overwrite custom text. Switching off removes the texture request and adds the
+instrumental directive. Lyrics-capable models retain their separate lyrics control.
+
+**Why:** Generate submits the displayed prompt. The earlier label-only toggle did
+not affect that request unless the user also pressed Regenerate. Component/API
+tests check the serialized Generate body; a live browser diagnostic retained the
+request in its saved sidecar. This proves dispatch, not audible texture quality.
 
 ## 2026-10-09 - Installed routes share one dispatch boundary
 

@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 # AI Music Generator
@@ -197,6 +197,8 @@ Audio serving supports single byte ranges, including suffix and open-ended reque
 Download sits beside Remix, Separate and Delete on each track's action row.
 Advanced shows the last returned seed; Lock reuses it. Each track's Prompt and seed
 disclosure shows its own saved values, not the current form.
+Vocal texture updates the visible prompt immediately, preserving other wording;
+Instrumental removes that request. Generate sends the displayed prompt unchanged.
 Advanced also selects the generation device. Auto follows the manifest's ordered
 installed routes: ACE-Step prefers the 4090, then local; other modules are local-only.
 Track details record actual route and fallback reason. "Local device" identifies

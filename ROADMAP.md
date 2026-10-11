@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-09-10
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 # ROADMAP
@@ -165,14 +165,18 @@ track immediately, with one-hour Undo and no permanent archive.
 
 ## Current next step
 
-- 2026-10-09: shared installed-route checkpoint implemented. Generation supports
-  Auto, local or 4090 pins in Advanced and CLI. Tracks retain actual execution and
+- 2026-10-11: Vocal texture auto-updates prompts; live Generate/180s sidecar
+  verified. On/off/custom/blank/lyrics covered. 270 tests, three mutations,
+  nine probes, build pass; listening/Windows/full mutations unchecked.
+
+- 2026-10-09: shared installed-route checkpoint implemented. Advanced/CLI allow
+  Auto/local/4090 pins. Tracks retain actual execution and
   fallback reason. Ambiguous remote submission must fail without local resubmission.
   Only ACE-Step has a CUDA adapter; complete readiness inventory remains planned.
   269 tests, seven targeted mutations, nine probes, build, validators and independent
   audit pass. Full mutations, Windows and listening remain unchecked.
-  Ten-second CUDA and local-fallback WAVs passed audits and HTTP 206. First local
-  attempt failed on a missing planner; explicit installation and identical retry passed.
+  Ten-second CUDA/local-fallback WAVs passed audits and HTTP 206. Missing planner
+  installed; identical retry passed.
   Next: install verified YuE2 and HeartMuLa builds.
 
 - 2026-10-09: suite expansion first checkpoint delivered. SFX uses the installed
@@ -189,7 +193,7 @@ track immediately, with one-hour Undo and no permanent archive.
   All 258 tests, nine targeted mutations, frontend build and eight backend probes pass.
   Desktop fixture checks cover Separate dispatch, colliding Delete, Undo and conflict
   errors. Full mutation run and audio rendering were not performed. Vocal texture's
-  menu-to-prompt connection remains unresolved; Regenerate includes it.
+  menu-to-prompt connection was subsequently repaired on 2026-10-11.
 
 - 2026-10-08: Download joins Remix, Separate and Delete in the action row.
   Tests, targeted mutation, build and validators passed; actual clicks were not checked.

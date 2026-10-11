@@ -3434,6 +3434,58 @@ print(json.dumps({
             )
 
 class AuditRegressions(unittest.TestCase):
+    def test_vocal_texture_toggle_updates_prompt_and_actual_generate_request(self):
+        # Execute the installed React component AND API serializer, intercepting fetch.
+        script = r'''
+const fs=require('fs'),vm=require('vm'),ts=require('./web/node_modules/typescript');
+const compile=path=>ts.transpileModule(fs.readFileSync(path,'utf8'),{
+ compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+}).outputText;
+const requests=[],apiExports={};
+vm.runInNewContext(compile('web/src/api.ts'),{exports:apiExports,fetch:async(url,init)=>{
+ requests.push({url,init,body:JSON.parse(init.body)});
+ return{ok:true,json:async()=>({seed:7,queue:[]})};
+}});
+const state=[];let cursor=0;
+const react={useState:init=>{const i=cursor++;if(!(i in state))state[i]=typeof init==='function'?init():init;
+ return[state[i],v=>state[i]=typeof v==='function'?v(state[i]):v];},useEffect:()=>{},useMemo:fn=>fn(),useRef:v=>({current:v})};
+const jsx=(type,props)=>({type,props}),exports={};
+vm.runInNewContext(compile('web/src/App.tsx'),{exports,require:n=>n==='react'?react:n==='react/jsx-runtime'?{jsx,jsxs:jsx}:n==='./api'?apiExports:{},window:{matchMedia:()=>({matches:true})}});
+function find(n,p){if(!n||typeof n!=='object')return null;if(p(n))return n;for(const c of [n.props?.children].flat(Infinity)){const hit=find(c,p);if(hit)return hit;}return null;}
+const render=()=>{cursor=0;return exports.App();};
+const prompt=t=>find(t,n=>n.type==='textarea'&&n.props.placeholder==='Edit the prompt');
+const choose=(t,label)=>find(t,n=>n.type==='button'&&n.props.children===label).props.onClick();
+const phrase='With a wordless vocal texture over the top.';
+async function sent(tree){find(tree,n=>n.props?.id==='generate-button').props.onClick();await new Promise(setImmediate);
+ const req=requests.at(-1);if(req.url!=='/api/generate'||req.init.method!=='POST'||req.body.prompt!==prompt(tree).props.value)throw Error('Visible prompt not serialized to Generate');return req.body;}
+(async()=>{
+ for(const name of ['stable-audio-medium','stable-audio-sm','musicgen']){
+  const model={name,devices:['local'],voice_choices:['Instrumental','Vocal texture'],duration:{minimum:1,maximum:380,default:180},steps:null,guidance:null,supports_lyrics:false};
+  state.length=0;state.push({models:[model],genres:[],characters:[],labels:{},singers:[],melodies:[]},name);
+  let tree=render();const original='My sparse piano idea, keep this exact phrasing';
+  prompt(tree).props.onChange({target:{value:original}});tree=render();choose(tree,'Vocal texture');tree=render();
+  if(!prompt(tree).props.value.startsWith(original)||!prompt(tree).props.value.includes(phrase))throw Error('Toggle did not preserve custom prompt and add texture');
+  if(!(await sent(tree)).prompt.includes(phrase))throw Error('Texture missing from POST');
+  choose(render(),'Vocal texture');tree=render();if(prompt(tree).props.value.split(phrase).length!==2)throw Error('Duplicate texture');
+  choose(tree,'Instrumental');tree=render();const off=(await sent(tree)).prompt;
+  if(off.toLowerCase().includes('wordless vocal texture')||!off.includes(original)||!off.includes('Instrumental only, no vocals.'))throw Error('Off state wrong');
+  for(const text of ['', 'VocalType: Instrumental. Warm rhodes.', 'warm rhodes, instrumental', 'Warm rhodes, with a wordless vocal texture over the top. Quiet ending.']){
+   prompt(render()).props.onChange({target:{value:text}});choose(render(),'Vocal texture');tree=render();
+   const body=await sent(tree);if(!body.prompt.includes(phrase)||/VocalType: Instrumental|Instrumental only|, instrumental/i.test(body.prompt))throw Error('Conflicting instrumental directive or missing request');
+   if(text.includes('rhodes')&&!body.prompt.toLowerCase().includes('warm rhodes'))throw Error('Composer wording lost');
+   if(text.includes('Quiet ending.')&&!body.prompt.includes('Warm rhodes. Quiet ending.'))throw Error('Existing sentence boundary lost');
+  }
+ }
+ const model={name:'acestep',devices:['local'],voice_choices:['Instrumental','With vocals'],duration:{minimum:10,maximum:600,default:120},steps:null,guidance:null,supports_lyrics:true};
+ state.length=0;state.push({models:[model],genres:[],characters:[],labels:{},singers:[],melodies:[]},model.name);
+ let tree=render();prompt(tree).props.onChange({target:{value:'My existing song style'}});choose(render(),'With vocals');tree=render();
+ if((await sent(tree)).prompt!=='My existing song style')throw Error('Lyrics model prompt altered');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+        result = subprocess.run(["node", "-e", script], cwd=core.PROJECT_ROOT,
+                                capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_undo_does_not_restore_into_a_reserved_render_path(self):
         wav = self.out / "reserved.wav"
         _write_test_wav(wav, 800)

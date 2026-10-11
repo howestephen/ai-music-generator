@@ -65,6 +65,19 @@ function clampControl(control: ModelInfo["duration"], current: number) {
   return control.integer ? Math.round(value) : value;
 }
 
+function vocalTexturePrompt(current: string, enabled: boolean) {
+  const text = current
+    .replace(/\bVocalType:\s*Instrumental\b[.,]?\s*/gi, "")
+    .replace(/\bInstrumental only,\s*no vocals\b\.?/gi, "")
+    .replace(/\bVocals:\s*wordless vocal texture\b\.?/gi, "")
+    .replace(/(?:,\s*)?\bwith a wordless vocal texture over the top\b/gi, "")
+    .replace(/([.!?])\s*\.(?=\s|$)/g, "$1")
+    .replace(/(?:^|,\s*)instrumental(?=\s*(?:,|$))/gi, "")
+    .trim().replace(/^[,.;\s]+|[,;\s]+$/g, "");
+  const separator = text ? (/[.!?]$/.test(text) ? " " : ". ") : "";
+  return `${text}${separator}${enabled ? "With a wordless vocal texture over the top." : "Instrumental only, no vocals."}`;
+}
+
 export function App() {
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [modelName, setModelName] = useState("");
@@ -193,6 +206,13 @@ export function App() {
       keywords,
     });
     setPrompt(result.prompt);
+  }
+
+  function onVocalChoice(choice: string) {
+    setVocals(choice);
+    if (model && !model.supports_lyrics) {
+      setPrompt((current) => vocalTexturePrompt(current, choice !== "Instrumental"));
+    }
   }
 
   async function onGenre(next: string) {
@@ -524,7 +544,7 @@ export function App() {
             <button
               key={choice}
               type="button"
-              onClick={() => setVocals(choice)}
+              onClick={() => onVocalChoice(choice)}
               className={`voice-choice ${vocals === choice ? "is-selected" : ""}`}
             >
               {choice}

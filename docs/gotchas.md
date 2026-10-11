@@ -2,7 +2,7 @@
 status: active
 author: stephen+claude
 created: 2026-08-15
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 # Gotchas
@@ -24,9 +24,11 @@ The React callback also discarded that error. Pending pairs now get separate
 storage identities while retaining the original restore basename; both Delete and
 Restore report failures. New output reservations include Trash names and sidecars.
 
-Vocal texture changes the menu selection only. Its wordless-vocal request is added
-when a genre is selected or Regenerate is pressed; Generate submits the visible
-prompt unchanged. This UI connection remains unresolved, not an audio-quality finding.
+Vocal texture previously changed only the selection; the prompt was updated only
+by genre selection or Regenerate. Fixed 2026-10-11: toggling changes the visible
+prompt immediately, removes conflicting composer-owned instrumental directives
+and preserves other wording. Generate sends that text unchanged. This repairs
+the request, not a guarantee that the model produces an audible vocal texture.
 
 ## Seneca
 

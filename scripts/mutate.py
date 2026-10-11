@@ -23,6 +23,14 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = ROOT / ".venv" / "bin" / "python"
 
 MUTATIONS = [
+    ("vocal texture toggle changes only selection", "web/src/App.tsx",
+     'onClick={() => onVocalChoice(choice)}', 'onClick={() => setVocals(choice)}'),
+    ("vocal texture toggle loses its prompt update", "web/src/App.tsx",
+     'setPrompt((current) => vocalTexturePrompt(current, choice !== "Instrumental"));',
+     'setPrompt((current) => current);'),
+    ("Generate strips the vocal texture request", "web/src/App.tsx",
+     '        prompt,\n        device,',
+     '        prompt: prompt.replace("With a wordless vocal texture over the top.", ""),\n        device,'),
     ("UI drops selected device pin", "web/src/App.tsx",
      '        prompt,\n        device,', '        prompt,\n        device: "auto",'),
     ("queue drops selected device pin", "app.py",
