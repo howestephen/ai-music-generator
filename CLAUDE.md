@@ -149,11 +149,6 @@ specific measurable claims ("did the requested key land?"), never to decide whet
 something is good. Generate a small number of options, send them, and ask. One clip and a
 question beats eight clips and a confident table.
 
-## Ask instead of guessing
-
-When something is ambiguous, ask a short question. A blocked minute is cheaper than an hour
-of confidently wrong work.
-
 ## Working loop
 
 inspect, plan, implement, adversarial tests, validate, fix, independent adversarial

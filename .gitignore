@@ -35,3 +35,6 @@ web/.claude/
 # agent tool output and scratch space: remove when done
 .playwright-mcp/
 scratch/
+
+# the kit's procedure: read it from _projects-admin, never commit a copy
+/RETROFIT.md
