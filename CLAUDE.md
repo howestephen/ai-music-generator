@@ -28,36 +28,30 @@ in itself.
 Keep the architecture easy to add models to. Write decisions down. Record traps.
 
 ## Autonomy
-- **Global rules and machine profiles are read-only here.** `~/.claude/*.md`, the Codex aliases and `_projects-admin/machines/` belong to `_projects-admin`. Append what belongs there, with evidence, to `_projects-admin/REQUESTS.md`. Do not reach for a shell to do what the editor refused: redirects, `sed -i`, `tee`, `cp`, `mv` and `rm` are covered too
-- **Spending money needs approval, per service, per session.** Paid APIs, image and video generation, hosted inference and purchases all prompt first. Never route around a prompt with another tool or an unlisted endpoint
-- Push without asking: yes on a branch, never on main. A main push needs Stephen's permission, per instance. A creative project has no maturity level to declare, so the early-stage exemption that product projects get does not apply here and never will
 
-The hook kit enforces these; they refuse rather than warn. A refusal is the answer, not an obstacle to route around. If a gate is genuinely wrong, say so and stop: the bypass is Stephen's.
+House defaults are in [CONVENTIONS.md](CONVENTIONS.md); read it on every task.
+This project's own lines, which win where they differ:
 
-House defaults, with this project's tightening:
-
-- Default branch is `main`, never `master`
-- Commit without asking: yes
 - Push without asking: yes, including main. At layer zero small work goes straight to
   main (owner instruction, 2026-09-18); branch once a change stops being small
-- Create new top-level folders: no. The structure is declared below and locked by
+- The folder structure is declared below and locked by
   `scripts/validate.config.json`
-- Delete files: never without listing what changes and what references it. The one
-  exception is the track library's explicit Delete action: remove the WAV and sidecar
-  from the library immediately, retain that same pair for one hour for Undo, then
-  permanently delete both. Do not make or archive another copy
-- One subagent at a time, never at your own tier or above; for the independent
-  audit, or when Stephen asks for delegation
+- The track library's explicit Delete action removes the WAV and sidecar from the
+  library immediately, retains that same pair for one hour for Undo, then
+  permanently deletes both. Do not make or archive another copy
+- Use a subagent only for the independent audit, or when Stephen asks for
+  delegation
 
 ## Read in this order
 
 1. This file, in full
-2. [ROADMAP.md](ROADMAP.md): the current milestone and the next step
-3. [docs/gotchas.md](docs/gotchas.md): before installing a model or debugging a failure
-4. [docs/decisions.md](docs/decisions.md): why the stack looks the way it does
-5. [README.md](README.md): usage, prompting, environments
-6. The current milestone's spec in `specs/`, if one exists
-7. The latest work item in `handoffs/`, if resuming someone else's work
+2. [CONVENTIONS.md](CONVENTIONS.md) - canonical house standards
+3. [ROADMAP.md](ROADMAP.md): the current milestone and the next step
+4. [docs/gotchas.md](docs/gotchas.md): before installing a model or debugging a failure
+5. [docs/decisions.md](docs/decisions.md): why the stack looks the way it does
+6. [README.md](README.md): usage, prompting, environments
+7. The current milestone's spec in `specs/`, if one exists
+8. The latest work item in `handoffs/`, if resuming someone else's work
 
 ## Structure
 

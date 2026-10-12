@@ -31,3 +31,7 @@ web/.claude/
 .DS_Store
 *.log
 .claude/hooks-state/
+
+# agent tool output and scratch space: remove when done
+.playwright-mcp/
+scratch/

@@ -8,7 +8,8 @@
     "README.md",
     "RETROFIT.md",
     "ROADMAP.md",
-    "handoffs/TEMPLATE.md"
+    "handoffs/TEMPLATE.md",
+    "CONVENTIONS.md"
   ],
   "growable": [
     {

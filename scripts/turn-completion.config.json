@@ -1,0 +1,9 @@
+{
+  "_comment": "Read by the shared hook kit's stop.py (hook 8). Guide only, never blocks. No test_command: running a full suite at every stop overloads the Mac; run tests deliberately instead.",
+  "roadmap_file": "ROADMAP.md",
+  "source_globs": [
+    "scripts/*",
+    "web/*"
+  ],
+  "scratch_dir": "scratch/"
+}
