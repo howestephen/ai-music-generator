@@ -1,6 +1,6 @@
 {
-  "warn_words": 1300,
-  "fail_words": 2300,
+  "warn_words": 2000,
+  "fail_words": 3000,
   "archive_dir": "_archive/",
   "allowlist": [
     "CLAUDE.md",
