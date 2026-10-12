@@ -52,9 +52,9 @@ Installed gates refuse rather than warn: a refusal is the answer. If a gate is g
 
 - **Shared server controller.** Previews start, stop and report only through `<python> "<repos>/_projects-admin/scripts/project_control.py" status|start|stop` (append the project ID outside its checkout); start reuses the running server and never picks another port. Never launch dev servers, kill listeners or edit Tailscale routes yourself, or add project hooks. Register a new preview's unique ports through the admin workflow first.
 
-- **One live address.** Give Stephen only this project's registered Tailscale link, never localhost or a port you picked; never start a second server or move ports. A server already on the registered port is the live one: use it or restart it on that port. Creating a project does not register it.
+- **One live address.** Give Stephen only this project's registered Tailscale link, never localhost or a port you picked; never start a second server or move ports. A server already on the registered port is the live one: use it or restart it on the same port. Creating a project does not register it.
 
-- **Vercel build policy.** Only main builds automatically; previews need Stephen's explicit request per branch, never wildcards. Apply `scripts/vercel-main-only.json` before connecting or pushing, as the kit's RETROFIT.md describes, and record exceptions in DECISIONS.md. CLI, API and deploy-hook builds need separate deployment authority.
+- **Vercel build policy.** Only main builds automatically; keep the deny-all default, and previews need Stephen's explicit request per branch, never wildcards. Apply `scripts/vercel-main-only.json` before connecting or pushing, as the kit's RETROFIT.md describes, and record exceptions in DECISIONS.md. CLI, API and deploy-hook builds need separate deployment authority.
 
 - **Publication-safe records.** Everything tracked, commit metadata included, is fit to disclose: neutral decisions, no private conversation, profanity or emotional delivery; no credentials, contact details or machine paths (fixtures too); no em-dashes in public copy.
 
